@@ -1,32 +1,14 @@
-# Prerequisites
-*.d
+# Philipp Neufeld, 2021
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# ignore output directory
+out/
+build/
 
-# Precompiled Headers
-*.gch
-*.pch
+# ignore Visual Studio specific files
+.vs/
+.vscode/
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# Cmake temp file
+CMakeSettings.json
+CMakeFiles/
+CMakeCache.txt
