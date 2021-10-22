@@ -12,6 +12,7 @@ int main()
     QSim::TMatrix<double, 3, 1> b = { 1, -2, 0 };
 
     mat2 = mat1 * mat1;
+    auto mat3 = mat1.transpose();
 
     auto x = QSim::LinearSolve(mat1, b);
 

@@ -136,6 +136,8 @@ namespace QSim
     template<typename Ty, std::size_t N>
     TMatrix<Ty, N, 1> LinearSolve(TMatrix<Ty, N, N> A, TMatrix<Ty, N, 1> b)
     {
+        // Do LU decomposition and only keep the U matrix (here A is transformed to U).
+        // The transformation b' = (L^-1)*b is done on the fly
         for (std::size_t k = 0; k < N - 1; k++)
         {
             // find pivot
@@ -163,7 +165,6 @@ namespace QSim
             }
         }
 
-        
         // A is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
         // b is the original b transformed by the L matrix from the L-U decomposition
         // Now one can solve for x
