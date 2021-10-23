@@ -49,7 +49,7 @@ namespace QSim
         assert((~lhs).Rows() == (~rhs).Rows());
         assert((~lhs).Cols() == (~rhs).Cols());
 
-        Internal::TMatrixAdditionResult_t<MT1, MT2> res;
+        Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
         for (std::size_t i = 0; i < (~res).Rows(); i++)
         {
             for (std::size_t j = 0; j < (~res).Cols(); j++)
@@ -65,7 +65,7 @@ namespace QSim
         assert((~lhs).Rows() == (~rhs).Rows());
         assert((~lhs).Cols() == (~rhs).Cols());
 
-        Internal::TMatrixSubtractionResult_t<MT1, MT2> res;
+        Internal::TMatrixSubtractionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
         for (std::size_t i = 0; i < (~res).Rows(); i++)
         {
             for (std::size_t j = 0; j < (~res).Cols(); j++)
@@ -80,7 +80,7 @@ namespace QSim
     { 
         assert((~rhs).Cols() == (~rhs).Rows());
 
-        Internal::TMatrixMultiplicationResult_t<MT1, MT2> res;
+        Internal::TMatrixMultiplicationResult_t<MT1, MT2> res((~lhs).Rows(), (~rhs).Cols());
         for (std::size_t i = 0; i < (~res).Rows(); i++)
         {
             for (std::size_t k = 0; k < (~lhs).Cols(); k++)
@@ -96,7 +96,7 @@ namespace QSim
     template<typename MT>
     Internal::TMatrixTranspositionResult_t<MT> Transpose(const TMatrix<MT>& mat)
     {
-        Internal::TMatrixTranspositionResult_t<MT> res;
+        Internal::TMatrixTranspositionResult_t<MT> res((~mat).Cols(), (~mat).Rows());
         for (std::size_t i = 0; i < (~res).Rows(); i++)
         {
             for (std::size_t j = 0; j < (~res).Cols(); j++)
@@ -109,7 +109,7 @@ namespace QSim
     template<typename MT>
     Internal::TMatrixTranspositionResult_t<MT> Adjoint(const TMatrix<MT>& mat)
     {
-        Internal::TMatrixTranspositionResult_t<MT> res;
+        Internal::TMatrixTranspositionResult_t<MT> res((~mat).Cols(), (~mat).Rows());
         for (std::size_t i = 0; i < (~res).Rows(); i++)
         {
             for (std::size_t j = 0; j < (~res).Cols(); j++)
@@ -119,60 +119,7 @@ namespace QSim
         return res;
     }
 
-    template<typename MT, typename VT>
-    std::decay_t<decltype(~(std::declval<VT>()))> LinearSolve(const TMatrix<MT>& A, const TMatrix<VT>& b)
-    {
-        assert((~A).Rows() == (~A).Cols());
-        assert((~A).Cols() == (~b).Rows());
-        assert((~b).Cols() == 1);
-        
-        std::decay_t<decltype(~(std::declval<MT>()))> U = (~A);
-        std::decay_t<decltype(~(std::declval<VT>()))> y = (~b);
-
-        // Do LU decomposition and only keep the U matrix (here A is transformed to U).
-        // The transformation y = (L^-1)*b is done on the fly
-        for (std::size_t k = 0; k < (~U).Rows() - 1; k++)
-        {
-            // find pivot
-            std::size_t pivot_row = k;
-            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
-            {
-                if (std::abs((~U)(i, k)) > std::abs((~U)(pivot_row, k)))
-                    pivot_row = i;
-            }
-
-            // swap k-th row with pivoted row
-            if (k != pivot_row)
-            {
-                for (std::size_t i = k; i < (~U).Rows(); i++)
-                    std::swap((~U)(k, i), (~U)(pivot_row, i));
-            }
-
-            // eliminate
-            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
-            {
-                auto lambda = (~U)(i, k) / (~U)(k, k);
-                for (std::size_t j = k; j < (~U).Rows(); j++)
-                    (~U)(i, j) -= lambda * (~U)(k, j);
-                (~y)(i, 0) -= lambda * (~y)(k, 0);
-            }
-        }
-
-        // U is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
-        // y is the original y transformed by the L matrix from the L-U decomposition
-        // Now one can solve for x
-        std::decay_t<decltype(~(std::declval<VT>()))> x = (~y);
-        for (std::size_t l = 0; l < (~U).Rows(); l++)
-        {
-            std::size_t i = (~U).Rows() - l - 1;
-            for (std::size_t j = i + 1; j < (~U).Rows(); j++)
-                (~x)(i, 0) -= (~U)(i, j) * (~x)(j, 0);
-            (~x)(i, 0) /= (~U)(i, i);
-        }
-
-        return (~x);
-    }
-
+    
     //
     // Statically sized matrix
     //
@@ -182,9 +129,9 @@ namespace QSim
     {
     public:
         TStaticMatrix() : m_data{} {} // m_data is initialized to its default value this way
-        TStaticMatrix(const Ty(&data)[N][M]);
+        TStaticMatrix(const Ty(&data)[N*M]);
         TStaticMatrix(std::size_t, std::size_t) : TStaticMatrix() {}
-        TStaticMatrix(std::size_t, std::size_t, const Ty(&data)[N][M]) : TStaticMatrix(data) {}
+        TStaticMatrix(std::size_t, std::size_t, const Ty(&data)[N*M]) : TStaticMatrix(data) {}
         ~TStaticMatrix() = default;
 
         template<typename MT>
@@ -202,14 +149,13 @@ namespace QSim
         Ty m_data[N*M];
     };
 
-
     template<typename Ty, std::size_t N, std::size_t M>
-    TStaticMatrix<Ty, N, M>::TStaticMatrix(const Ty(&data)[N][M])
+    TStaticMatrix<Ty, N, M>::TStaticMatrix(const Ty(&data)[N*M])
     {
         for (std::size_t i = 0; i < Rows(); i++)
         {
             for (std::size_t j = 0; j < Cols(); j++)
-                (*this)(i, j) = data[i][j];
+                (*this)(i, j) = data[i*M + j];
         }
     }
 
@@ -242,7 +188,6 @@ namespace QSim
 
         return *this;
     }   
-
 
     namespace Internal
     {
@@ -281,12 +226,19 @@ namespace QSim
     public:
         TDynamicMatrix(std::size_t rows, std::size_t cols);
         TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data);
-        ~TDynamicMatrix() { delete[] m_data; }
+        ~TDynamicMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
 
         template<typename MT>
         TDynamicMatrix(const TMatrix<MT>& rhs);
         template<typename MT>
         TDynamicMatrix& operator=(const TMatrix<MT>& rhs);
+
+        TDynamicMatrix(const TDynamicMatrix& rhs);
+        TDynamicMatrix& operator=(const TDynamicMatrix& rhs);
+
+        TDynamicMatrix(TDynamicMatrix&& rhs) 
+            : m_rows(rhs.m_rows), m_cols(rhs.m_cols), m_data(rhs.m_data) { rhs.m_data = nullptr; }
+        TDynamicMatrix& operator=(TDynamicMatrix&& rhs);
        
         Ty& operator()(std::size_t i, std::size_t j) { return m_data[i*Cols()+j]; }
         const Ty& operator()(std::size_t i, std::size_t j) const { return m_data[i*Cols()+j]; }
@@ -339,16 +291,61 @@ namespace QSim
     template<typename MT>
     TDynamicMatrix<Ty>& TDynamicMatrix<Ty>::operator=(const TMatrix<MT>& rhs)
     {
-        this->~TDynamicMatrix();
+        if (m_rows*m_cols != (~rhs).Rows()*(~rhs).Cols())
+        {
+            this->~TDynamicMatrix();
+            m_data = new Ty[(~rhs).Rows()*(~rhs).Cols()];
+        }
         m_rows = (~rhs).Rows();
-        m_cols = (~rhs).Cols();
-        m_data = new Ty[m_rows*m_cols];
+        m_cols = (~rhs).Cols(); 
 
         for (std::size_t i = 0; i < Rows(); i++)
         {
             for (std::size_t j = 0; j < Cols(); j++)
                 (*this)(i, j) = (~rhs)(i, j);            
         }
+
+        return *this;
+    }
+
+    template<typename Ty>
+    TDynamicMatrix<Ty>::TDynamicMatrix(const TDynamicMatrix<Ty>& rhs)
+        : m_rows(rhs.m_rows), m_cols(rhs.m_cols), m_data(new Ty[m_rows*m_cols])
+    {
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }
+    }
+    
+    template<typename Ty>
+    TDynamicMatrix<Ty>& TDynamicMatrix<Ty>::operator=(const TDynamicMatrix<Ty>& rhs)
+    {
+        if (m_rows*m_cols != (~rhs).Rows()*(~rhs).Cols())
+        {
+            this->~TDynamicMatrix();
+            m_data = new Ty[(~rhs).Rows()*(~rhs).Cols()];
+        }
+        m_rows = (~rhs).Rows();
+        m_cols = (~rhs).Cols();
+
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }
+
+        return *this;
+    }
+
+    template<typename Ty>
+    TDynamicMatrix<Ty>& TDynamicMatrix<Ty>::operator=(TDynamicMatrix<Ty>&& rhs)
+    {
+        std::swap(m_rows, rhs.m_rows);
+        std::swap(m_cols, rhs.m_cols);
+        std::swap(m_data, rhs.m_data);
+        return *this;
     }
 
     namespace Internal
@@ -414,6 +411,61 @@ namespace QSim
         {
             using type = TDynamicMatrix<Ty>;
         }; 
+    }
+
+
+    template<typename MT, typename VT>
+    std::decay_t<decltype(~(std::declval<VT>()))> LinearSolve(const TMatrix<MT>& A, const TMatrix<VT>& b)
+    {
+        assert((~A).Rows() == (~A).Cols());
+        assert((~A).Cols() == (~b).Rows());
+        assert((~b).Cols() == 1);
+        
+        std::decay_t<decltype(~(std::declval<MT>()))> U(A);
+        std::decay_t<decltype(~(std::declval<VT>()))> y(b);
+
+        // Do LU decomposition and only keep the U matrix (here A is transformed to U).
+        // The transformation y = (L^-1)*b is done on the fly
+        for (std::size_t k = 0; k < (~U).Rows() - 1; k++)
+        {
+            // find pivot
+            std::size_t pivot_row = k;
+            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
+            {
+                if (std::abs((~U)(i, k)) > std::abs((~U)(pivot_row, k)))
+                    pivot_row = i;
+            }
+
+            // swap k-th row with pivoted row
+            if (k != pivot_row)
+            {
+                for (std::size_t i = k; i < (~U).Rows(); i++)
+                    std::swap((~U)(k, i), (~U)(pivot_row, i));
+            }
+
+            // eliminate
+            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
+            {
+                auto lambda = (~U)(i, k) / (~U)(k, k);
+                for (std::size_t j = k; j < (~U).Rows(); j++)
+                    (~U)(i, j) -= lambda * (~U)(k, j);
+                (~y)(i, 0) -= lambda * (~y)(k, 0);
+            }
+        }
+
+        // U is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
+        // y is the original y transformed by the L matrix from the L-U decomposition
+        // Now one can solve for x
+        std::decay_t<decltype(~(std::declval<VT>()))> x = (~y);
+        for (std::size_t l = 0; l < (~U).Rows(); l++)
+        {
+            std::size_t i = (~U).Rows() - l - 1;
+            for (std::size_t j = i + 1; j < (~U).Rows(); j++)
+                (~x)(i, 0) -= (~U)(i, j) * (~x)(j, 0);
+            (~x)(i, 0) /= (~U)(i, i);
+        }
+
+        return (~x);
     }
 
 }

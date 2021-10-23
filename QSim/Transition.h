@@ -26,8 +26,8 @@ namespace QSim
         Ty GetRabi() const { return m_rabi; }
 
         // Setter
-        void SetLevel1Index(std::size_t l1) const { m_l1 = l1; }
-        void SetLevel2Index(std::size_t l2) const { m_l2 = l2; }
+        void SetLevel1Index(std::size_t l1) { m_l1 = l1; }
+        void SetLevel2Index(std::size_t l2) { m_l2 = l2; }
         void SetRabi(Ty rabi) { m_rabi = rabi; }
 
         // Comparison operators that enable this class to be used as keys in a map
