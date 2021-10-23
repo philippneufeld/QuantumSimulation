@@ -13,171 +13,369 @@ namespace QSim
 
     namespace Internal
     {
-        template<typename T>
-        struct TIsComplex_impl : std::false_type {};
-        template<typename T>
-        struct TIsComplex_impl<std::complex<T>> {};
+        template<typename MT1, typename MT2>
+        struct TMatrixAdditionResult;
+        template<typename MT1, typename MT2>
+        using TMatrixAdditionResult_t = typename TMatrixAdditionResult<MT1, MT2>::type;
+        
+        template<typename MT1, typename MT2>
+        struct TMatrixSubtractionResult;
+        template<typename MT1, typename MT2>
+        using TMatrixSubtractionResult_t = typename TMatrixSubtractionResult<MT1, MT2>::type;
+        
+        template<typename MT1, typename MT2>
+        struct TMatrixMultiplicationResult;
+        template<typename MT1, typename MT2>
+        using TMatrixMultiplicationResult_t = typename TMatrixMultiplicationResult<MT1, MT2>::type;
+
+        template<typename MT>
+        struct TMatrixTranspositionResult;
+        template<typename MT>
+        using TMatrixTranspositionResult_t = typename TMatrixTranspositionResult<MT>::type;
     }
 
-    template<typename T>
-    struct TIsComplex : Internal::TIsComplex_impl<std::decay_t<T>> {};
-    template<typename T>
-    constexpr auto TIsComplex_v = TIsComplex<T>::value;
 
-
-    template<typename Ty, std::size_t N, std::size_t M>
+    template<typename MT>
     class TMatrix
     {
-        template<typename U, std::size_t L, std::size_t O>
-        friend class TMatrix;
+    public:  
+        MT& operator~() { return static_cast<MT&>(*this); }
+        const MT& operator~() const { return static_cast<const MT&>(*this); }
+    };
 
-        template<typename Dummy>
-        constexpr static bool TIsVector_v = ((N==1) || (M==1));
+    template<typename MT1, typename MT2>
+    Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
+    { 
+        assert((~lhs).Rows() == (~rhs).Rows());
+        assert((~lhs).Cols() == (~rhs).Cols());
 
-        template<typename U, typename Dummy>
-        using TEnableIfComplex_t = std::enable_if_t<std::is_same<Dummy, Dummy>::value && TIsComplex_v<Ty>, U>;
-        template<typename U, typename Dummy>
-        using TDisableIfComplex_t = std::enable_if_t<std::is_same<Dummy, Dummy>::value && !TIsComplex_v<Ty>, U>;
+        Internal::TMatrixAdditionResult_t<MT1, MT2> res;
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~res).Cols(); j++)
+                (~res)(i, j) = (~lhs)(i, j) + (~rhs)(i, j);            
+        }
+        
+        return res;
+    }
+
+    template<typename MT1, typename MT2>
+    Internal::TMatrixSubtractionResult_t<MT1, MT2> operator-(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
+    { 
+        assert((~lhs).Rows() == (~rhs).Rows());
+        assert((~lhs).Cols() == (~rhs).Cols());
+
+        Internal::TMatrixSubtractionResult_t<MT1, MT2> res;
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~res).Cols(); j++)
+                (~res)(i, j) = (~lhs)(i, j) - (~rhs)(i, j);            
+        }
+
+        return res;
+    }
+    
+    template<typename MT1, typename MT2>
+    Internal::TMatrixMultiplicationResult_t<MT1, MT2> operator*(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
+    { 
+        assert((~rhs).Cols() == (~rhs).Rows());
+
+        Internal::TMatrixMultiplicationResult_t<MT1, MT2> res;
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t k = 0; k < (~lhs).Cols(); k++)
+            {
+                for (std::size_t j = 0; j < (~res).Cols(); j++)
+                    (~res)(i, j) += (~lhs)(i, k) * (~rhs)(k, j);
+            }                
+        }
+
+        return res;
+    }
+
+    template<typename MT>
+    Internal::TMatrixTranspositionResult_t<MT> Transpose(const TMatrix<MT>& mat)
+    {
+        Internal::TMatrixTranspositionResult_t<MT> res;
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~res).Cols(); j++)
+                (~res)(i, j) = (~mat)(j, i);
+        }
+
+        return res;
+    }
+
+    template<typename MT>
+    Internal::TMatrixTranspositionResult_t<MT> Adjoint(const TMatrix<MT>& mat)
+    {
+        Internal::TMatrixTranspositionResult_t<MT> res;
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~res).Cols(); j++)
+                (~res)(i, j) = std::conj((~mat)(j, i));
+        }
+        
+        return res;
+    }
+        
+    template<typename Ty, std::size_t N, std::size_t M>
+    class TStaticMatrix : public TMatrix<TStaticMatrix<Ty, N, M>>
+    {
     public:
-        TMatrix() : m_data{} {} // m_data is initialized to its default value this way
-        template<typename... Ts, typename=std::enable_if_t<sizeof...(Ts) == N*M>>
-        TMatrix(const Ts&... vals) : m_data{ static_cast<Ty>(std::forward<const Ts&>(vals))... } {}
-        ~TMatrix() = default;
+        TStaticMatrix() : m_data{} {} // m_data is initialized to its default value this way
+        TStaticMatrix(const Ty(&data)[N][M]);
+        TStaticMatrix(std::size_t, std::size_t) : TStaticMatrix() {}
+        TStaticMatrix(std::size_t, std::size_t, const Ty(&data)[N][M]) : TStaticMatrix(data) {}
+        ~TStaticMatrix() = default;
 
-        TMatrix(const TMatrix& rhs) { std::copy(rhs.m_data, rhs.m_data + N*M, m_data); } 
-        TMatrix& operator=(const TMatrix& rhs) { std::copy(rhs.m_data, rhs.m_data + N*M, m_data); return *this; } 
+        // TODO: CRTP
+        TStaticMatrix(const TStaticMatrix& rhs) = default;
+        TStaticMatrix& operator=(const TStaticMatrix& rhs) = default;
        
         Ty& operator()(std::size_t i, std::size_t j) { return m_data[i*M+j]; }
         const Ty& operator()(std::size_t i, std::size_t j) const { return m_data[i*M+j]; }
 
-        template<typename Dummy=void, typename=std::enable_if_t<TIsVector_v<Dummy>>>
-        const Ty& operator()(std::size_t i) const { return m_data[i]; } 
-        template<typename Dummy=void, typename=std::enable_if_t<TIsVector_v<Dummy>>>
-        Ty& operator()(std::size_t i) { return m_data[i]; }
-
-        TMatrix& operator+=(const TMatrix& rhs);
-        TMatrix& operator-=(const TMatrix& rhs);
-        TMatrix& operator*=(const TMatrix<Ty, M, M>& rhs) { return this->operator=((*this) * rhs); }
-
-        friend TMatrix operator+(const TMatrix& lhs, const TMatrix& rhs) { TMatrix tmp(lhs); tmp += rhs; return tmp; }
-        friend TMatrix operator-(const TMatrix& lhs, const TMatrix& rhs) { TMatrix tmp(lhs); tmp -= rhs; return tmp; }
-        //template<std::size_t L>
-        //friend TMatrix<Ty, N, L> operator*(const TMatrix<Ty, N, M>& lhs, const TMatrix<Ty, M, L>& rhs);
-
-        TMatrix<Ty, M, N> transpose() const;
-        template<typename U=void> 
-        TEnableIfComplex_t<TMatrix<Ty, M, N>, U> adjoint() const;
-        template<typename U=void> 
-        TDisableIfComplex_t<TMatrix<Ty, M, N>, U> adjoint() const { return transpose(); }
-
-        void SetZero() { std::fill(m_data, m_data + N*M, static_cast<Ty>(0)); }
+        constexpr std::size_t Rows() const { return N; }
+        constexpr std::size_t Cols() const { return M; }
 
     private:
         Ty m_data[N*M];
     };
 
-    template<typename Ty, std::size_t N, std::size_t M>
-    TMatrix<Ty, N, M>& TMatrix<Ty, N, M>::operator+=(const TMatrix& rhs)
-    {
-        for (std::size_t i = 0; i < N*M; i++)
-            m_data[i] += rhs.m_data[i];
-        return *this;
-    }
 
     template<typename Ty, std::size_t N, std::size_t M>
-    TMatrix<Ty, N, M>& TMatrix<Ty, N, M>::operator-=(const TMatrix& rhs)
+    TStaticMatrix<Ty, N, M>::TStaticMatrix(const Ty(&data)[N][M])
     {
-        for (std::size_t i = 0; i < N*M; i++)
-            m_data[i] += rhs.m_data[i];
-        return *this;
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = data[i][j];
+        }
     }
+
+
+    namespace Internal
+    {
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResult<TStaticMatrix<Ty, N, M>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResult<TStaticMatrix<Ty, N, M>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M, std::size_t L>
+        struct TMatrixMultiplicationResult<TStaticMatrix<Ty, N, L>, TStaticMatrix<Ty, L, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixTranspositionResult<TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, M, N>;
+        };
+    }
+
+    template<typename Ty>
+    class TDynamicMatrix : public TMatrix<TDynamicMatrix<Ty>>
+    {
+    public:
+        TDynamicMatrix(std::size_t rows, std::size_t cols);
+        TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data);
+        ~TDynamicMatrix() { delete[] m_data; }
+
+        template<typename MT>
+        TDynamicMatrix(const TMatrix<MT>& rhs);
+        template<typename MT>
+        TDynamicMatrix& operator=(const TMatrix<MT>& rhs);
+       
+        Ty& operator()(std::size_t i, std::size_t j) { return m_data[i*Cols()+j]; }
+        const Ty& operator()(std::size_t i, std::size_t j) const { return m_data[i*Cols()+j]; }
+
+        std::size_t Rows() const { return m_rows; }
+        std::size_t Cols() const { return m_cols; }
+
+    private:
+        std::size_t m_rows;
+        std::size_t m_cols;
+        Ty* m_data;
+    };
+
+
+    template<typename Ty>
+    TDynamicMatrix<Ty>::TDynamicMatrix(std::size_t rows, std::size_t cols)
+        : m_rows(rows), m_cols(cols), m_data(new Ty[m_rows*m_cols])
+    {
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = Ty();
+        } 
+    }
+
+    template<typename Ty>
+    TDynamicMatrix<Ty>::TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data)
+        : m_rows(rows), m_cols(cols), m_data(new Ty[m_rows*m_cols])
+    {
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = data[i*m_cols+j];
+        } 
+    }
+
+    template<typename Ty>
+    template<typename MT>
+    TDynamicMatrix<Ty>::TDynamicMatrix(const TMatrix<MT>& rhs)
+        : m_rows((~rhs).Rows()), m_cols((~rhs).Cols()), m_data(new Ty[m_rows*m_cols])
+    {
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }    
+    }
+
+    template<typename Ty>
+    template<typename MT>
+    TDynamicMatrix<Ty>& TDynamicMatrix<Ty>::operator=(const TMatrix<MT>& rhs)
+    {
+        this->~TDynamicMatrix();
+        m_rows = (~rhs).Rows();
+        m_cols = (~rhs).Cols();
+        m_data = new Ty[m_rows*m_cols];
+
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }
+    }
+
+    namespace Internal
+    {
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResult<TStaticMatrix<Ty, N, M>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResult<TDynamicMatrix<Ty>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty>
+        struct TMatrixAdditionResult<TDynamicMatrix<Ty>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResult<TStaticMatrix<Ty, N, M>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResult<TDynamicMatrix<Ty>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty>
+        struct TMatrixSubtractionResult<TDynamicMatrix<Ty>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixMultiplicationResult<TStaticMatrix<Ty, N, M>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixMultiplicationResult<TDynamicMatrix<Ty>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty>
+        struct TMatrixMultiplicationResult<TDynamicMatrix<Ty>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty>
+        struct TMatrixTranspositionResult<TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        }; 
+    }
+
+
+    template<typename MT, typename VT>
+    std::decay_t<decltype(~(std::declval<VT>()))> LinearSolve(const TMatrix<MT>& A, const TMatrix<VT>& b)
+    {
+        assert((~A).Rows() == (~A).Cols());
+        assert((~A).Cols() == (~b).Rows());
+        assert((~b).Cols() == 1);
         
-    template<typename Ty, std::size_t N, std::size_t M, std::size_t L>
-    TMatrix<Ty, N, L> operator*(const TMatrix<Ty, N, M>& lhs, const TMatrix<Ty, M, L>& rhs)
-    {
-        TMatrix<Ty, N, L> res;
-        for (std::size_t i = 0; i < N; i++) 
-        {
-            for (std::size_t k = 0; k < M; k++)
-            {
-                for (std::size_t j = 0; j < L; j++)
-                    res(i, j) += lhs(i, k) * rhs(k, j); 
-            }
-        }
-        return res;
-    }
+        std::decay_t<decltype(~(std::declval<MT>()))> U = (~A);
+        std::decay_t<decltype(~(std::declval<VT>()))> y = (~b);
 
-    
-    template<typename Ty, std::size_t N, std::size_t M>
-    TMatrix<Ty, M, N> TMatrix<Ty, N, M>::transpose() const
-    {
-        TMatrix<Ty, M, N> res;
-        for (std::size_t i = 0; i < N; i++)
-        {
-            for (std::size_t j = 0; j < M; j++)
-                res(j, i) = (*this)(i, j);
-        }
-        return res;
-    }
-    
-    template<typename Ty, std::size_t N, std::size_t M>
-    template<typename U>
-    typename TMatrix<Ty, N, M>::TEnableIfComplex_t<TMatrix<Ty, M, N>, U> TMatrix<Ty, N, M>::adjoint() const
-    {
-        TMatrix<Ty, M, N> res;
-        for (std::size_t i = 0; i < N; i++)
-        {
-            for (std::size_t j = 0; j < M; j++)
-                res(j, i) = std::conj((*this)(i, j));
-        }
-        return res;
-    }
-
-    template<typename Ty, std::size_t N>
-    TMatrix<Ty, N, 1> LinearSolve(TMatrix<Ty, N, N> A, TMatrix<Ty, N, 1> b)
-    {
         // Do LU decomposition and only keep the U matrix (here A is transformed to U).
-        // The transformation b' = (L^-1)*b is done on the fly
-        for (std::size_t k = 0; k < N - 1; k++)
+        // The transformation y = (L^-1)*b is done on the fly
+        for (std::size_t k = 0; k < (~U).Rows() - 1; k++)
         {
             // find pivot
             std::size_t pivot_row = k;
-            for (std::size_t i = k + 1; i < N; i++)
+            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
             {
-                if (std::abs(A(i, k)) > std::abs(A(pivot_row, k)))
+                if (std::abs((~U)(i, k)) > std::abs((~U)(pivot_row, k)))
                     pivot_row = i;
             }
 
             // swap k-th row with pivoted row
             if (k != pivot_row)
             {
-                for (std::size_t i = k; i < N; i++)
-                    std::swap(A(k, i), A(pivot_row, i));
+                for (std::size_t i = k; i < (~U).Rows(); i++)
+                    std::swap((~U)(k, i), (~U)(pivot_row, i));
             }
 
             // eliminate
-            for (std::size_t i = k + 1; i < N; i++)
+            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
             {
-                Ty lambda = A(i, k) / A(k, k);
-                for (std::size_t j = k; j < N; j++)
-                    A(i, j) -= lambda * A(k, j);
-                b(i) -= lambda * b(k);
+                auto lambda = (~U)(i, k) / (~U)(k, k);
+                for (std::size_t j = k; j < (~U).Rows(); j++)
+                    (~U)(i, j) -= lambda * (~U)(k, j);
+                (~y)(i, 1) -= lambda * (~y)(k, 1);
             }
         }
 
-        // A is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
-        // b is the original b transformed by the L matrix from the L-U decomposition
+        // U is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
+        // y is the original y transformed by the L matrix from the L-U decomposition
         // Now one can solve for x
-        TMatrix<Ty, N, 1> x = b;
-        for (std::size_t l = 0; l < N; l++)
+        std::decay_t<decltype(~(std::declval<VT>()))> x = (~y);
+        for (std::size_t l = 0; l < (~U).Rows(); l++)
         {
-            std::size_t i = N - l - 1;
-            for (std::size_t j = i + 1; j < N; j++)
-                x(i) -= A(i, j) * x(j);
-            x(i) /= A(i, i);
+            std::size_t i = (~U).Rows() - l - 1;
+            for (std::size_t j = i + 1; j < (~U).Rows(); j++)
+                (~x)(i, 1) -= (~U)(i, j) * (~x)(j, 1);
+            (~x)(i, 1) /= (~U)(i, i);
         }
 
-        return x;
+        return (~x);
     }
 }
 
