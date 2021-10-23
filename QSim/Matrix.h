@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSIM_MATRIX
-#define QSIM_MATRIX
+#ifndef QSim_NLevel_Matrix_H_
+#define QSim_NLevel_Matrix_H_
 
 #include <cstdint>
 #include <type_traits>

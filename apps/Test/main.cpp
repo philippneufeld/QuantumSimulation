@@ -7,6 +7,8 @@ using namespace QSim;
 int main()
 {
 
+    QSim::TNLevelSystem<3> sys({0.0, 1.0, 2.0});
+
     QSim::TMatrix<double, 3, 3> mat1 = { 3, 2, -1, 2, -2, 4, -1, 0.5, -1 };
     QSim::TMatrix<double, 3, 3> mat2;
     QSim::TMatrix<double, 3, 1> b = { 1, -2, 0 };
