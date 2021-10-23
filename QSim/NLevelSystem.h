@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <vector>
+#include <cassert>
 
 #include "Matrix.h"
 

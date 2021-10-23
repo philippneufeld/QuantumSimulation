@@ -1,4 +1,4 @@
-// Philipp Neufeld
+// Philipp Neufeld, 2021
 
 #ifndef QSim_TransitionTree_H_
 #define QSim_TransitionTree_H_
@@ -7,75 +7,84 @@
 #include <cstring>
 #include <map>
 #include <vector>
+#include <algorithm>
+#include <iterator>
+#include <set>
+
+#include "Transition.h"
 
 namespace QSim
 {
 
     template<typename Ty>
-    class TTransition
-    {
-    public:
-        TTransition(std::size_t lvl1, std::size_t lvl2, Ty rabi);
-            : m_l1(lvl1), m_l2(lvl2), m_rabi(rabi) { }
-
-        // copy operations
-        TTransition(const TTransition& rhs) = default;
-        TTransition& operator=(const TTransition& rhs) = default;
-
-        // Getter
-        std::size_t GetLevel1Index() const { return m_l1; }
-        std::size_t GetLevel2Index() const { return m_l2; }
-        Ty GetRabi() const { return m_rabi; }
-
-        // Setter
-        void SetLevel1Index(std::size_t l1) const { m_l1 = l1; }
-        void SetLevel2Index(std::size_t l2) const { m_l2 = l2; }
-        void SetRabi(Ty rabi) { m_rabi = rabi; }
-
-        // Comparison operators that enable this class to be used as keys in a map
-        bool operator==(const TTransition& rhs) { return std::memcmp(this, &rhs, sizeof(TTransition)) == 0; }
-        bool operator<(const TTransition& rhs) { return std::memcmp(this, &rhs, sizeof(TTransition)) < 0; }
-        bool operator>(const TTransition& rhs) { return std::memcmp(this, &rhs, sizeof(TTransition)) > 0; }
-        bool operator>=(const TTransition& rhs) { return !((*this) < rhs); }
-        bool operator<=(const TTransition& rhs) { return !((*this) > rhs); }
-        bool operator!=(const TTransition& rhs) { return !((*this) == rhs); }
-
-    private:
-        std::size_t m_l1;
-        std::size_t m_l2;
-        Ty m_rabi;
-    }; 
-
-
-    template<typename Ty>
-    class TTransitionTreeNode
-    {
-    public:
-        TTransitionTreeNode() : m_subNodes() { }
-
-        // copy operators
-        TTransitionTreeNode(const TTransitionTreeNode& rhs) = default;
-        TTransitionTreeNode& operator=(const TTransitionTreeNode& rhs) = default;
-
-        // node operations
-        void AddNode(TTransition<Ty> trans) { m_subNodes.emplace(trans); }
-        TTransitionTreeNode& GetNode(TTransition<Ty> trans) { return m_subNodes[trans]; }
-        const TTransitionTreeNode& GetNode(TTransition<Ty> trans) const { return m_subNodes[trans]; }
-
-    private:
-        std::map<TTransition<Ty>, TTransitionTreeNode> m_subNodes;
-    };
-
-
-    template<typename Ty>
     class TTransitionTree
     {
     public:
-        TTransitionTree(std::vector<TTransition<Ty>> transitions);
+        TTransitionTree(std::size_t headLvlIdx) 
+            : m_headLevelIdx(headLvlIdx), m_subNodes() { }
+
+        // copy operators
+        TTransitionTree(const TTransitionTree& rhs) = default;
+        TTransitionTree(TTransitionTree&& rhs) = default;
+        TTransitionTree& operator=(const TTransitionTree& rhs) = default;
+        TTransitionTree& operator=(TTransitionTree&& rhs) = default;
+
+        // Getter
+        std::set<std::size_t> GetTreeLevelIndices() const { return m_levelIndices; }
+
+        bool BuildTree(const std::vector<TTransition<Ty>>& transitions);
 
     private:
-
+        std::size_t m_headLevelIdx;
+        std::map<TTransition<Ty>, TTransitionTree> m_subNodes;
+        std::set<std::size_t> m_levelIndices;
     };
+
+
+    template<typename Ty>
+    bool TTransitionTree<Ty>::BuildTree(const std::vector<TTransition<Ty>>& transitions)
+    {
+        m_subNodes.clear();
+        m_levelIndices.insert(m_headLevelIdx);
+
+        for (const auto& trans: transitions)
+        {
+            auto lvl1 = trans.GetLevel1Index();
+            auto lvl2 = trans.GetLevel2Index();
+            if (m_headLevelIdx == lvl1 || m_headLevelIdx == lvl2)
+            {
+                // find all remaining transitions (excluding the current one)
+                std::vector<TTransition<Ty>> nextTransitions;
+                std::copy_if(
+                    transitions.begin(), 
+                    transitions.end(), 
+                    std::back_inserter(nextTransitions),
+                    [&](auto t) { return t != trans; });
+
+                // Build next tree level
+                auto nextLevelIdx = (m_headLevelIdx == lvl1) ? lvl2 : lvl1;
+                TTransitionTree<Ty> node(nextLevelIdx);
+                bool success = node.BuildTree(nextTransitions);
+
+                // check for circular transition paths
+                if (success)
+                    success = (node.m_levelIndices.find(m_headLevelIdx) == node.m_levelIndices.end());
+
+                // If any of the above operations failed, abort
+                if (!success)
+                {
+                    m_subNodes.clear();
+                    m_levelIndices.clear();
+                    return false;
+                }
+
+                // update members
+                m_subNodes.insert(std::make_pair(trans, node));
+                m_levelIndices.insert(node.m_levelIndices.begin(), node.m_levelIndices.end());
+            }
+        }
+        return true;
+    }
 
 }
 
