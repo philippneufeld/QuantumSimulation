@@ -464,12 +464,20 @@ namespace QSim
             {
                 for (std::size_t i = k; i < (~U).Rows(); i++)
                     std::swap((~U)(k, i), (~U)(pivot_row, i));
+                std::swap((~y)(k, 0), (~y)(pivot_row, 0));
             }
 
             // eliminate
+            auto factor = 1.0 / (~U)(k, k);
+            for (std::size_t i = k; i < (~U).Rows(); i++)
+                (~U)(k, i) *= factor;
+            (~U)(k, k) = 1;
+            (~y)(k, 0) *= factor;
+            
+
             for (std::size_t i = k + 1; i < (~U).Rows(); i++)
             {
-                auto lambda = (~U)(i, k) / (~U)(k, k);
+                auto lambda = (~U)(i, k); // / (~U)(k, k);
                 for (std::size_t j = k; j < (~U).Rows(); j++)
                     (~U)(i, j) -= lambda * (~U)(k, j);
                 (~y)(i, 0) -= lambda * (~y)(k, 0);

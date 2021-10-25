@@ -4,48 +4,45 @@
 #include <QSim/NLevelSystem.h>
 #include <QSim/Matrix.h>
 #include <QSim/TransitionTree.h>
+#include <chrono>
+
+#include <fstream>
 
 int main()
 {
-    bool success = true;
-
-    QSim::TStaticMatrix<double, 5, 1> levels({0.0, 1.0, 2.0, -1.0, 3.0});
-    QSim::TNLevelSystem<5> sys(levels);
-    success = sys.AddTransition(QSim::TTransition<double>(0, 2, 1.0));
-    success = sys.AddTransition(QSim::TTransition<double>(1, 2, 1.0));
-    success = sys.AddTransition(QSim::TTransition<double>(2, 4, 1.0));
-    success = sys.AddTransition(QSim::TTransition<double>(0, 3, 1.0));
-
-    QSim::TStaticMatrix<double, 4, 1> detunings({1,0,0,0});
-    auto h = sys.GetHamiltonian(detunings, 0.0);
-    for (std::size_t i = 0; i < h.Rows(); i++)
-    {
-        for (std::size_t j = 0; j < h.Cols(); j++)
-        {
-            std::cout << h(i, j) << " ";
-        }
-        std::cout << std::endl;
-    }
     
-    double mat_data[] = { 3, 2, -1, 2, -2, 4, -1, 0.5, -1 };
-    double b_data[] = { 1, -2, 0 };
-    QSim::TDynamicMatrix<double> mat1(3, 3, mat_data);
-    QSim::TDynamicMatrix<double> mat2(3, 3);
-    QSim::TDynamicMatrix<double> b(3, 1, b_data);
-    mat2 = mat1 * mat1;
-    auto mat3 = QSim::Transpose(mat1);
-    auto x = QSim::LinearSolve(mat1, b);
+    using Ty = double;
 
-    std::vector<QSim::TTransition<double>> transitions;
-    transitions.emplace_back(0, 2);
-    transitions.emplace_back(3, 0);
-    transitions.emplace_back(1, 2);
-    // transitions.emplace_back(1, 4);
-    transitions.emplace_back(4, 2);
+    // Ty mass = 1.44e-25;
+    Ty levels[] = { -4.271e9, 2.563e9, QSim::SpeedOfLight_v / 780.241e-9 };
+    QSim::TNLevelSystem<3, Ty> system(levels);
+    system.AddTransition(QSim::TTransition<Ty>{0, 2, 3.5e6});
+    system.AddTransition(QSim::TTransition<Ty>{1, 2, 10e6});
+    system.AddDecay(QSim::TDecay<Ty>{2, 0, 3.0/8.0 * 6.065e6});
+    system.AddDecay(QSim::TDecay<Ty>{2, 1, 5.0/8.0 * 6.065e6});
+    
+    Ty det_start = -0.025e9;
+    Ty det_stop = 0.025e9;
+    std::size_t det_steps = 501;
+    std::vector<Ty> detuning;
+    detuning.reserve(det_steps);
+    for (std::size_t i = 0; i < det_steps; i++)
+        detuning.push_back(det_start + i * (det_stop - det_start) / (det_steps - 1));
 
-    QSim::TTransitionTree<double> node(0);
-    success = node.BuildTree(transitions);
+    auto start_ts = std::chrono::high_resolution_clock::now();
 
-    std::cout << "Hello world" << std::endl;
+    std::vector<Ty> absCoeffs;
+    absCoeffs.reserve(detuning.size());
+    for (Ty det: detuning)
+        absCoeffs.push_back(system.GetAbsorptionCoeff(QSim::TStaticMatrix<Ty, 2, 1>({ det, 0 }), 0, 2));
+    
+    std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
+
+    std::ofstream file;
+    file.open("data.txt", std::ios::out);
+    for (std::size_t i = 0; i < det_steps; i++)
+        file << detuning[i] << " " << absCoeffs[i] << std::endl;
+    file.close();
+    
     return 0;
 }

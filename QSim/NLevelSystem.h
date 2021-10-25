@@ -7,10 +7,13 @@
 #include <algorithm>
 #include <vector>
 #include <cassert>
+#include <cmath>
+#include <complex>
 
 #include "Matrix.h"
 #include "Transition.h"
 #include "TransitionTree.h"
+#include "Decay.h"
 
 
 namespace QSim
@@ -40,6 +43,15 @@ namespace QSim
         std::size_t GetTransitionCount() const { return m_transitions.size(); }
         std::size_t GetTransitionIdx(const TTransition<Ty>& trans) const;
 
+        // Decays
+        void AddDecay(const TDecay<Ty>& decay) { m_decays.push_back(decay); }
+
+        // Solver
+        template<typename VT>
+        TStaticMatrix<std::complex<Ty>, N, N> GetSteadyState(const TMatrix<VT>& detunings, Ty velocity);
+        template<typename VT>
+        Ty GetAbsorptionCoeff(const TMatrix<VT>& detunings, std::size_t lIdx1, std::size_t lIdx2);
+
         const TDynamicMatrix<Ty>& GetPhotonBasis() const { return m_photonBasis; }
         template<typename VT>
         TStaticMatrix<Ty, N, N> GetHamiltonian(const TMatrix<VT>& detunings, Ty velocity) const;
@@ -47,8 +59,9 @@ namespace QSim
     private:
         TStaticMatrix<Ty, N, 1> m_levels;
         std::vector<TTransition<Ty>> m_transitions;
+        std::vector<TDecay<Ty>> m_decays;
+        
         TDynamicMatrix<Ty> m_photonBasis;
-
         TDynamicMatrix<Ty> m_transitionFreqs;
         TDynamicMatrix<Ty> m_dopplerFactors;
         TStaticMatrix<Ty, N, N> m_partialHamiltonian;
@@ -102,10 +115,6 @@ namespace QSim
             m_partialHamiltonian(lvlIdx2, lvlIdx1) = 0.5 * rabi;
         }
         
-
-        
-
-
         // Rebuild transition tree and photon basis matrix
         std::vector<TTransitionTree<Ty>> trees;
         std::set<std::size_t> handledLevels;
@@ -161,6 +170,66 @@ namespace QSim
         return h; 
     }
 
+    template<std::size_t N, typename Ty>
+    template<typename VT>
+    TStaticMatrix<std::complex<Ty>, N, N> TNLevelSystem<N, Ty>::GetSteadyState(const TMatrix<VT>& detunings, Ty velocity)
+    {
+        auto h = GetHamiltonian(detunings, velocity);
+        TStaticMatrix<std::complex<Ty>, N*N + 1, N*N> A;
+
+        // von Neumann part of the evolution operator
+        for (std::size_t i = 0; i < N; i++)
+        {
+            for (std::size_t j = 0; j < N; j++)
+            {
+                for (std::size_t k = 0; k < N; k++)
+                {
+                    A(i*N+k, j*N+k) -= std::complex<Ty>(0, 1) * h(i, j);
+                    A(k*N+i, k*N+j) += std::complex<Ty>(0, 1) * h(j, i);
+                }
+            }
+        }
+        
+        // Lindblad part of the evolution operator
+        for(const auto& decay: m_decays)
+        {
+            std::size_t i = decay.GetInitialIndex();
+            std::size_t f = decay.GetFinalIndex();
+            Ty rate = decay.GetRate();
+            A(f*N+f, i*N+i) += rate;
+            for (std::size_t j = 0; j < N; j++)
+            {
+                A(j*N+i, j*N+i) -= 0.5*rate;
+                A(i*N+j, i*N+j) -= 0.5*rate;
+            }
+        }
+
+        // Normalization condition
+        for (std::size_t i = 0; i < N; i++)
+            A(N*N, i*N+i) += static_cast<Ty>(1);
+        
+        TStaticMatrix<std::complex<Ty>, N*N+1, 1> b;
+        b(N*N, 0) = static_cast<Ty>(1);
+        
+        auto A_adj = Adjoint(A);
+        auto x = LinearSolve(A_adj*A, A_adj*b);
+
+        TStaticMatrix<std::complex<Ty>, N, N> ss;
+        for (std::size_t i = 0; i < N; i++)
+        {
+            for (std::size_t j = 0; j < N; j++)
+                ss(i, j) = x(i*N+j, 0);
+        }
+        
+        return ss;
+    }
+
+    template<std::size_t N, typename Ty>
+    template<typename VT>
+    Ty TNLevelSystem<N, Ty>::GetAbsorptionCoeff(const TMatrix<VT>& detunings, std::size_t lIdx1, std::size_t lIdx2)
+    {
+        return std::imag((~GetSteadyState(detunings, 0.0))(lIdx1, lIdx2));
+    }
 }
 
 #endif
