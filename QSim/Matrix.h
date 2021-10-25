@@ -41,7 +41,20 @@ namespace QSim
     public:  
         MT& operator~() { return static_cast<MT&>(*this); }
         const MT& operator~() const { return static_cast<const MT&>(*this); }
+
+        void SetZero();
     };
+
+    
+    template<typename MT>
+    void TMatrix<MT>::SetZero()
+    {
+        for (std::size_t i = 0; i < (~(*this)).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~(*this)).Cols(); j++)
+                (~(*this))(i, j) = 0;
+        }
+    }
 
     template<typename MT1, typename MT2>
     Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
@@ -78,7 +91,7 @@ namespace QSim
     template<typename MT1, typename MT2>
     Internal::TMatrixMultiplicationResult_t<MT1, MT2> operator*(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     { 
-        assert((~rhs).Cols() == (~rhs).Rows());
+        assert((~lhs).Cols() == (~rhs).Rows());
 
         Internal::TMatrixMultiplicationResult_t<MT1, MT2> res((~lhs).Rows(), (~rhs).Cols());
         for (std::size_t i = 0; i < (~res).Rows(); i++)
@@ -224,6 +237,7 @@ namespace QSim
     class TDynamicMatrix : public TMatrix<TDynamicMatrix<Ty>>
     {
     public:
+        TDynamicMatrix() : m_rows(0), m_cols(0), m_data(nullptr) {}
         TDynamicMatrix(std::size_t rows, std::size_t cols);
         TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data);
         ~TDynamicMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
@@ -245,6 +259,8 @@ namespace QSim
 
         std::size_t Rows() const { return m_rows; }
         std::size_t Cols() const { return m_cols; }
+
+        void Resize(std::size_t rows, std::size_t cols);
 
     private:
         std::size_t m_rows;
@@ -291,13 +307,7 @@ namespace QSim
     template<typename MT>
     TDynamicMatrix<Ty>& TDynamicMatrix<Ty>::operator=(const TMatrix<MT>& rhs)
     {
-        if (m_rows*m_cols != (~rhs).Rows()*(~rhs).Cols())
-        {
-            this->~TDynamicMatrix();
-            m_data = new Ty[(~rhs).Rows()*(~rhs).Cols()];
-        }
-        m_rows = (~rhs).Rows();
-        m_cols = (~rhs).Cols(); 
+        Resize((~rhs).Rows(), (~rhs).Cols());
 
         for (std::size_t i = 0; i < Rows(); i++)
         {
@@ -346,6 +356,19 @@ namespace QSim
         std::swap(m_cols, rhs.m_cols);
         std::swap(m_data, rhs.m_data);
         return *this;
+    }
+
+    template<typename Ty>
+    void TDynamicMatrix<Ty>::Resize(std::size_t rows, std::size_t cols)
+    {
+        if (m_rows*m_cols != rows*cols)
+        {
+            this->~TDynamicMatrix();
+            if (rows*cols > 0)
+                m_data = new Ty[rows*cols];
+        }
+        m_rows = rows;
+        m_cols = cols;
     }
 
     namespace Internal

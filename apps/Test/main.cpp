@@ -7,9 +7,26 @@
 
 int main()
 {
+    bool success = true;
 
-    QSim::TNLevelSystem<3> sys({0.0, 1.0, 2.0});
+    QSim::TStaticMatrix<double, 5, 1> levels({0.0, 1.0, 2.0, -1.0, 3.0});
+    QSim::TNLevelSystem<5> sys(levels);
+    success = sys.AddTransition(QSim::TTransition<double>(0, 2, 1.0));
+    success = sys.AddTransition(QSim::TTransition<double>(1, 2, 1.0));
+    success = sys.AddTransition(QSim::TTransition<double>(2, 4, 1.0));
+    success = sys.AddTransition(QSim::TTransition<double>(0, 3, 1.0));
 
+    QSim::TStaticMatrix<double, 4, 1> detunings({1,0,0,0});
+    auto h = sys.GetHamiltonian(detunings, 0.0);
+    for (std::size_t i = 0; i < h.Rows(); i++)
+    {
+        for (std::size_t j = 0; j < h.Cols(); j++)
+        {
+            std::cout << h(i, j) << " ";
+        }
+        std::cout << std::endl;
+    }
+    
     double mat_data[] = { 3, 2, -1, 2, -2, 4, -1, 0.5, -1 };
     double b_data[] = { 1, -2, 0 };
     QSim::TDynamicMatrix<double> mat1(3, 3, mat_data);
@@ -27,7 +44,7 @@ int main()
     transitions.emplace_back(4, 2);
 
     QSim::TTransitionTree<double> node(0);
-    bool success = node.BuildTree(transitions);
+    success = node.BuildTree(transitions);
 
     std::cout << "Hello world" << std::endl;
     return 0;

@@ -9,24 +9,24 @@
 #include <cassert>
 
 #include "Matrix.h"
+#include "Transition.h"
+#include "TransitionTree.h"
+
 
 namespace QSim
 {
 
+    constexpr static double SpeedOfLight_v = 2.99792458e8;
+
     template<std::size_t N, typename Ty = double>
     class TNLevelSystem
     {
-        struct Transition 
-        {
-            std::size_t lvl1;
-            std::size_t lvl2;
-            Ty rabi;
-        };
-
     public:
         // constructors
         TNLevelSystem(const Ty (&levels)[N]) : TNLevelSystem(static_cast<const Ty*>(levels)) { } 
         TNLevelSystem(const std::initializer_list<Ty> levels) : TNLevelSystem(levels.begin()) { assert(levels.size() == N); }
+        template<typename VT>
+        TNLevelSystem(const TMatrix<VT>& levels) : m_levels(levels) {}
         TNLevelSystem(const Ty* levels); 
         ~TNLevelSystem();
 
@@ -34,21 +34,131 @@ namespace QSim
         TNLevelSystem(const TNLevelSystem& rhs) = default;
         TNLevelSystem& operator=(const TNLevelSystem& rhs) = default;
 
+        // Transition management functions
+        bool AddTransition(const TTransition<Ty>& trans);
+        const TTransition<Ty>& GetTransition(std::size_t idx) const { return m_transitions[idx]; }
+        std::size_t GetTransitionCount() const { return m_transitions.size(); }
+        std::size_t GetTransitionIdx(const TTransition<Ty>& trans) const;
+
+        const TDynamicMatrix<Ty>& GetPhotonBasis() const { return m_photonBasis; }
+        template<typename VT>
+        TStaticMatrix<Ty, N, N> GetHamiltonian(const TMatrix<VT>& detunings, Ty velocity) const;
+
     private:
-        Ty m_levels[N];
+        TStaticMatrix<Ty, N, 1> m_levels;
+        std::vector<TTransition<Ty>> m_transitions;
+        TDynamicMatrix<Ty> m_photonBasis;
+
+        TDynamicMatrix<Ty> m_transitionFreqs;
+        TDynamicMatrix<Ty> m_dopplerFactors;
+        TStaticMatrix<Ty, N, N> m_partialHamiltonian;
     };
 
     template<std::size_t N, typename Ty>
     TNLevelSystem<N, Ty>::TNLevelSystem(const Ty* levels)
-        : m_levels{}
     {
-        std::copy(levels, levels + N, m_levels);
+        for (std::size_t i = 0; i < N; i++)
+            m_levels(i, 0) = levels[i];
     }
 
     template<std::size_t N, typename Ty>
     TNLevelSystem<N, Ty>::~TNLevelSystem()
     {
 
+    }
+    
+    template<std::size_t N, typename Ty>
+    bool TNLevelSystem<N, Ty>::AddTransition(const TTransition<Ty>& trans)
+    {
+        if (std::find(m_transitions.begin(), m_transitions.end(), trans) != m_transitions.end())
+            return false;
+        m_transitions.push_back(trans);
+
+        // Recalculate transition frequencies
+        m_transitionFreqs.Resize(m_transitions.size(), 1);
+        m_dopplerFactors.Resize(m_transitions.size(), 1);
+        for (std::size_t i = 0; i < m_transitions.size(); i++)
+        {
+            Ty lvl1 = m_levels(m_transitions[i].GetLevel1Index(), 0); 
+            Ty lvl2 = m_levels(m_transitions[i].GetLevel2Index(), 0); 
+            m_transitionFreqs(i, 0) = std::abs(lvl1 - lvl2);
+            m_dopplerFactors(i, 0) = 1.0 / SpeedOfLight_v;
+        }
+
+        // Rebuild partial hamiltonian
+        m_partialHamiltonian.SetZero();
+
+        // Atom hamiltonian
+        for (std::size_t i = 0; i < N; i++)
+            m_partialHamiltonian(i, i) = m_levels(i, 0);
+        
+        // Interaction hamiltonian
+        for (const auto& tr: m_transitions)
+        {
+            std::size_t lvlIdx1 = tr.GetLevel1Index();
+            std::size_t lvlIdx2 = tr.GetLevel2Index();
+            Ty rabi = tr.GetRabi();
+            m_partialHamiltonian(lvlIdx1, lvlIdx2) = 0.5 * rabi;
+            m_partialHamiltonian(lvlIdx2, lvlIdx1) = 0.5 * rabi;
+        }
+        
+
+        
+
+
+        // Rebuild transition tree and photon basis matrix
+        std::vector<TTransitionTree<Ty>> trees;
+        std::set<std::size_t> handledLevels;
+
+        m_photonBasis.Resize(N, GetTransitionCount());
+        m_photonBasis.SetZero();
+
+        while (handledLevels.size() < N)
+        {
+            std::size_t head = 0;
+            for (; handledLevels.find(head) != handledLevels.end(); head++);
+
+            TTransitionTree<Ty> tree(head);
+            if (!tree.BuildTree(m_transitions))
+            {
+                m_transitions.pop_back();
+                return false;
+            }
+            trees.push_back(tree);
+            
+            auto treeIndices = tree.GetTreeLevelIndices();
+            handledLevels.insert(treeIndices.begin(), treeIndices.end());
+
+            tree.AddPhotonBasis(m_transitions, m_levels, m_photonBasis);
+        }
+
+        return true;
+    }
+
+    template<std::size_t N, typename Ty>
+    std::size_t TNLevelSystem<N, Ty>::GetTransitionIdx(const TTransition<Ty>& trans) const
+    {
+        auto it = std::find(m_transitions.begin(), m_transitions.end(), trans);
+        if (it != m_transitions.end())
+            return it - m_transitions.begin();
+        return -1;
+    }
+
+    template<std::size_t N, typename Ty>
+    template<typename VT>
+    TStaticMatrix<Ty, N, N> TNLevelSystem<N, Ty>::GetHamiltonian(const TMatrix<VT>& detunings, Ty velocity) const
+    {
+        assert((~detunings).Rows() == m_transitionFreqs.Rows());
+
+        TStaticMatrix<Ty, N, N> h = m_partialHamiltonian;
+        auto laserFreqs = detunings + m_transitionFreqs;
+        for (std::size_t i = 0; i < (~laserFreqs).Rows(); i++)
+            laserFreqs(i, 0) *= (1 - m_dopplerFactors(i, 0) * velocity);
+        auto diag = m_photonBasis * laserFreqs;
+        for (std::size_t i = 0; i < N; i++)
+            h(i, i) += diag(i, 0); 
+
+        return h; 
     }
 
 }

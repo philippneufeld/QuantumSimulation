@@ -29,10 +29,15 @@ namespace QSim
         TTransitionTree& operator=(const TTransitionTree& rhs) = default;
         TTransitionTree& operator=(TTransitionTree&& rhs) = default;
 
+        bool BuildTree(const std::vector<TTransition<Ty>>& transitions);
+
         // Getter
+        const std::map<TTransition<Ty>, TTransitionTree>& GetNodes() const { return m_subNodes; }
         std::set<std::size_t> GetTreeLevelIndices() const { return m_levelIndices; }
 
-        bool BuildTree(const std::vector<TTransition<Ty>>& transitions);
+        //
+        template<typename VT, typename MT>
+        bool AddPhotonBasis(const std::vector<TTransition<Ty>>& allTrans, const TMatrix<VT>& levels, TMatrix<MT>& inout) const;
 
     private:
         std::size_t m_headLevelIdx;
@@ -45,6 +50,8 @@ namespace QSim
     bool TTransitionTree<Ty>::BuildTree(const std::vector<TTransition<Ty>>& transitions)
     {
         m_subNodes.clear();
+        m_levelIndices.clear();
+
         m_levelIndices.insert(m_headLevelIdx);
 
         for (const auto& trans: transitions)
@@ -83,6 +90,41 @@ namespace QSim
                 m_levelIndices.insert(node.m_levelIndices.begin(), node.m_levelIndices.end());
             }
         }
+        return true;
+    }
+
+    template<typename Ty>
+    template<typename VT, typename MT>
+    bool TTransitionTree<Ty>::AddPhotonBasis(const std::vector<TTransition<Ty>>& allTrans, const TMatrix<VT>& levels, TMatrix<MT>& inout) const
+    {
+        // Validate matrices
+        if ((~inout).Rows() != (~levels).Rows())
+            return false;
+        if ((~inout).Cols() != allTrans.size())
+            return false;
+        if ((~levels).Cols() != 1)
+            return false;
+
+        for (const auto& el: m_subNodes)
+        {
+            const auto& trans = el.first;
+            auto it = std::find(allTrans.begin(), allTrans.end(), trans);
+            if (it == allTrans.end())
+                return false;
+            std::size_t transIdx = it - allTrans.begin();
+
+            Ty rel = 1;
+            if ((~levels)(m_headLevelIdx, 0) < std::max((~levels)(trans.GetLevel1Index(), 0), (~levels)(trans.GetLevel2Index(), 0)))
+                rel = -rel;
+
+            const auto& subtree = el.second;
+            for (std::size_t lvlIdx: subtree.m_levelIndices)
+                (~inout)(lvlIdx, transIdx) += rel;
+            
+            if (!subtree.AddPhotonBasis(allTrans, levels, inout))
+                return false;
+        }
+
         return true;
     }
 
