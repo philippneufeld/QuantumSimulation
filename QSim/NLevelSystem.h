@@ -48,9 +48,9 @@ namespace QSim
 
         // Solver
         template<typename VT>
-        TStaticMatrix<std::complex<Ty>, N, N> GetSteadyState(const TMatrix<VT>& detunings, Ty velocity);
+        TStaticMatrix<std::complex<Ty>, N, N> GetSteadyState(const TMatrix<VT>& detunings, Ty velocity) const;
         template<typename VT>
-        Ty GetAbsorptionCoeff(const TMatrix<VT>& detunings, std::size_t lIdx1, std::size_t lIdx2);
+        Ty GetAbsorptionCoeff(const TMatrix<VT>& detunings, Ty velocity, std::size_t lIdx1, std::size_t lIdx2) const;
 
         const TDynamicMatrix<Ty>& GetPhotonBasis() const { return m_photonBasis; }
         template<typename VT>
@@ -134,7 +134,6 @@ namespace QSim
                 return false;
             }
             trees.push_back(tree);
-            
             auto treeIndices = tree.GetTreeLevelIndices();
             handledLevels.insert(treeIndices.begin(), treeIndices.end());
 
@@ -172,7 +171,7 @@ namespace QSim
 
     template<std::size_t N, typename Ty>
     template<typename VT>
-    TStaticMatrix<std::complex<Ty>, N, N> TNLevelSystem<N, Ty>::GetSteadyState(const TMatrix<VT>& detunings, Ty velocity)
+    TStaticMatrix<std::complex<Ty>, N, N> TNLevelSystem<N, Ty>::GetSteadyState(const TMatrix<VT>& detunings, Ty velocity) const
     {
         auto h = GetHamiltonian(detunings, velocity);
         TStaticMatrix<std::complex<Ty>, N*N + 1, N*N> A;
@@ -226,9 +225,9 @@ namespace QSim
 
     template<std::size_t N, typename Ty>
     template<typename VT>
-    Ty TNLevelSystem<N, Ty>::GetAbsorptionCoeff(const TMatrix<VT>& detunings, std::size_t lIdx1, std::size_t lIdx2)
+    Ty TNLevelSystem<N, Ty>::GetAbsorptionCoeff(const TMatrix<VT>& detunings, Ty velocity, std::size_t lIdx1, std::size_t lIdx2) const
     {
-        return std::imag((~GetSteadyState(detunings, 0.0))(lIdx1, lIdx2));
+        return std::imag((~GetSteadyState(detunings, velocity))(lIdx1, lIdx2));
     }
 }
 

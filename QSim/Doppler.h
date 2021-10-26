@@ -1,0 +1,69 @@
+// Philipp Neufeld, 2021
+
+#ifndef QSIM_Doppler_H_
+#define QSIM_Doppler_H_
+
+#include <cstdint>
+
+#include "NLevelSystem.h"
+
+namespace QSim
+{
+
+    constexpr static double BoltzmannConstant_v = 1.38064852e-23;
+
+    template<typename Ty>
+    class TDopplerIntegrator
+    {
+    public:
+        // constructors
+        TDopplerIntegrator() : TDopplerIntegrator(1.674e-27, 300) { }
+        TDopplerIntegrator(Ty mass, Ty temperature) : TDopplerIntegrator(mass, temperature, 1000) { }
+        TDopplerIntegrator(Ty mass, Ty temperature, std::size_t steps)
+            : m_mass(mass), m_temperature(temperature), m_steps(steps) { }
+
+        // copy operators
+        TDopplerIntegrator(const TDopplerIntegrator&) = default;
+        TDopplerIntegrator& operator=(const TDopplerIntegrator&) = default;
+
+        template<std::size_t N>
+        Ty IntegrateAbsorptionCoefficient(const TNLevelSystem<N, Ty>& system, const TDynamicMatrix<Ty>& detunings, std::size_t lvl1Idx, std::size_t lvl2Idx) const;
+    
+    private:
+        Ty m_mass;
+        Ty m_temperature;
+        std::size_t m_steps;
+    };
+
+    template<typename Ty>
+    template<std::size_t N>
+    Ty TDopplerIntegrator<Ty>::IntegrateAbsorptionCoefficient(
+        const TNLevelSystem<N, Ty>& system, const TDynamicMatrix<Ty>& detunings, std::size_t lvl1Idx, std::size_t lvl2Idx) const
+    {
+        const static Ty pi = std::acos(-1.0);
+        if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
+        {
+            int steps = static_cast<int>(m_steps / 2);
+            Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
+            Ty sigma2SqRec = 1 / (2 * sigma * sigma);
+            Ty norm = 1 / (std::sqrt(2*pi)*sigma);
+            Ty vel_step = 3.5 * sigma / steps;
+
+            Ty dopplerAbsCoeff = 0.0;
+            for (auto i = -steps; i <= steps; i++)
+            {
+                Ty velocity = i * vel_step;
+                Ty thermal = norm * std::exp(-velocity*velocity * sigma2SqRec);
+                Ty absCoeff = system.GetAbsorptionCoeff(detunings, velocity, lvl1Idx, lvl2Idx);
+                dopplerAbsCoeff += thermal * absCoeff;
+            }
+            dopplerAbsCoeff *= vel_step;
+
+            return dopplerAbsCoeff;
+        }
+        else
+            return system.GetAbsorptionCoeff(detunings, 0.0, lvl1Idx, lvl2Idx);
+    }
+}
+
+#endif
