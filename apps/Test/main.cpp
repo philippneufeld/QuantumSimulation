@@ -5,13 +5,43 @@
 #include <QSim/Matrix.h>
 #include <QSim/TransitionTree.h>
 #include <QSim/Doppler.h>
+#include <QSim/ThreadPool.h>
 #include <chrono>
 
 #include <fstream>
 
+
+std::mutex mutex;
+
+void task()
+{
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        std::cout << "Starting task..." << std::endl;
+    }
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        std::cout << "Finnishing task..." << std::endl;
+    }
+}
+
 int main()
 {
     
+    QSim::ThreadPool pool;
+
+    pool.AddTask(task);
+    pool.AddTask(task);
+    pool.AddTask(task);
+    pool.WaitUntilFinnished();
+
+    std::cout << "All tasks finnished." << std::endl;
+
+    return 0;
+
     using Ty = double;
 
     Ty levels[] = { -4.271e9, 2.563e9, QSim::SpeedOfLight_v / 780.241e-9 };
