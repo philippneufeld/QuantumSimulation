@@ -13,7 +13,7 @@
 
 std::mutex mutex;
 
-void task()
+void task1()
 {
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -28,22 +28,12 @@ void task()
     }
 }
 
+
 int main()
-{
-    
+{    
     QSim::ThreadPool pool;
 
-    pool.AddTask(task);
-    pool.AddTask(task);
-    pool.AddTask(task);
-    pool.WaitUntilFinnished();
-
-    std::cout << "All tasks finnished." << std::endl;
-
-    return 0;
-
     using Ty = double;
-
     Ty levels[] = { -4.271e9, 2.563e9, QSim::SpeedOfLight_v / 780.241e-9 };
     QSim::TNLevelSystem<3, Ty> system(levels);
     system.AddTransition(QSim::TTransition<Ty>{0, 2, 3.5e6});
@@ -65,10 +55,20 @@ int main()
     auto start_ts = std::chrono::high_resolution_clock::now();
 
     std::vector<Ty> absCoeffs;
-    absCoeffs.reserve(detuning.size());
-    for (Ty det: detuning)
-        absCoeffs.push_back(dopplerIntegrator.IntegrateAbsorptionCoefficient(system, QSim::TStaticMatrix<Ty, 2, 1>({ det, 0 }), 0, 2));
+    absCoeffs.resize(detuning.size());
+    for (std::size_t i = 0; i < absCoeffs.size(); i++)
+    {
+        auto task = [&, i]()
+        { 
+            absCoeffs[i] = dopplerIntegrator.IntegrateAbsorptionCoefficient(
+                system, QSim::TStaticMatrix<Ty, 2, 1>({ detuning[i], 0 }), 0, 2); 
+        };
+
+        pool.AddTask(task);
+    }
     
+    pool.WaitUntilFinnished();
+
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
 
     std::ofstream file;
