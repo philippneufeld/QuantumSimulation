@@ -1,36 +1,33 @@
 // Philipp Neufeld, 2021
 
 #include <iostream>
+#include <chrono>
+#include <fstream>
+
 #include <QSim/NLevelSystem.h>
 #include <QSim/Matrix.h>
 #include <QSim/TransitionTree.h>
 #include <QSim/Doppler.h>
 #include <QSim/ThreadPool.h>
-#include <chrono>
-
-#include <fstream>
-
-
-std::mutex mutex;
-
-void task1()
-{
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        std::cout << "Starting task..." << std::endl;
-    }
-
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        std::cout << "Finnishing task..." << std::endl;
-    }
-}
+#include <QSim/NLevelSystem2.h>
 
 
 int main()
-{    
+{
+    QSim::NLevelSystem sys;
+    sys.SetLevel("g1", 0.0);
+    sys.SetLevel("g2", 1.0);
+    sys.SetLevel("e", 2.0);
+
+    std::cout << sys.GetLevel("e") << std::endl;
+
+    bool success = true;
+    success = sys.AddTransition("g1", "e", 1.0);
+    success = sys.AddTransition("g2", "e", 1.0);
+    std::cout << success << std::endl;
+
+    return 0;
+
     QSim::ThreadPool pool;
 
     using Ty = double;
@@ -40,7 +37,7 @@ int main()
     system.AddTransition(QSim::TTransition<Ty>{1, 2, 10e6});
     system.AddDecay(QSim::TDecay<Ty>{2, 0, 3.0/8.0 * 6.065e6});
     system.AddDecay(QSim::TDecay<Ty>{2, 1, 5.0/8.0 * 6.065e6});
-
+    
     Ty mass = 1.44e-25;
     QSim::TDopplerIntegrator<Ty> dopplerIntegrator(mass, 300.0);
     
@@ -63,7 +60,6 @@ int main()
             absCoeffs[i] = dopplerIntegrator.IntegrateAbsorptionCoefficient(
                 system, QSim::TStaticMatrix<Ty, 2, 1>({ detuning[i], 0 }), 0, 2); 
         };
-
         pool.AddTask(task);
     }
     

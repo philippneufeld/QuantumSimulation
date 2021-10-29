@@ -17,6 +17,12 @@ set (CMAKE_CXX_STANDARD 14)
 set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
 set(QSIM_PUBLIC_INCLUDE_DIRS, "${QSIM_INCLUDE_DIR}")
 
+# source files
+set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
+set(QSIM_SOURCES 
+    "${QSIM_SOURCE_DIR}/NLevelSystem.cpp")
+message(${QSIM_SOURCES})
+
 # find required libs
 find_package (Threads REQUIRED)
 
