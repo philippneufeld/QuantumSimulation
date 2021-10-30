@@ -244,7 +244,7 @@ namespace QSim
         TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data);
         TDynamicMatrix(std::size_t rows, std::size_t cols, std::initializer_list<double> lst)
             : TDynamicMatrix(rows, cols, lst.begin()) {}
-        ~TDynamicMatrix() { /*if (m_data) delete[] m_data;*/ m_data = nullptr; }
+        ~TDynamicMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
 
         template<typename MT>
         TDynamicMatrix(const TMatrix<MT>& rhs);
@@ -276,14 +276,14 @@ namespace QSim
 
     template<typename Ty>
     TDynamicMatrix<Ty>::TDynamicMatrix(std::size_t rows, std::size_t cols)
-        : m_rows(rows), m_cols(cols), m_data(m_memory/*new Ty[m_rows*m_cols]*/)
+        : m_rows(rows), m_cols(cols), m_data(new Ty[m_rows*m_cols])
     {
         this->SetZero();
     }
 
     template<typename Ty>
     TDynamicMatrix<Ty>::TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data)
-        : m_rows(rows), m_cols(cols), m_data(m_memory/*new Ty[m_rows*m_cols]*/)
+        : m_rows(rows), m_cols(cols), m_data(new Ty[m_rows*m_cols])
     {
         for (std::size_t i = 0; i < Rows(); i++)
         {
@@ -295,7 +295,7 @@ namespace QSim
     template<typename Ty>
     template<typename MT>
     TDynamicMatrix<Ty>::TDynamicMatrix(const TMatrix<MT>& rhs)
-        : m_rows((~rhs).Rows()), m_cols((~rhs).Cols()), m_data(m_memory/*new Ty[m_rows*m_cols]*/)
+        : m_rows((~rhs).Rows()), m_cols((~rhs).Cols()), m_data(new Ty[m_rows*m_cols])
     {
         for (std::size_t i = 0; i < Rows(); i++)
         {
@@ -321,7 +321,7 @@ namespace QSim
 
     template<typename Ty>
     TDynamicMatrix<Ty>::TDynamicMatrix(const TDynamicMatrix<Ty>& rhs)
-        : m_rows(rhs.m_rows), m_cols(rhs.m_cols), m_data(m_memory/*new Ty[m_rows*m_cols]*/)
+        : m_rows(rhs.m_rows), m_cols(rhs.m_cols), m_data(new Ty[m_rows*m_cols])
     {
         for (std::size_t i = 0; i < Rows(); i++)
         {
@@ -366,7 +366,7 @@ namespace QSim
         {
             this->~TDynamicMatrix();
             if (rows*cols > 0)
-                m_data = m_memory/*new Ty[rows*cols]*/;
+                m_data = new Ty[rows*cols];
         }
         m_rows = rows;
         m_cols = cols;
