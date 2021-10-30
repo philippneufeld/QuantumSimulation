@@ -62,9 +62,8 @@ namespace QSim
         return true;
     }
 
-    TDynamicMatrix<double> NLevelSystem::GetHamiltonian(const TDynamicMatrix<double>& detunings)
+    TDynamicMatrix<double> NLevelSystem::GetHamiltonian(const TDynamicMatrix<double>& detunings, double velocity)
     {
-
         assert((~detunings).Rows() == m_transitionSplittings.Rows());
 
         // Add light term to the hamiltonian
@@ -73,12 +72,75 @@ namespace QSim
         for (std::size_t i = 0; i < (~laserFreqs).Rows(); i++)
             laserFreqs(i, 0) *= (1 - m_dopplerFactors(i, 0) * velocity);
         auto diag = m_photonBasis * laserFreqs;
-        for (std::size_t i = 0; i < N; i++)
-            h(i, i) += diag(i, 0); 
+        for (std::size_t i = 0; i < (~hamiltonian).Rows(); i++)
+            hamiltonian(i, i) += diag(i, 0); 
 
-        return h; 
+        return hamiltonian; 
+    }
+
+    TDynamicMatrix<std::complex<double>> NLevelSystem::GetSteadyState(const TDynamicMatrix<double>& detunings, double velocity)
+    {
+
+        auto h = GetHamiltonian(detunings, velocity);
+        std::size_t N = h.Rows();
+        TDynamicMatrix<std::complex<double>> A(N*N + 1, N*N);
+
+        // von Neumann part of the evolution operator
+        for (std::size_t i = 0; i < N; i++)
+        {
+            for (std::size_t j = 0; j < N; j++)
+            {
+                for (std::size_t k = 0; k < N; k++)
+                {
+                    A(i*N+k, j*N+k) -= std::complex<double>(0, 1) * h(i, j);
+                    A(k*N+i, k*N+j) += std::complex<double>(0, 1) * h(j, i);
+                }
+            }
+        }
+        
+        // Lindblad part of the evolution operator
+        for(const auto& decay: m_indexedDecays)
+        {
+            std::size_t i = std::get<0>(decay);
+            std::size_t f = std::get<1>(decay);
+            auto rate = std::get<2>(decay);
+            A(f*N+f, i*N+i) += rate;
+            for (std::size_t j = 0; j < N; j++)
+            {
+                A(j*N+i, j*N+i) -= 0.5*rate;
+                A(i*N+j, i*N+j) -= 0.5*rate;
+            }
+        }
+
+        // Normalization condition
+        for (std::size_t i = 0; i < N; i++)
+            A(N*N, i*N+i) += 1.0;
+        
+        TDynamicMatrix<std::complex<double>> b(N*N+1, 1);
+        b(N*N, 0) = 1.0;
+        
+        auto A_adj = Adjoint(A);
+        auto x = LinearSolve(A_adj*A, A_adj*b);
+
+        TDynamicMatrix<std::complex<double>> ss(N, N);
+        for (std::size_t i = 0; i < N; i++)
+        {
+            for (std::size_t j = 0; j < N; j++)
+                ss(i, j) = x(i*N+j, 0);
+        }
+        
+        return ss;
     }
     
+    double NLevelSystem::GetAbsorptionCoeff(const TDynamicMatrix<double>& detunings, double velocity, const std::string& lvl1, const std::string lvl2)
+    {
+        std::map<std::string, std::size_t> indexMap;
+        for (std::size_t i = 0; i < m_usedLevels.size(); i++)
+            indexMap[m_usedLevels[i]] = i;
+
+        return std::imag(GetSteadyState(detunings, velocity)(indexMap[lvl1], indexMap[lvl2]));
+    }
+
     bool NLevelSystem::PrepareCalculation()
     {
         // find used levels
@@ -93,13 +155,20 @@ namespace QSim
         for (std::size_t i = 0; i < m_usedLevels.size(); i++)
             usedLevelsIndices[m_usedLevels[i]] = i;
         
+        // 
+        m_indexedDecays.resize(m_decays.size());
+        for (std::size_t i = 0; i < m_indexedDecays.size(); i++)
+            m_indexedDecays[i] = std::make_tuple(usedLevelsIndices[std::get<0>(m_decays[i])],
+                usedLevelsIndices[std::get<1>(m_decays[i])], std::get<2>(m_decays[i]));
+        
+
         // get dimensions
         std::size_t dim = m_usedLevels.size();
         std::size_t transCnt = m_transitions.size();
 
         // calculate transition splittings
-        m_transitionSplittings.Resize(m_transitions.size(), 1);
-        for (std::size_t i = 0; i < m_transitions.size(); i++)
+        m_transitionSplittings.Resize(transCnt, 1);
+        for (std::size_t i = 0; i < transCnt; i++)
         {
             auto lvl1 = m_levels[std::get<0>(m_transitions[i])];
             auto lvl2 = m_levels[std::get<1>(m_transitions[i])];
@@ -107,9 +176,12 @@ namespace QSim
         }
 
         // calulate doppler factors
+        m_dopplerFactors.Resize(transCnt, 1);
+        for (std::size_t i = 0; i < transCnt; i++)
+            m_dopplerFactors(i, 0) = 1.0 / SpeedOfLight2_v;
 
         // allocate photon basis matrix of the right size and initialize it with zero
-        m_photonBasis.Resize(dim, m_transitions.size());
+        m_photonBasis.Resize(dim, transCnt);
         m_photonBasis.SetZero();
 
         // Perform the photon basis(deallocate matrix on failure)

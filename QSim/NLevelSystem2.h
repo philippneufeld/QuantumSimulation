@@ -16,6 +16,8 @@
 namespace QSim
 {
 
+    constexpr static double SpeedOfLight2_v = 2.99792458e8;
+
     class NLevelSystem
     {
     public:
@@ -28,7 +30,9 @@ namespace QSim
         bool AddTransition(const std::string& lvl1, const std::string& lvl2, double rabi);
         bool AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi);
 
-        TDynamicMatrix<double> GetHamiltonian(const TDynamicMatrix<double>& detunings);
+        TDynamicMatrix<double> GetHamiltonian(const TDynamicMatrix<double>& detunings, double velocity);
+        TDynamicMatrix<std::complex<double>> GetSteadyState(const TDynamicMatrix<double>& detunings, double velocity);
+        double GetAbsorptionCoeff(const TDynamicMatrix<double>& detunings, double velocity, const std::string& lvl1, const std::string lvl2);
 
     private:
         bool PrepareCalculation();
@@ -44,6 +48,7 @@ namespace QSim
 
         // auxilliary variables for the creation of the hamiltonian
         std::vector<std::string> m_usedLevels;
+        std::vector<std::tuple<std::size_t, std::size_t, double>> m_indexedDecays;
         TDynamicMatrix<double> m_transitionSplittings;
         TDynamicMatrix<double> m_dopplerFactors;
         TDynamicMatrix<double> m_photonBasis;
