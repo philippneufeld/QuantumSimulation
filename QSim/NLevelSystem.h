@@ -159,10 +159,12 @@ namespace QSim
         assert((~detunings).Rows() == m_transitionFreqs.Rows());
 
         TStaticMatrix<Ty, N, N> h = m_partialHamiltonian;
-        auto laserFreqs = detunings + m_transitionFreqs;
+        TStaticMatrix<Ty, N, 1> laserFreqs;
+        MatrixAdd(laserFreqs, detunings, m_transitionFreqs);
         for (std::size_t i = 0; i < (~laserFreqs).Rows(); i++)
             laserFreqs(i, 0) *= (1 - m_dopplerFactors(i, 0) * velocity);
-        auto diag = m_photonBasis * laserFreqs;
+        TStaticMatrix<Ty, N, 1> diag;
+        MatrixMul(laserFreqs, m_photonBasis, laserFreqs);
         for (std::size_t i = 0; i < N; i++)
             h(i, i) += diag(i, 0); 
 
