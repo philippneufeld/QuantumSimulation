@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-#include "NLevelSystem.h"
+#include "NLevelSystemStatic.h"
 
 namespace QSim
 {
@@ -27,7 +27,11 @@ namespace QSim
         TDopplerIntegrator& operator=(const TDopplerIntegrator&) = default;
 
         template<std::size_t N>
-        Ty IntegrateAbsorptionCoefficient(const TNLevelSystem<N, Ty>& system, const TDynamicMatrix<Ty>& detunings, std::size_t lvl1Idx, std::size_t lvl2Idx) const;
+        Ty IntegrateAbsorptionCoefficient(
+            const TStaticNLevelSystem<N>& system, 
+            const TDynamicMatrix<Ty>& detunings, 
+            const std::string& lvl1, 
+            const std::string& lvl2) const;
     
     private:
         Ty m_mass;
@@ -38,7 +42,8 @@ namespace QSim
     template<typename Ty>
     template<std::size_t N>
     Ty TDopplerIntegrator<Ty>::IntegrateAbsorptionCoefficient(
-        const TNLevelSystem<N, Ty>& system, const TDynamicMatrix<Ty>& detunings, std::size_t lvl1Idx, std::size_t lvl2Idx) const
+        const TStaticNLevelSystem<N>& system, const TDynamicMatrix<Ty>& detunings, 
+        const std::string& lvl1, const std::string& lvl2) const
     {
         const static Ty pi = std::acos(-1.0);
         if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
@@ -54,7 +59,7 @@ namespace QSim
             {
                 Ty velocity = i * vel_step;
                 Ty thermal = norm * std::exp(-velocity*velocity * sigma2SqRec);
-                Ty absCoeff = system.GetAbsorptionCoeff(detunings, velocity, lvl1Idx, lvl2Idx);
+                Ty absCoeff = system.GetAbsorptionCoeff(detunings, velocity, lvl1, lvl2);
                 dopplerAbsCoeff += thermal * absCoeff;
             }
             dopplerAbsCoeff *= vel_step;
@@ -62,7 +67,7 @@ namespace QSim
             return dopplerAbsCoeff;
         }
         else
-            return system.GetAbsorptionCoeff(detunings, 0.0, lvl1Idx, lvl2Idx);
+            return system.GetAbsorptionCoeff(detunings, 0.0, lvl1, lvl2);
     }
 }
 

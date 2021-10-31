@@ -6,13 +6,16 @@
 #include <cstdint>
 #include <string>
 #include <array>
+#include <vector>
+#include <map>
+#include <set>
 #include <cassert>
 
 #include "Matrix.h"
 
 namespace QSim
 {
-    constexpr static double SpeedOfLight3_v = 2.99792458e8;
+    constexpr static double SpeedOfLight_v = 2.99792458e8;
 
     template<std::size_t N>
     class TStaticNLevelSystem
@@ -38,11 +41,11 @@ namespace QSim
         bool AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi);
 
         template<typename VT>
-        TStaticMatrix<double, N, N> GetHamiltonian(const TMatrix<VT>& detunings, double velocity);
+        TStaticMatrix<double, N, N> GetHamiltonian(const TMatrix<VT>& detunings, double velocity) const;
         template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetSteadyState(const TMatrix<VT>& detunings, double velocity);
+        TStaticMatrix<std::complex<double>, N, N> GetSteadyState(const TMatrix<VT>& detunings, double velocity) const;
         template<typename VT>
-        double GetAbsorptionCoeff(const TMatrix<VT>& detunings, double velocity, const std::string& lvl1, const std::string lvl2);
+        double GetAbsorptionCoeff(const TMatrix<VT>& detunings, double velocity, const std::string& lvl1, const std::string lvl2) const;
 
     private:
         bool PrepareCalculation();
@@ -110,7 +113,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<double, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TMatrix<VT>& detunings, double velocity)
+    TStaticMatrix<double, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TMatrix<VT>& detunings, double velocity) const
     {
         assert((~detunings).Rows() == m_transResonances.Rows());
         TStaticMatrix<double, N, N> hamiltonian = m_hamiltonianNoLight;
@@ -132,7 +135,7 @@ namespace QSim
     
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetSteadyState(const TMatrix<VT>& detunings, double velocity)
+    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetSteadyState(const TMatrix<VT>& detunings, double velocity) const
     {
         TStaticMatrix<double, N, N> h = GetHamiltonian(detunings, velocity);
         TStaticMatrix<std::complex<double>, N*N + 1, N*N> A;
@@ -187,9 +190,9 @@ namespace QSim
     template<std::size_t N>
     template<typename VT>
     double TStaticNLevelSystem<N>::GetAbsorptionCoeff(const TMatrix<VT>& detunings, 
-        double velocity, const std::string& lvl1, const std::string lvl2)
+        double velocity, const std::string& lvl1, const std::string lvl2) const
     {
-        return std::imag(GetSteadyState(detunings, velocity)(m_levelNames[lvl1], m_levelNames[lvl2]));
+        return std::imag(GetSteadyState(detunings, velocity)(m_levelNames.at(lvl1), m_levelNames.at(lvl2)));
     }
 
     template<std::size_t N>
@@ -208,7 +211,7 @@ namespace QSim
         // calulate doppler factors
         m_dopplerFactors.Resize(transCnt, 1);
         for (std::size_t i = 0; i < transCnt; i++)
-            m_dopplerFactors(i, 0) = 1.0 / SpeedOfLight3_v;
+            m_dopplerFactors(i, 0) = 1.0 / SpeedOfLight_v;
 
         // create photon basis matrix
         m_photonBasis.Resize(N, transCnt);

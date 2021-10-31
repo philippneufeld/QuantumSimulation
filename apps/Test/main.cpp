@@ -4,13 +4,10 @@
 #include <chrono>
 #include <fstream>
 
-#include <QSim/NLevelSystem.h>
 #include <QSim/Matrix.h>
-#include <QSim/TransitionTree.h>
+#include <QSim/NLevelSystemStatic.h>
 #include <QSim/Doppler.h>
 #include <QSim/ThreadPool.h>
-#include <QSim/NLevelSystem2.h>
-#include <QSim/NLevelSystemStatic.h>
 
 int main()
 {
@@ -19,7 +16,7 @@ int main()
     // Generate detuning axis
     double det_start = -100e6;
     double det_stop = 100e6;
-    std::size_t det_steps = 501*1000;
+    std::size_t det_steps = 501;
     std::vector<double> detuning;
     detuning.reserve(det_steps);
     for (std::size_t i = 0; i < det_steps; i++)
@@ -30,11 +27,12 @@ int main()
     levels["g2"] = 2.563e9;
     levels["e"] = QSim::SpeedOfLight_v / 780.241e-9;
     QSim::TStaticNLevelSystem<3> ssys(levels);
-    
-    ssys.AddTransition("g1", "e", 1.0);
-    ssys.AddTransition("g2", "e", 1.0);
-    ssys.AddDecay("e", "g1", 1.0);
-    ssys.AddDecay("e", "g2", 1.0);
+    ssys.AddTransition("g1", "e", 3.5e6);
+    ssys.AddTransition("g2", "e", 10.0e6);
+    ssys.AddDecay("e", "g1", 3.0/8.0 * 6.065e6);
+    ssys.AddDecay("e", "g2", 5.0/8.0 * 6.065e6);
+
+    QSim::TDopplerIntegrator<double> doppler(1.44316060e-25, 300.0);
 
     auto start_ts = std::chrono::high_resolution_clock::now();
 
@@ -44,14 +42,15 @@ int main()
     {
         auto task = [&, i]()
         { 
-            absCoeffs[i] = ssys.GetAbsorptionCoeff(QSim::TStaticMatrix<double, 2, 1>({ detuning[i], 0 }), 0.0, "g1", "e"); 
+            absCoeffs[i] = doppler.IntegrateAbsorptionCoefficient(
+                ssys, QSim::TStaticMatrix<double, 2, 1>({ detuning[i], 0 }), "g1", "e"); 
         };
         pool.AddTask(task);
     }
     
     pool.WaitUntilFinnished();
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
-
+    
     std::ofstream file;
     file.open("data.txt", std::ios::out);
     for (std::size_t i = 0; i < det_steps; i++)
