@@ -67,6 +67,12 @@ namespace QSim
         void SetZero();
     };
 
+    template<typename VT>
+    class TVector : public TMatrix<VT> {};
+    template<typename VT>
+    class TRowVector : public TVector<VT> {};
+    template<typename VT>
+    class TColVector : public TVector<VT> {};
     
     template<typename MT>
     void TMatrix<MT>::SetZero()
@@ -176,7 +182,7 @@ namespace QSim
     }
 
     template<typename MT, typename VT>
-    Internal::TMatrixDecay_t<VT> LinearSolve(const TMatrix<MT>& A, const TMatrix<VT>& b)
+    Internal::TMatrixDecay_t<VT> LinearSolve(const TMatrix<MT>& A, const TVector<VT>& b)
     {
         assert((~A).Rows() == (~A).Cols());
         assert((~A).Cols() == (~b).Rows());
@@ -202,7 +208,7 @@ namespace QSim
             {
                 for (std::size_t i = k; i < (~U).Rows(); i++)
                     std::swap((~U)(k, i), (~U)(pivot_row, i));
-                std::swap((~y)(k, 0), (~y)(pivot_row, 0));
+                std::swap((~y)(k), (~y)(pivot_row));
             }
 
             // eliminate
@@ -210,7 +216,7 @@ namespace QSim
             for (std::size_t i = k; i < (~U).Rows(); i++)
                 (~U)(k, i) *= factor;
             (~U)(k, k) = 1;
-            (~y)(k, 0) *= factor;
+            (~y)(k) *= factor;
             
 
             for (std::size_t i = k + 1; i < (~U).Rows(); i++)
@@ -218,7 +224,7 @@ namespace QSim
                 auto lambda = (~U)(i, k); // / (~U)(k, k);
                 for (std::size_t j = k; j < (~U).Rows(); j++)
                     (~U)(i, j) -= lambda * (~U)(k, j);
-                (~y)(i, 0) -= lambda * (~y)(k, 0);
+                (~y)(i) -= lambda * (~y)(k);
             }
         }
 
@@ -230,21 +236,20 @@ namespace QSim
         {
             std::size_t i = (~U).Rows() - l - 1;
             for (std::size_t j = i + 1; j < (~U).Rows(); j++)
-                (~x)(i, 0) -= (~U)(i, j) * (~x)(j, 0);
-            (~x)(i, 0) /= (~U)(i, i);
+                (~x)(i) -= (~U)(i, j) * (~x)(j);
+            (~x)(i) /= (~U)(i, i);
         }
 
         return (~x);
     }
 
-
-    
     //
     // Statically sized matrix
     //
 
     template<typename Ty, std::size_t N, std::size_t M>
-    class TStaticMatrix : public TMatrix<TStaticMatrix<Ty, N, M>>
+    class TStaticMatrix : public std::conditional_t<N==1 || M==1, 
+        std::conditional_t<N==1, TRowVector<TStaticMatrix<Ty, N, M>>, TColVector<TStaticMatrix<Ty, N, M>>>, TMatrix<TStaticMatrix<Ty, N, M>>>
     {
     public:
         TStaticMatrix() : m_data{} {} // m_data is initialized to its default value this way
@@ -261,12 +266,26 @@ namespace QSim
         Ty& operator()(std::size_t i, std::size_t j) { return m_data[i*M+j]; }
         const Ty& operator()(std::size_t i, std::size_t j) const { return m_data[i*M+j]; }
 
+        template<std::size_t K=N, std::size_t L=M, typename=std::enable_if_t<K==1 || L==1>>
+        Ty& operator()(std::size_t i) { return m_data[i]; }
+        template<std::size_t K=N, std::size_t L=M, typename=std::enable_if_t<K==1 || L==1>>
+        const Ty& operator()(std::size_t i) const { return m_data[i]; }
+
+        Ty& operator[](std::size_t i) { return m_data[i]; }
+        const Ty& operator[](std::size_t i) const { return m_data[i]; }
+
         constexpr std::size_t Rows() const { return N; }
         constexpr std::size_t Cols() const { return M; }
+        constexpr std::size_t Size() const { return Rows()*Cols(); }
 
     private:
         Ty m_data[N*M];
     };
+
+    template<typename Ty, std::size_t N>
+    using TStaticRowVector = TStaticMatrix<Ty, 1, N>;
+    template<typename Ty, std::size_t N>
+    using TStaticColVector = TStaticMatrix<Ty, N, 1>;
 
     template<typename Ty, std::size_t N, std::size_t M>
     TStaticMatrix<Ty, N, M>::TStaticMatrix(const Ty(&data)[N*M])
@@ -336,6 +355,276 @@ namespace QSim
     }
 
     //
+    // Hybridly sized matrix
+    //
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    class THybridMatrix : public std::conditional_t<N==1, 
+        std::conditional_t<colDyn, TRowVector<THybridMatrix<Ty, N, colDyn>>, TColVector<THybridMatrix<Ty, N, colDyn>>>, TMatrix<THybridMatrix<Ty, N, colDyn>>>
+    {
+    public:
+        THybridMatrix() : m_dynDim(0), m_data(nullptr) {}
+        THybridMatrix(std::size_t rows, std::size_t cols);
+        THybridMatrix(std::size_t rows, std::size_t cols, const Ty* data);
+        THybridMatrix(std::size_t rows, std::size_t cols, std::initializer_list<double> lst)
+            : THybridMatrix(rows, cols, lst.begin()) {}
+        ~THybridMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
+
+        template<typename MT>
+        THybridMatrix(const TMatrix<MT>& rhs);
+        template<typename MT>
+        THybridMatrix& operator=(const TMatrix<MT>& rhs);
+
+        THybridMatrix(const THybridMatrix& rhs);
+        THybridMatrix& operator=(const THybridMatrix& rhs);
+
+        THybridMatrix(THybridMatrix&& rhs) 
+            : m_dynDim(rhs.m_dynDim), m_data(rhs.m_data) { rhs.m_data = nullptr; }
+        THybridMatrix& operator=(THybridMatrix&& rhs);
+       
+        Ty& operator()(std::size_t i, std::size_t j) { return m_data[i*Cols()+j]; }
+        const Ty& operator()(std::size_t i, std::size_t j) const { return m_data[i*Cols()+j]; }
+
+        template<std::size_t K=N, typename=std::enable_if_t<K==1>>
+        Ty& operator()(std::size_t i) { return m_data[i]; }
+        template<std::size_t K=N, typename=std::enable_if_t<K==1>>
+        const Ty& operator()(std::size_t i) const { return m_data[i]; }
+
+        Ty& operator[](std::size_t i) { return m_data[i]; }
+        const Ty& operator[](std::size_t i) const { return m_data[i]; }
+
+        std::size_t Rows() const { return colDyn ? N : m_dynDim; }
+        std::size_t Cols() const { return colDyn ? m_dynDim : N; }
+        constexpr std::size_t Size() const { return Rows()*Cols(); }
+
+        void Resize(std::size_t dynDim);
+
+    private:
+        std::size_t m_dynDim;
+        Ty* m_data;
+    };
+
+    template<typename Ty>
+    using TDynamicRowVector = THybridMatrix<Ty, 1, true>;
+    template<typename Ty>
+    using TDynamicColVector = THybridMatrix<Ty, 1, false>;
+
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    THybridMatrix<Ty, N, colDyn>::THybridMatrix(std::size_t rows, std::size_t cols)
+        : m_dynDim(colDyn ? cols : rows), m_data(new Ty[N*colDyn])
+    {
+        assert((colDyn ? rows : cols) == N);
+        this->SetZero();
+    }
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    THybridMatrix<Ty, N, colDyn>::THybridMatrix(std::size_t rows, std::size_t cols, const Ty* data)
+        : m_dynDim(colDyn ? cols : rows), m_data(new Ty[N*colDyn])
+    {
+        assert((colDyn ? rows : cols) == N);
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = data[i*Cols()+j];
+        } 
+    }
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    template<typename MT>
+    THybridMatrix<Ty, N, colDyn>::THybridMatrix(const TMatrix<MT>& rhs)
+        : m_dynDim(colDyn ? (~rhs).Cols() : (~rhs).Rows()), m_data(new Ty[N*m_dynDim])
+    {
+        assert((colDyn ? (~rhs).Rows() : (~rhs).Cols()) == N);
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }    
+    }
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    template<typename MT>
+    THybridMatrix<Ty, N, colDyn>& THybridMatrix<Ty, N, colDyn>::operator=(const TMatrix<MT>& rhs)
+    {
+        assert((colDyn ? (~rhs).Rows() : (~rhs).Cols()) == N);
+        this->Resize(colDyn ? (~rhs).Cols() : (~rhs).Rows());
+
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }
+
+        return *this;
+    }
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    THybridMatrix<Ty, N, colDyn>::THybridMatrix(const THybridMatrix<Ty, N, colDyn>& rhs)
+        : m_dynDim(rhs.m_dynDim), m_data(new Ty[N*m_dynDim])
+    {
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }
+    }
+    
+    template<typename Ty, std::size_t N, bool colDyn>
+    THybridMatrix<Ty, N, colDyn>& THybridMatrix<Ty, N, colDyn>::operator=(const THybridMatrix<Ty, N, colDyn>& rhs)
+    {
+        this->Resize(rhs.m_dynDim);
+
+        for (std::size_t i = 0; i < Rows(); i++)
+        {
+            for (std::size_t j = 0; j < Cols(); j++)
+                (*this)(i, j) = (~rhs)(i, j);            
+        }
+
+        return *this;
+    }
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    THybridMatrix<Ty, N, colDyn>& THybridMatrix<Ty, N, colDyn>::operator=(THybridMatrix<Ty, N, colDyn>&& rhs)
+    {
+        std::swap(m_dynDim, rhs.m_dynDim);
+        std::swap(m_data, rhs.m_data);
+        return *this;
+    }
+
+    template<typename Ty, std::size_t N, bool colDyn>
+    void THybridMatrix<Ty, N, colDyn>::Resize(std::size_t dynDim)
+    {
+        if (m_dynDim != dynDim)
+        {
+            this->~THybridMatrix();
+            if (dynDim > 0)
+                m_data = new Ty[N*dynDim];
+        }
+        m_dynDim = dynDim;
+    }
+
+    namespace Internal
+    {
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResultImpl<TStaticMatrix<Ty, N, M>, THybridMatrix<Ty, N, true>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResultImpl<TStaticMatrix<Ty, N, M>, THybridMatrix<Ty, M, false>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResultImpl<THybridMatrix<Ty, N, true>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixAdditionResultImpl<THybridMatrix<Ty, M, false>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, bool colDyn>
+        struct TMatrixAdditionResultImpl<THybridMatrix<Ty, N, colDyn>, THybridMatrix<Ty, N, colDyn>>
+        {
+            using type = THybridMatrix<Ty, N, colDyn>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M, bool colDyn>
+        struct TMatrixAdditionResultImpl<THybridMatrix<Ty, N, colDyn>, THybridMatrix<Ty, M, !colDyn>>
+        {
+            using type = TStaticMatrix<Ty, colDyn ? N : M, colDyn ? M : N>;
+        };
+
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResultImpl<TStaticMatrix<Ty, N, M>, THybridMatrix<Ty, N, true>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResultImpl<TStaticMatrix<Ty, N, M>, THybridMatrix<Ty, M, false>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResultImpl<THybridMatrix<Ty, N, true>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixSubtractionResultImpl<THybridMatrix<Ty, M, false>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, bool colDyn>
+        struct TMatrixSubtractionResultImpl<THybridMatrix<Ty, N, colDyn>, THybridMatrix<Ty, N, colDyn>>
+        {
+            using type = THybridMatrix<Ty, N, colDyn>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M, bool colDyn>
+        struct TMatrixSubtractionResultImpl<THybridMatrix<Ty, N, colDyn>, THybridMatrix<Ty, M, !colDyn>>
+        {
+            using type = TStaticMatrix<Ty, colDyn ? N : M, colDyn ? M : N>;
+        };
+
+
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixMultiplicationResultImpl<TStaticMatrix<Ty, N, M>, THybridMatrix<Ty, M, true>>
+        {
+            using type = THybridMatrix<Ty, N, true>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M, std::size_t K>
+        struct TMatrixMultiplicationResultImpl<TStaticMatrix<Ty, N, M>, THybridMatrix<Ty, K, false>>
+        {
+            using type = TStaticMatrix<Ty, N, K>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M, std::size_t K>
+        struct TMatrixMultiplicationResultImpl<THybridMatrix<Ty, K, true>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticMatrix<Ty, K, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixMultiplicationResultImpl<THybridMatrix<Ty, N, false>, TStaticMatrix<Ty, N, M>>
+        {
+            using type = THybridMatrix<Ty, M, false>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixMultiplicationResultImpl<THybridMatrix<Ty, N, true>, THybridMatrix<Ty, M, false>>
+        {
+            using type = TStaticMatrix<Ty, N, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M, bool colDyn>
+        struct TMatrixMultiplicationResultImpl<THybridMatrix<Ty, N, colDyn>, THybridMatrix<Ty, M, colDyn>>
+        {
+            using type = THybridMatrix<Ty, colDyn ? N : M, colDyn>;
+        };
+
+        template<typename Ty, std::size_t N, bool colDyn>
+        struct TMatrixTranspositionResultImpl<THybridMatrix<Ty, N, colDyn>>
+        {
+            using type = THybridMatrix<Ty, N, !colDyn>;
+        };  
+    }
+
+    //
     // Dynamically sized matrix
     //
 
@@ -365,8 +654,12 @@ namespace QSim
         Ty& operator()(std::size_t i, std::size_t j) { return m_data[i*Cols()+j]; }
         const Ty& operator()(std::size_t i, std::size_t j) const { return m_data[i*Cols()+j]; }
 
+        Ty& operator[](std::size_t i) { return m_data[i]; }
+        const Ty& operator[](std::size_t i) const { return m_data[i]; }
+
         std::size_t Rows() const { return m_rows; }
         std::size_t Cols() const { return m_cols; }
+        constexpr std::size_t Size() const { return Rows()*Cols(); }
 
         void Resize(std::size_t rows, std::size_t cols);
 
@@ -374,7 +667,6 @@ namespace QSim
         std::size_t m_rows;
         std::size_t m_cols;
         Ty* m_data;
-        Ty m_memory[90];
     };
 
 
@@ -437,13 +729,7 @@ namespace QSim
     template<typename Ty>
     TDynamicMatrix<Ty>& TDynamicMatrix<Ty>::operator=(const TDynamicMatrix<Ty>& rhs)
     {
-        if (m_rows*m_cols != (~rhs).Rows()*(~rhs).Cols())
-        {
-            this->~TDynamicMatrix();
-            m_data = new Ty[(~rhs).Rows()*(~rhs).Cols()];
-        }
-        m_rows = (~rhs).Rows();
-        m_cols = (~rhs).Cols();
+        this->Resize(rhs.Rows(), rhs.Cols());
 
         for (std::size_t i = 0; i < Rows(); i++)
         {
@@ -481,13 +767,13 @@ namespace QSim
         template<typename Ty, std::size_t N, std::size_t M>
         struct TMatrixAdditionResultImpl<TStaticMatrix<Ty, N, M>, TDynamicMatrix<Ty>>
         {
-            using type = TDynamicMatrix<Ty>;
+            using type = TStaticMatrix<Ty, N, M>;
         };
 
         template<typename Ty, std::size_t N, std::size_t M>
         struct TMatrixAdditionResultImpl<TDynamicMatrix<Ty>, TStaticMatrix<Ty, N, M>>
         {
-            using type = TDynamicMatrix<Ty>;
+            using type = TStaticMatrix<Ty, N, M>;
         };
 
         template<typename Ty>
@@ -500,13 +786,13 @@ namespace QSim
         template<typename Ty, std::size_t N, std::size_t M>
         struct TMatrixSubtractionResultImpl<TStaticMatrix<Ty, N, M>, TDynamicMatrix<Ty>>
         {
-            using type = TDynamicMatrix<Ty>;
+            using type = TStaticMatrix<Ty, N, M>;
         };
 
         template<typename Ty, std::size_t N, std::size_t M>
         struct TMatrixSubtractionResultImpl<TDynamicMatrix<Ty>, TStaticMatrix<Ty, N, M>>
         {
-            using type = TDynamicMatrix<Ty>;
+            using type = TStaticMatrix<Ty, N, M>;
         };
 
         template<typename Ty>
@@ -519,17 +805,23 @@ namespace QSim
         template<typename Ty, std::size_t N, std::size_t M>
         struct TMatrixMultiplicationResultImpl<TStaticMatrix<Ty, N, M>, TDynamicMatrix<Ty>>
         {
-            using type = TDynamicMatrix<Ty>;
+            using type = THybridMatrix<Ty, N, true>;
         };
 
         template<typename Ty, std::size_t N, std::size_t M>
         struct TMatrixMultiplicationResultImpl<TDynamicMatrix<Ty>, TStaticMatrix<Ty, N, M>>
         {
-            using type = TDynamicMatrix<Ty>;
+            using type = THybridMatrix<Ty, M, false>;
         };
 
         template<typename Ty>
         struct TMatrixMultiplicationResultImpl<TDynamicMatrix<Ty>, TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicMatrix<Ty>;
+        };
+
+        template<typename Ty, std::size_t N>
+        struct TMatrixMultiplicationResultImpl<THybridMatrix<Ty, N, false>, THybridMatrix<Ty, N, true>>
         {
             using type = TDynamicMatrix<Ty>;
         };
@@ -540,6 +832,31 @@ namespace QSim
             using type = TDynamicMatrix<Ty>;
         }; 
     }
+
+
+    //
+    // Algorithms
+    //
+    template<typename Ty, bool colVec = true>
+    auto CreateLinspace(Ty start, Ty stop, std::size_t steps)
+    {
+        std::conditional_t<colVec, TDynamicColVector<Ty>, TDynamicRowVector<Ty>> vec;
+        vec.Resize(steps);
+
+        if (steps == 1)
+            vec(0) = (start + stop) / 2;
+        else if(steps > 1)
+        {
+            Ty tyStep = (stop - start) / (steps - 1);
+            for (std::size_t i = 0; i < steps; i++)
+                vec(i) = start + i * tyStep;
+        }
+
+        return vec;
+    }
+
+
+    
 
 }
 

@@ -41,11 +41,11 @@ namespace QSim
         bool AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi);
 
         template<typename VT>
-        TStaticMatrix<double, N, N> GetHamiltonian(const TMatrix<VT>& detunings, double velocity) const;
+        TStaticMatrix<double, N, N> GetHamiltonian(const TColVector<VT>& detunings, double velocity) const;
         template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetSteadyState(const TMatrix<VT>& detunings, double velocity) const;
+        TStaticMatrix<std::complex<double>, N, N> GetSteadyState(const TColVector<VT>& detunings, double velocity) const;
         template<typename VT>
-        double GetAbsorptionCoeff(const TMatrix<VT>& detunings, double velocity, const std::string& lvl1, const std::string lvl2) const;
+        double GetAbsorptionCoeff(const TColVector<VT>& detunings, double velocity, const std::string& lvl1, const std::string lvl2) const;
 
     private:
         bool PrepareCalculation();
@@ -62,8 +62,8 @@ namespace QSim
         std::vector<std::tuple<std::size_t, std::size_t, double>> m_decays;
 
         // auxilliary variables
-        TDynamicMatrix<double> m_transResonances;
-        TDynamicMatrix<double> m_dopplerFactors;
+        TDynamicColVector<double> m_transResonances;
+        TDynamicColVector<double> m_dopplerFactors;
         TDynamicMatrix<double> m_photonBasis;
         TStaticMatrix<double, N, N> m_hamiltonianNoLight;
     };
@@ -113,7 +113,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<double, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TMatrix<VT>& detunings, double velocity) const
+    TStaticMatrix<double, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TColVector<VT>& detunings, double velocity) const
     {
         assert((~detunings).Rows() == m_transResonances.Rows());
         TStaticMatrix<double, N, N> hamiltonian = m_hamiltonianNoLight;
@@ -135,7 +135,7 @@ namespace QSim
     
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetSteadyState(const TMatrix<VT>& detunings, double velocity) const
+    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetSteadyState(const TColVector<VT>& detunings, double velocity) const
     {
         TStaticMatrix<double, N, N> h = GetHamiltonian(detunings, velocity);
         TStaticMatrix<std::complex<double>, N*N + 1, N*N> A;
@@ -189,7 +189,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    double TStaticNLevelSystem<N>::GetAbsorptionCoeff(const TMatrix<VT>& detunings, 
+    double TStaticNLevelSystem<N>::GetAbsorptionCoeff(const TColVector<VT>& detunings, 
         double velocity, const std::string& lvl1, const std::string lvl2) const
     {
         return std::imag(GetSteadyState(detunings, velocity)(m_levelNames.at(lvl1), m_levelNames.at(lvl2)));
@@ -200,7 +200,7 @@ namespace QSim
     {
         // calculate transition splittings
         std::size_t transCnt = m_transitions.size();
-        m_transResonances.Resize(transCnt, 1);
+        m_transResonances.Resize(transCnt);
         for (std::size_t i = 0; i < transCnt; i++)
         {
             auto lvl1 = std::get<0>(m_transitions[i]);
@@ -209,7 +209,7 @@ namespace QSim
         }
 
         // calulate doppler factors
-        m_dopplerFactors.Resize(transCnt, 1);
+        m_dopplerFactors.Resize(transCnt);
         for (std::size_t i = 0; i < transCnt; i++)
             m_dopplerFactors(i, 0) = 1.0 / SpeedOfLight_v;
 
@@ -227,8 +227,8 @@ namespace QSim
 
             if (!PreparePhotonBasis(trans_path, visited_levels, head))
             {
-                m_transResonances.Resize(0, 0);
-                m_dopplerFactors.Resize(0, 0);
+                m_transResonances.Resize(0);
+                m_dopplerFactors.Resize(0);
                 m_photonBasis.Resize(0, 0);
                 return false;
             }

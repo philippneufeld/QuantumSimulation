@@ -26,10 +26,10 @@ namespace QSim
         TDopplerIntegrator(const TDopplerIntegrator&) = default;
         TDopplerIntegrator& operator=(const TDopplerIntegrator&) = default;
 
-        template<std::size_t N>
+        template<std::size_t N, typename VT>
         Ty IntegrateAbsorptionCoefficient(
             const TStaticNLevelSystem<N>& system, 
-            const TDynamicMatrix<Ty>& detunings, 
+            const TColVector<VT>& detunings, 
             const std::string& lvl1, 
             const std::string& lvl2) const;
     
@@ -40,9 +40,9 @@ namespace QSim
     };
 
     template<typename Ty>
-    template<std::size_t N>
+    template<std::size_t N, typename VT>
     Ty TDopplerIntegrator<Ty>::IntegrateAbsorptionCoefficient(
-        const TStaticNLevelSystem<N>& system, const TDynamicMatrix<Ty>& detunings, 
+        const TStaticNLevelSystem<N>& system, const TColVector<VT>& detunings, 
         const std::string& lvl1, const std::string& lvl2) const
     {
         const static Ty pi = std::acos(-1.0);
