@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_NLevel_Matrix_H_
-#define QSim_NLevel_Matrix_H_
+#ifndef QSim_Matrix_H_
+#define QSim_Matrix_H_
 
 #include <cstdint>
 #include <type_traits>
@@ -65,6 +65,10 @@ namespace QSim
         const MT& operator~() const { return static_cast<const MT&>(*this); }
 
         void SetZero();
+
+        template<typename MT2> MT& operator+=(const TMatrix<MT2>& rhs);
+        template<typename MT2> MT& operator-=(const TMatrix<MT2>& rhs);
+        template<typename MT2> MT& operator*=(const TMatrix<MT2>& rhs);
     };
 
     template<typename VT>
@@ -98,15 +102,7 @@ namespace QSim
                 (~c)(i, j) = (~a)(i, j) + (~b)(i, j);            
         }
     }
-
-    template<typename MT1, typename MT2>
-    Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
-    { 
-        Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
-        MatrixAdd(res, lhs, rhs);   
-        return res;
-    }
-
+    
     template<typename MT1, typename MT2, typename MT3>
     void MatrixSub(TMatrix<MT1>& c, const TMatrix<MT2>& a, const TMatrix<MT3>& b)
     {
@@ -120,14 +116,6 @@ namespace QSim
             for (std::size_t j = 0; j < (~c).Cols(); j++)
                 (~c)(i, j) = (~a)(i, j) - (~b)(i, j);            
         }
-    }
-
-    template<typename MT1, typename MT2>
-    Internal::TMatrixSubtractionResult_t<MT1, MT2> operator-(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
-    {
-        Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
-        MatrixSub(res, lhs, rhs);   
-        return res;
     }
 
     template<typename MT1, typename MT2, typename MT3>
@@ -145,14 +133,6 @@ namespace QSim
                     (~c)(i, j) += (~a)(i, k) * (~b)(k, j);
             }                
         }
-    }
-    
-    template<typename MT1, typename MT2>
-    Internal::TMatrixMultiplicationResult_t<MT1, MT2> operator*(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
-    { 
-        Internal::TMatrixMultiplicationResult_t<MT1, MT2> res((~lhs).Rows(), (~rhs).Cols());
-        MatrixMul(res, lhs, rhs);
-        return res;
     }
 
     template<typename MT>
@@ -180,67 +160,53 @@ namespace QSim
         
         return res;
     }
+    
+    template<typename MT1, typename MT2>
+    Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
+    { 
+        Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
+        MatrixAdd(res, lhs, rhs);   
+        return res;
+    }
 
-    template<typename MT, typename VT>
-    Internal::TMatrixDecay_t<VT> LinearSolve(const TMatrix<MT>& A, const TVector<VT>& b)
+    template<typename MT1, typename MT2>
+    Internal::TMatrixSubtractionResult_t<MT1, MT2> operator-(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     {
-        assert((~A).Rows() == (~A).Cols());
-        assert((~A).Cols() == (~b).Rows());
-        assert((~b).Cols() == 1);
-        
-        Internal::TMatrixDecay_t<MT> U(A);
-        Internal::TMatrixDecay_t<VT> y(b);
+        Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
+        MatrixSub(res, lhs, rhs);   
+        return res;
+    }
 
-        // Do LU decomposition and only keep the U matrix (here A is transformed to U).
-        // The transformation y = (L^-1)*b is done on the fly
-        for (std::size_t k = 0; k < (~U).Rows() - 1; k++)
-        {
-            // find pivot
-            std::size_t pivot_row = k;
-            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
-            {
-                if (std::abs((~U)(i, k)) > std::abs((~U)(pivot_row, k)))
-                    pivot_row = i;
-            }
+    template<typename MT1, typename MT2>
+    Internal::TMatrixMultiplicationResult_t<MT1, MT2> operator*(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
+    { 
+        Internal::TMatrixMultiplicationResult_t<MT1, MT2> res((~lhs).Rows(), (~rhs).Cols());
+        MatrixMul(res, lhs, rhs);
+        return res;
+    }
 
-            // swap k-th row with pivoted row
-            if (k != pivot_row)
-            {
-                for (std::size_t i = k; i < (~U).Rows(); i++)
-                    std::swap((~U)(k, i), (~U)(pivot_row, i));
-                std::swap((~y)(k), (~y)(pivot_row));
-            }
+    template<typename MT>
+    template<typename MT2> 
+    MT& TMatrix<MT>::operator+=(const TMatrix<MT2>& rhs) 
+    {
+        MatrixAdd(*this, *this, rhs);
+        return *this;
+    }
 
-            // eliminate
-            auto factor = 1.0 / (~U)(k, k);
-            for (std::size_t i = k; i < (~U).Rows(); i++)
-                (~U)(k, i) *= factor;
-            (~U)(k, k) = 1;
-            (~y)(k) *= factor;
-            
+    template<typename MT>
+    template<typename MT2> 
+    MT& TMatrix<MT>::operator-=(const TMatrix<MT2>& rhs) 
+    {
+        MatrixSub(*this, *this, rhs);
+        return *this;
+    }
 
-            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
-            {
-                auto lambda = (~U)(i, k); // / (~U)(k, k);
-                for (std::size_t j = k; j < (~U).Rows(); j++)
-                    (~U)(i, j) -= lambda * (~U)(k, j);
-                (~y)(i) -= lambda * (~y)(k);
-            }
-        }
-
-        // U is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
-        // y is the original y transformed by the L matrix from the L-U decomposition
-        // Now one can solve for x
-        Internal::TMatrixDecay_t<VT> x = (~y);
-        for (std::size_t l = 0; l < (~U).Rows(); l++)
-        {
-            std::size_t i = (~U).Rows() - l - 1;
-            for (std::size_t j = i + 1; j < (~U).Rows(); j++)
-                (~x)(i) -= (~U)(i, j) * (~x)(j);
-            (~x)(i) /= (~U)(i, i);
-        }
-
-        return (~x);
+    template<typename MT>
+    template<typename MT2> 
+    MT& TMatrix<MT>::operator*=(const TMatrix<MT2>& rhs) 
+    {
+        MatrixMul(*this, *this, rhs);
+        return *this;
     }
 
     //
@@ -412,7 +378,7 @@ namespace QSim
 
     template<typename Ty, std::size_t N, bool colDyn>
     THybridMatrix<Ty, N, colDyn>::THybridMatrix(std::size_t rows, std::size_t cols)
-        : m_dynDim(colDyn ? cols : rows), m_data(new Ty[N*colDyn])
+        : m_dynDim(colDyn ? cols : rows), m_data(new Ty[N*m_dynDim])
     {
         assert((colDyn ? rows : cols) == N);
         this->SetZero();
@@ -420,7 +386,7 @@ namespace QSim
 
     template<typename Ty, std::size_t N, bool colDyn>
     THybridMatrix<Ty, N, colDyn>::THybridMatrix(std::size_t rows, std::size_t cols, const Ty* data)
-        : m_dynDim(colDyn ? cols : rows), m_data(new Ty[N*colDyn])
+        : m_dynDim(colDyn ? cols : rows), m_data(new Ty[N*m_dynDim])
     {
         assert((colDyn ? rows : cols) == N);
         for (std::size_t i = 0; i < Rows(); i++)
@@ -837,6 +803,24 @@ namespace QSim
     //
     // Algorithms
     //
+
+    template<typename Ty = double, bool colVec = true>
+    auto CreateZeros(std::size_t steps)
+    {
+        std::conditional_t<colVec, TDynamicColVector<Ty>, TDynamicRowVector<Ty>> vec;
+        vec.Resize(steps);
+        vec.SetZero();
+        return vec;
+    }
+
+    template<typename MT>
+    auto CreateZerosLike(const TMatrix<MT>& like)
+    {
+        Internal::TMatrixDecay_t<MT> vec((~like).Rows(), (~like).Cols());
+        vec.SetZero();
+        return vec;
+    }
+
     template<typename Ty, bool colVec = true>
     auto CreateLinspace(Ty start, Ty stop, std::size_t steps)
     {
@@ -855,8 +839,67 @@ namespace QSim
         return vec;
     }
 
+    template<typename MT, typename VT>
+    Internal::TMatrixDecay_t<VT> LinearSolve(const TMatrix<MT>& A, const TVector<VT>& b)
+    {
+        assert((~A).Rows() == (~A).Cols());
+        assert((~A).Cols() == (~b).Rows());
+        assert((~b).Cols() == 1);
+        
+        Internal::TMatrixDecay_t<MT> U(A);
+        Internal::TMatrixDecay_t<VT> y(b);
 
-    
+        // Do LU decomposition and only keep the U matrix (here A is transformed to U).
+        // The transformation y = (L^-1)*b is done on the fly
+        for (std::size_t k = 0; k < (~U).Rows() - 1; k++)
+        {
+            // find pivot
+            std::size_t pivot_row = k;
+            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
+            {
+                if (std::abs((~U)(i, k)) > std::abs((~U)(pivot_row, k)))
+                    pivot_row = i;
+            }
+
+            // swap k-th row with pivoted row
+            if (k != pivot_row)
+            {
+                for (std::size_t i = k; i < (~U).Rows(); i++)
+                    std::swap((~U)(k, i), (~U)(pivot_row, i));
+                std::swap((~y)(k), (~y)(pivot_row));
+            }
+
+            // eliminate
+            auto factor = 1.0 / (~U)(k, k);
+            for (std::size_t i = k; i < (~U).Rows(); i++)
+                (~U)(k, i) *= factor;
+            (~U)(k, k) = 1;
+            (~y)(k) *= factor;
+            
+
+            for (std::size_t i = k + 1; i < (~U).Rows(); i++)
+            {
+                auto lambda = (~U)(i, k); // / (~U)(k, k);
+                for (std::size_t j = k; j < (~U).Rows(); j++)
+                    (~U)(i, j) -= lambda * (~U)(k, j);
+                (~y)(i) -= lambda * (~y)(k);
+            }
+        }
+
+        // U is in upper triagonal form (lower triganonal is not set to zero expilicitly for efficiency)
+        // y is the original y transformed by the L matrix from the L-U decomposition
+        // Now one can solve for x
+        Internal::TMatrixDecay_t<VT> x = (~y);
+        for (std::size_t l = 0; l < (~U).Rows(); l++)
+        {
+            std::size_t i = (~U).Rows() - l - 1;
+            for (std::size_t j = i + 1; j < (~U).Rows(); j++)
+                (~x)(i) -= (~U)(i, j) * (~x)(j);
+            (~x)(i) /= (~U)(i, i);
+        }
+
+        return (~x);
+    }
 
 }
 

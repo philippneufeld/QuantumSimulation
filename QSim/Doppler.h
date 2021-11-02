@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSIM_Doppler_H_
-#define QSIM_Doppler_H_
+#ifndef QSim_Doppler_H_
+#define QSim_Doppler_H_
 
 #include <cstdint>
 

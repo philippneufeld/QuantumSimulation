@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSIM_NLevelSystemStatic_H_
-#define QSIM_NLevelSystemStatic_H_
+#ifndef QSim_NLevelSystemStatic_H_
+#define QSim_NLevelSystemStatic_H_
 
 #include <cstdint>
 #include <string>
@@ -116,16 +116,15 @@ namespace QSim
     TStaticMatrix<double, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TColVector<VT>& detunings, double velocity) const
     {
         assert((~detunings).Rows() == m_transResonances.Rows());
-        TStaticMatrix<double, N, N> hamiltonian = m_hamiltonianNoLight;
+        auto hamiltonian = m_hamiltonianNoLight;
 
         // Calculate doppler shifted laser frequencies
-        auto laserFreqs = m_transResonances;
-        MatrixAdd(laserFreqs, laserFreqs, detunings);
+        auto laserFreqs = m_transResonances + detunings;
         for (std::size_t i = 0; i < (~laserFreqs).Rows(); i++)
             laserFreqs(i, 0) *= (1 - m_dopplerFactors(i, 0) * velocity);
 
         // Add light term to the hamiltonian
-        TStaticMatrix<double, N, 1> photonTerms;
+        TStaticColVector<double, N> photonTerms;
         MatrixMul(photonTerms, m_photonBasis, laserFreqs);
         for (std::size_t i = 0; i < (~hamiltonian).Rows(); i++)
             hamiltonian(i, i) += photonTerms(i, 0); 

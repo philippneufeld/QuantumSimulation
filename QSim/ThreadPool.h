@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSIM_ThreadPool_H_
-#define QSIM_ThreadPool_H_
+#ifndef QSim_ThreadPool_H_
+#define QSim_ThreadPool_H_
 
 #include <vector>
 #include <thread>
