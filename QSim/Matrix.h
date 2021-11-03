@@ -12,10 +12,21 @@
 
 namespace QSim
 {
+    // forward declare CRTP class
+    template<typename MT>
+    class TMatrix;
 
     namespace Internal
     {
+        template<typename MT, typename = void>
+        struct TIsMatrix : std::integral_constant<bool, false> {};
         template<typename MT>
+        struct TIsMatrix<MT, std::enable_if_t<std::is_base_of<TMatrix<std::decay_t<decltype(~(std::declval<MT>()))>>, std::decay_t<MT>>::value>> 
+            : std::integral_constant<bool, true> {};
+        template<typename MT>
+        constexpr bool TIsMatrix_v = TIsMatrix<MT>::value;
+
+        template<typename MT, typename=std::enable_if_t<TIsMatrix_v<MT>>>
         struct TMatrixDecay
         {
             using type = std::decay_t<decltype(~(std::declval<MT>()))>;
@@ -66,9 +77,14 @@ namespace QSim
 
         void SetZero();
 
-        template<typename MT2> MT& operator+=(const TMatrix<MT2>& rhs);
-        template<typename MT2> MT& operator-=(const TMatrix<MT2>& rhs);
-        template<typename MT2> MT& operator*=(const TMatrix<MT2>& rhs);
+        template<typename MT2> 
+        MT& operator+=(const TMatrix<MT2>& rhs);
+        template<typename MT2> 
+        MT& operator-=(const TMatrix<MT2>& rhs);
+        template<typename MT2> 
+        MT& operator*=(const TMatrix<MT2>& rhs);
+        template<typename Ty, typename=std::enable_if_t<!Internal::TIsMatrix_v<Ty>>> 
+        MT& operator*=(Ty s);
     };
 
     template<typename VT>
@@ -88,7 +104,8 @@ namespace QSim
         }
     }
 
-    template<typename MT1, typename MT2, typename MT3>
+    template<typename MT1, typename MT2, typename MT3,
+        typename=std::enable_if_t<Internal::TIsMatrix_v<MT1> && Internal::TIsMatrix_v<MT2> && Internal::TIsMatrix_v<MT3>>>
     void MatrixAdd(TMatrix<MT1>& c, const TMatrix<MT2>& a, const TMatrix<MT3>& b)
     {
         assert((~a).Rows() == (~b).Rows());
@@ -135,6 +152,19 @@ namespace QSim
         }
     }
 
+    template<typename MT1, typename MT2, typename Ty>
+    void MatrixScalarMul(TMatrix<MT1>& c, const TMatrix<MT2>& a, Ty s)
+    {
+        assert((~c).Rows() == (~a).Rows());
+        assert((~c).Cols() == (~a).Cols());   
+
+        for (std::size_t i = 0; i < (~c).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~c).Cols(); j++)
+                (~c)(i, j) = (~a)(i, j) * s;                
+        }
+    }
+
     template<typename MT>
     Internal::TMatrixTranspositionResult_t<MT> Transpose(const TMatrix<MT>& mat)
     {
@@ -161,7 +191,7 @@ namespace QSim
         return res;
     }
     
-    template<typename MT1, typename MT2>
+    template<typename MT1, typename MT2, typename=void>
     Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     { 
         Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
@@ -169,7 +199,7 @@ namespace QSim
         return res;
     }
 
-    template<typename MT1, typename MT2>
+    template<typename MT1, typename MT2, typename=void>
     Internal::TMatrixSubtractionResult_t<MT1, MT2> operator-(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     {
         Internal::TMatrixAdditionResult_t<MT1, MT2> res((~rhs).Rows(), (~rhs).Cols());
@@ -177,7 +207,7 @@ namespace QSim
         return res;
     }
 
-    template<typename MT1, typename MT2>
+    template<typename MT1, typename MT2, typename=void>
     Internal::TMatrixMultiplicationResult_t<MT1, MT2> operator*(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     { 
         Internal::TMatrixMultiplicationResult_t<MT1, MT2> res((~lhs).Rows(), (~rhs).Cols());
@@ -185,12 +215,26 @@ namespace QSim
         return res;
     }
 
+    template<typename MT1, typename Ty, typename=std::enable_if_t<!Internal::TIsMatrix_v<Ty>>>
+    MT1 operator*(const TMatrix<MT1>& lhs, Ty s) 
+    { 
+        MT1 res((~lhs).Rows(), (~lhs).Cols());
+        MatrixScalarMul(res, lhs, s);
+        return res;
+    }
+
+    template<typename MT1, typename Ty, typename=std::enable_if_t<!Internal::TIsMatrix_v<Ty>>>
+    MT1 operator*(Ty s, const TMatrix<MT1>& rhs) 
+    { 
+        return rhs * s;
+    }
+
     template<typename MT>
     template<typename MT2> 
     MT& TMatrix<MT>::operator+=(const TMatrix<MT2>& rhs) 
     {
         MatrixAdd(*this, *this, rhs);
-        return *this;
+        return ~(*this);
     }
 
     template<typename MT>
@@ -198,7 +242,7 @@ namespace QSim
     MT& TMatrix<MT>::operator-=(const TMatrix<MT2>& rhs) 
     {
         MatrixSub(*this, *this, rhs);
-        return *this;
+        return ~(*this);
     }
 
     template<typename MT>
@@ -206,7 +250,15 @@ namespace QSim
     MT& TMatrix<MT>::operator*=(const TMatrix<MT2>& rhs) 
     {
         MatrixMul(*this, *this, rhs);
-        return *this;
+        return ~(*this);
+    }
+
+    template<typename MT>
+    template<typename Ty, typename> 
+    MT& TMatrix<MT>::operator*=(Ty s) 
+    {
+        MatrixScalarMul(*this, *this, s);
+        return ~(*this);
     }
 
     //

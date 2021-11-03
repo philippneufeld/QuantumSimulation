@@ -4,6 +4,7 @@
 #define QSim_Doppler_H_
 
 #include <cstdint>
+#include <functional>
 
 #include "NLevelSystemStatic.h"
 
@@ -32,6 +33,9 @@ namespace QSim
             const TColVector<VT>& detunings, 
             const std::string& lvl1, 
             const std::string& lvl2) const;
+
+        template<typename Lambda, typename Ret = decltype(std::declval<Lambda>()(std::declval<Ty>()))>
+        Ret Integrate(Lambda func) const;
     
     private:
         Ty m_mass;
@@ -68,6 +72,38 @@ namespace QSim
         }
         else
             return system.GetAbsorptionCoeff(detunings, 0.0, lvl1, lvl2);
+    }
+
+    template<typename Ty>
+    template<typename Lambda, typename Ret>
+    Ret TDopplerIntegrator<Ty>::Integrate(Lambda func) const
+    {
+        const static Ty pi = std::acos(-1.0);
+        if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
+        {
+            int steps = static_cast<int>(m_steps / 2);
+            Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
+            Ty sigma2SqRec = 1 / (2 * sigma * sigma);
+            Ty norm = 1 / (std::sqrt(2*pi)*sigma);
+            Ty vel_step = 3.5 * sigma / steps;
+  
+            Ret integrated;
+            for (auto i = -steps; i <= steps; i++)
+            {
+                Ty velocity = i * vel_step;
+                Ty thermal = norm * std::exp(-velocity*velocity * sigma2SqRec);
+                Ret absCoeff = func(velocity);
+
+                if (i == -steps) 
+                    integrated = thermal * absCoeff;
+                else
+                    integrated += thermal * absCoeff;
+            }
+            integrated *= vel_step;
+            return integrated;
+        }
+        else
+            return func(0);
     }
 }
 

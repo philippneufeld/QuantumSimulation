@@ -36,6 +36,9 @@ namespace QSim
         TStaticNLevelSystem(const TStaticNLevelSystem&) = default;
         TStaticNLevelSystem& operator=(const TStaticNLevelSystem&) = default;
 
+        // get index by name
+        std::size_t GetLevelIndexByName(const std::string& name) { return m_levelNames.at(name); }
+
         // functions to change the system properties 
         bool AddTransition(const std::string& lvl1, const std::string& lvl2, double rabi);
         bool AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi);
@@ -57,7 +60,7 @@ namespace QSim
         std::map<std::string, std::size_t> m_levelNames;
 
         // Properties of the system
-        std::array<double, N> m_levels;
+        TStaticColVector<double, N> m_levels;
         std::vector<std::tuple<std::size_t, std::size_t, double>> m_transitions;
         std::vector<std::tuple<std::size_t, std::size_t, double>> m_decays;
 

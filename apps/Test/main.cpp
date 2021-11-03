@@ -40,7 +40,7 @@ int main()
         auto task = [&, i]()
         { 
             QSim::TStaticColVector<double, 2> detunings({ probeDetunings[i], 0.0 });
-            absCoeffs[i] = doppler.IntegrateAbsorptionCoefficient(system, detunings, "S1_2_F1", "P3_2"); 
+            absCoeffs[i] = doppler.Integrate([&, detunings](double vel) { return system.GetAbsorptionCoeff(detunings, vel, "S1_2_F1", "P3_2"); });
         };
         pool.AddTask(task);
     }
