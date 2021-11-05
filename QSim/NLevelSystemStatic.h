@@ -44,7 +44,7 @@ namespace QSim
         bool AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi);
 
         template<typename VT>
-        TStaticMatrix<double, N, N> GetHamiltonian(const TColVector<VT>& detunings, double velocity) const;
+        TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(const TColVector<VT>& detunings, double velocity) const;
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetSteadyState(const TColVector<VT>& detunings, double velocity) const;
         template<typename VT>
@@ -68,7 +68,7 @@ namespace QSim
         TDynamicColVector<double> m_transResonances;
         TDynamicColVector<double> m_dopplerFactors;
         TDynamicMatrix<double> m_photonBasis;
-        TStaticMatrix<double, N, N> m_hamiltonianNoLight;
+        TStaticMatrix<std::complex<double>, N, N> m_hamiltonianNoLight;
     };
 
     template<std::size_t N>
@@ -116,7 +116,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<double, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TColVector<VT>& detunings, double velocity) const
+    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TColVector<VT>& detunings, double velocity) const
     {
         assert((~detunings).Rows() == m_transResonances.Rows());
         auto hamiltonian = m_hamiltonianNoLight;
@@ -139,7 +139,7 @@ namespace QSim
     template<typename VT>
     TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetSteadyState(const TColVector<VT>& detunings, double velocity) const
     {
-        TStaticMatrix<double, N, N> h = GetHamiltonian(detunings, velocity);
+        const TStaticMatrix<std::complex<double>, N, N>& h = GetHamiltonian(detunings, velocity);
         TStaticMatrix<std::complex<double>, N*N + 1, N*N> A;
 
         // von Neumann part of the evolution operator
