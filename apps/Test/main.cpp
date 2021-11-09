@@ -14,7 +14,10 @@ int main()
     QSim::ThreadPool pool;
 
     // Generate detuning axis
-    auto probeDetunings = QSim::CreateLinspace(-100.0e6, 100.0e6, 501);
+    constexpr static std::size_t cnt = 5001;
+    QSim::TStaticMatrix<double, 2, cnt> detunings;
+    auto probeDetunings = QSim::CreateLinspace(-100.0e6, 100.0e6, cnt);
+    QSim::SetRow(detunings, probeDetunings, 0);
 
     // setup Rb87 parameters
     std::map<std::string, double> levels;
@@ -39,8 +42,8 @@ int main()
     {
         auto task = [&, i]()
         { 
-            QSim::TStaticColVector<double, 2> detunings({ probeDetunings[i], 0.0 });
-            absCoeffs[i] = doppler.Integrate([&, detunings](double vel) { return system.GetAbsorptionCoeff(detunings, vel, "S1_2_F1", "P3_2"); });
+            QSim::TStaticColVector<double, 2> dets = QSim::GetCol(detunings, i);
+            absCoeffs[i] = doppler.Integrate([&, dets](double vel) { return system.GetAbsorptionCoeff(dets, vel, "S1_2_F1", "P3_2"); });
         };
         pool.AddTask(task);
     }

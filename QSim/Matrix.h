@@ -9,12 +9,13 @@
 #include <complex>
 #include <cassert>
 
-
 namespace QSim
 {
     // forward declare CRTP class
     template<typename MT>
     class TMatrix;
+    template<typename MT>
+    class TVector;
 
     namespace Internal
     {
@@ -65,6 +66,22 @@ namespace QSim
             : TMatrixTranspositionResultImpl<TMatrixDecay_t<MT>> {};
         template<typename MT>
         using TMatrixTranspositionResult_t = typename TMatrixTranspositionResult<MT>::type;
+
+        template<typename MT>
+        struct TMatrixRowTypeImpl;
+        template<typename MT>
+        struct TMatrixRowType
+            : TMatrixRowTypeImpl<TMatrixDecay_t<MT>> {};
+        template<typename MT>
+        using TMatrixRowType_t = typename TMatrixRowType<MT>::type;
+
+        template<typename MT>
+        struct TMatrixColTypeImpl;
+        template<typename MT>
+        struct TMatrixColType
+            : TMatrixColTypeImpl<TMatrixDecay_t<MT>> {};
+        template<typename MT>
+        using TMatrixColType_t = typename TMatrixColType<MT>::type;
     }
 
 
@@ -164,7 +181,7 @@ namespace QSim
                 (~c)(i, j) = (~a)(i, j) * s;                
         }
     }
-
+    
     template<typename MT>
     Internal::TMatrixTranspositionResult_t<MT> Transpose(const TMatrix<MT>& mat)
     {
@@ -174,7 +191,6 @@ namespace QSim
             for (std::size_t j = 0; j < (~res).Cols(); j++)
                 (~res)(i, j) = (~mat)(j, i);
         }
-
         return res;
     }
 
@@ -187,10 +203,43 @@ namespace QSim
             for (std::size_t j = 0; j < (~res).Cols(); j++)
                 (~res)(i, j) = std::conj((~mat)(j, i));
         }
-        
         return res;
     }
-    
+
+    template<typename MT>
+    Internal::TMatrixRowType_t<MT> GetRow(const TMatrix<MT>& mat, std::size_t i)
+    {
+        Internal::TMatrixRowType_t<MT> row((~mat).Cols());
+        for (std::size_t j = 0; j < (~mat).Cols(); j++)
+            row(j) = (~mat)(i, j);
+        return row;
+    }
+
+    template<typename MT>
+    Internal::TMatrixColType_t<MT> GetCol(const TMatrix<MT>& mat, std::size_t i)
+    {
+        Internal::TMatrixColType_t<MT> col((~mat).Rows());
+        for (std::size_t j = 0; j < (~mat).Rows(); j++)
+            col(j) = (~mat)(j, i);
+        return col;
+    }
+
+    template<typename MT, typename VT>
+    void SetRow(TMatrix<MT>& mat, const TVector<VT>& v, std::size_t i)
+    {
+        assert((~mat).Cols() == (~v).Size());
+        for (std::size_t j = 0; j < (~mat).Cols(); j++)
+            (~mat)(i, j) = (~v)(j);
+    }
+
+    template<typename MT, typename VT>
+    void SetCol(TMatrix<MT>& mat, const TVector<VT>& v, std::size_t i)
+    {
+        assert((~mat).Rows() == (~v).Size());
+        for (std::size_t j = 0; j < (~mat).Rows(); j++)
+            (~mat)(j, i) = (~v)(j);
+    }
+
     template<typename MT1, typename MT2, typename=void>
     Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     { 
@@ -272,6 +321,8 @@ namespace QSim
     public:
         TStaticMatrix() : m_data{} {} // m_data is initialized to its default value this way
         TStaticMatrix(const Ty(&data)[N*M]);
+        template<std::size_t Dummy = 1, typename = std::enable_if_t<Dummy == 1 && (N == 1 || M == 1)>>
+        TStaticMatrix(std::size_t) : TStaticMatrix() {}
         TStaticMatrix(std::size_t, std::size_t) : TStaticMatrix() {}
         TStaticMatrix(std::size_t, std::size_t, const Ty(&data)[N*M]) : TStaticMatrix(data) {}
         ~TStaticMatrix() = default;
@@ -370,6 +421,18 @@ namespace QSim
         {
             using type = TStaticMatrix<Ty, M, N>;
         };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixRowTypeImpl<TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticRowVector<Ty, M>;
+        };
+
+        template<typename Ty, std::size_t N, std::size_t M>
+        struct TMatrixColTypeImpl<TStaticMatrix<Ty, N, M>>
+        {
+            using type = TStaticColVector<Ty, N>;
+        };
     }
 
     //
@@ -382,6 +445,8 @@ namespace QSim
     {
     public:
         THybridMatrix() : m_dynDim(0), m_data(nullptr) {}
+        template<std::size_t Dummy = 1, typename = std::enable_if_t<Dummy == 1 && (N == 1)>>
+        THybridMatrix(std::size_t size) : THybridMatrix(colDyn ? N : size, colDyn ? size : N) {}
         THybridMatrix(std::size_t rows, std::size_t cols);
         THybridMatrix(std::size_t rows, std::size_t cols, const Ty* data);
         THybridMatrix(std::size_t rows, std::size_t cols, std::initializer_list<double> lst)
@@ -640,6 +705,18 @@ namespace QSim
         {
             using type = THybridMatrix<Ty, N, !colDyn>;
         };  
+
+        template<typename Ty, std::size_t N, bool colDyn>
+        struct TMatrixRowTypeImpl<THybridMatrix<Ty, N, colDyn>>
+        {
+            using type = std::conditional_t<colDyn, TStaticRowVector<Ty, N>, TDynamicRowVector<Ty>>;
+        };
+
+        template<typename Ty, std::size_t N, bool colDyn>
+        struct TMatrixColTypeImpl<THybridMatrix<Ty, N, colDyn>>
+        {
+            using type = std::conditional_t<!colDyn, TStaticColVector<Ty, N>, TDynamicColVector<Ty>>;
+        };
     }
 
     //
@@ -849,6 +926,18 @@ namespace QSim
         {
             using type = TDynamicMatrix<Ty>;
         }; 
+
+        template<typename Ty>
+        struct TMatrixRowTypeImpl<TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicRowVector<Ty>;
+        };
+
+        template<typename Ty>
+        struct TMatrixColTypeImpl<TDynamicMatrix<Ty>>
+        {
+            using type = TDynamicColVector<Ty>;
+        };
     }
 
 
@@ -890,6 +979,8 @@ namespace QSim
 
         return vec;
     }
+
+
 
     template<typename MT, typename VT>
     Internal::TMatrixDecay_t<VT> LinearSolve(const TMatrix<MT>& A, const TVector<VT>& b)

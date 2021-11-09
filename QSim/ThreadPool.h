@@ -25,6 +25,11 @@ namespace QSim
         void AddTask(const std::function<void(void)>& task);
         void WaitUntilFinnished();
 
+        template<typename Ty, typename Lambda>
+        std::vector<decltype(std::declval<Lambda>()(std::declval<Ty>()))> 
+            Map(Lambda func, const std::vector<Ty>& params);
+
+
     private:
         void ThreadFunc();
 
@@ -92,6 +97,20 @@ namespace QSim
             m_ongoingTasks--;
             m_taskFinnished.notify_all();
         }
+    }
+
+    template<typename Ty, typename Lambda>
+    std::vector<decltype(std::declval<Lambda>()(std::declval<Ty>()))> 
+        ThreadPool::Map(Lambda func, const std::vector<Ty>& params)
+    {
+        std::vector<decltype(std::declval<Lambda>()(std::declval<Ty>()))> results(params.size());
+        for (std::size_t i = 0; i < params.size(); i++)
+        {
+            Ty param = params[i];
+            AddTask([&, i, param]() { results[i] = func(param); });
+        }
+        WaitUntilFinnished();
+        return results;
     }
 
 }
