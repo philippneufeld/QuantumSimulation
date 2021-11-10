@@ -14,7 +14,10 @@ int main()
     QSim::ThreadPool pool;
 
     // Generate detuning axis
-    auto probeDetunings = QSim::CreateLinspace(-100.0e6, 100.0e6, 501);
+    constexpr static std::size_t cnt = 501;
+    QSim::TStaticMatrix<double, 2, cnt> detunings;
+    auto probeDetunings = QSim::CreateLinspaceRow(-100.0e6, 100.0e6, cnt);
+    QSim::SetRow(detunings, probeDetunings, 0);
 
     // setup Rb87 parameters
     std::map<std::string, double> levels;
@@ -25,27 +28,18 @@ int main()
     double temperature = 300.0;
 
     // create system object
-    QSim::TStaticNLevelSystem<3> system(levels);
+    QSim::TStaticNLevelSystem<3> system(levels, mass);
     system.AddTransition("S1_2_F1", "P3_2", 3.5e6);
     system.AddTransition("S1_2_F2", "P3_2", 10.0e6);
     system.AddDecay("P3_2", "S1_2_F1", 3.0/8.0 * 6.065e6);
     system.AddDecay("P3_2", "S1_2_F2", 5.0/8.0 * 6.065e6);
-    QSim::TDopplerIntegrator<double> doppler(mass, temperature);
+    system.SetTemperature(temperature);
 
     auto start_ts = std::chrono::high_resolution_clock::now();
 
-    auto absCoeffs = QSim::CreateZerosLike(probeDetunings);
-    for (std::size_t i = 0; i < absCoeffs.Size(); i++)
-    {
-        auto task = [&, i]()
-        { 
-            QSim::TStaticColVector<double, 2> detunings({ probeDetunings[i], 0.0 });
-            absCoeffs[i] = doppler.IntegrateAbsorptionCoefficient(system, detunings, "S1_2_F1", "P3_2"); 
-        };
-        pool.AddTask(task);
-    }
-    
-    pool.WaitUntilFinnished();
+    auto absCoeffs = pool.Map([&](auto dets){ return system.GetSteadyState(dets).GetAbsCoeff("S1_2_F1", "P3_2"); }, 
+        QSim::GetColIteratorBegin(detunings), QSim::GetColIteratorEnd(detunings));
+
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
     
     // Write to file
@@ -57,3 +51,4 @@ int main()
     
     return 0;
 }
+

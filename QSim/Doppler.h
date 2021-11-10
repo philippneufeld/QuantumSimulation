@@ -27,12 +27,11 @@ namespace QSim
         TDopplerIntegrator(const TDopplerIntegrator&) = default;
         TDopplerIntegrator& operator=(const TDopplerIntegrator&) = default;
 
-        template<std::size_t N, typename VT>
-        Ty IntegrateAbsorptionCoefficient(
-            const TStaticNLevelSystem<N>& system, 
-            const TColVector<VT>& detunings, 
-            const std::string& lvl1, 
-            const std::string& lvl2) const;
+        // Parameter getter/setter
+        void SetMass(double mass) { m_mass = mass; }
+        double GetMass() const { return m_mass; }
+        void SetTemperature(double temp) { m_temperature = temp; }
+        double GetTemperature() const { return m_temperature; }
 
         template<typename Lambda, typename Ret = decltype(std::declval<Lambda>()(std::declval<Ty>()))>
         Ret Integrate(Lambda func) const;
@@ -42,37 +41,6 @@ namespace QSim
         Ty m_temperature;
         std::size_t m_steps;
     };
-
-    template<typename Ty>
-    template<std::size_t N, typename VT>
-    Ty TDopplerIntegrator<Ty>::IntegrateAbsorptionCoefficient(
-        const TStaticNLevelSystem<N>& system, const TColVector<VT>& detunings, 
-        const std::string& lvl1, const std::string& lvl2) const
-    {
-        const static Ty pi = std::acos(-1.0);
-        if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
-        {
-            int steps = static_cast<int>(m_steps / 2);
-            Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
-            Ty sigma2SqRec = 1 / (2 * sigma * sigma);
-            Ty norm = 1 / (std::sqrt(2*pi)*sigma);
-            Ty vel_step = 3.5 * sigma / steps;
-
-            Ty dopplerAbsCoeff = 0.0;
-            for (auto i = -steps; i <= steps; i++)
-            {
-                Ty velocity = i * vel_step;
-                Ty thermal = norm * std::exp(-velocity*velocity * sigma2SqRec);
-                Ty absCoeff = system.GetAbsorptionCoeff(detunings, velocity, lvl1, lvl2);
-                dopplerAbsCoeff += thermal * absCoeff;
-            }
-            dopplerAbsCoeff *= vel_step;
-
-            return dopplerAbsCoeff;
-        }
-        else
-            return system.GetAbsorptionCoeff(detunings, 0.0, lvl1, lvl2);
-    }
 
     template<typename Ty>
     template<typename Lambda, typename Ret>

@@ -12,10 +12,56 @@
 #include <cassert>
 
 #include "Matrix.h"
+#include "Doppler.h"
 
 namespace QSim
 {
     constexpr static double SpeedOfLight_v = 2.99792458e8;
+
+    //
+    // Density matrix class
+    //
+
+    template<std::size_t N>
+    class TStaticDensityMatrix
+    {
+    public:
+        TStaticDensityMatrix(std::map<std::string, std::size_t> levelNames, 
+            const TStaticMatrix<std::complex<double>, N, N>& densityMatrix)
+            : m_levelNames(levelNames), m_densityMatrix(densityMatrix) {}
+
+        TStaticDensityMatrix(const TStaticDensityMatrix&) = default;
+        TStaticDensityMatrix& operator=(const TStaticDensityMatrix&) = default;
+        
+        double GetPopulation(const std::string& lvl) const;
+        double GetAbsCoeff(const std::string& lvl1, const std::string& lvl2) const;
+
+        const TStaticMatrix<std::complex<double>, N, N>& GetMatrix() const { return m_densityMatrix; }
+
+    private:
+        std::map<std::string, std::size_t> m_levelNames;
+        TStaticMatrix<std::complex<double>, N, N> m_densityMatrix;
+    };
+
+    template<std::size_t N>
+    double TStaticDensityMatrix<N>::GetPopulation(const std::string& lvl) const 
+    { 
+        std::size_t idx = m_levelNames.at(lvl);
+        return std::real(m_densityMatrix(idx, idx)); 
+    }
+
+    template<std::size_t N>
+    double TStaticDensityMatrix<N>::GetAbsCoeff(const std::string& lvl1, const std::string& lvl2) const 
+    { 
+        std::size_t idx1 = m_levelNames.at(lvl1);
+        std::size_t idx2 = m_levelNames.at(lvl2);
+        return std::imag(m_densityMatrix(idx1, idx2)); 
+    }
+
+
+    //
+    // N-level system steady state solver
+    //
 
     template<std::size_t N>
     class TStaticNLevelSystem
@@ -27,10 +73,10 @@ namespace QSim
 
     public:
         // constructors
-        TStaticNLevelSystem(const std::map<std::string, double>& levels)
-            : TStaticNLevelSystem(levels.begin()) { assert(levels.size() == N); }
+        TStaticNLevelSystem(const std::map<std::string, double>& levels, double mass)
+            : TStaticNLevelSystem(levels.begin(), mass) { assert(levels.size() == N); }
         template<typename InputIt, typename=EnableIfLvlIt_t<InputIt>>
-        TStaticNLevelSystem(InputIt levelIterator);
+        TStaticNLevelSystem(InputIt levelIterator, double mass);
 
         // copy operations
         TStaticNLevelSystem(const TStaticNLevelSystem&) = default;
@@ -45,11 +91,20 @@ namespace QSim
 
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(const TColVector<VT>& detunings, double velocity) const;
-        template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetSteadyState(const TColVector<VT>& detunings, double velocity) const;
-        template<typename VT>
-        double GetAbsorptionCoeff(const TColVector<VT>& detunings, double velocity, const std::string& lvl1, const std::string lvl2) const;
 
+        // thermal environment
+        void SetMass(double mass) { m_doppler.SetMass(mass); }
+        void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
+
+        double GetMass() const { return m_doppler.GetMass(); }
+        double GetTemperature() const { return m_doppler.GetTemperature(); }
+
+        // Steady state
+        template<typename VT>
+        TStaticDensityMatrix<N> GetSteadyStateNatural(const TColVector<VT>& detunings, double velocity) const;
+        template<typename VT>
+        TStaticDensityMatrix<N> GetSteadyState(const TColVector<VT>& detunings) const;
+        
     private:
         bool PrepareCalculation();
         bool PreparePhotonBasis(std::vector<std::size_t>& trans_path, 
@@ -64,6 +119,9 @@ namespace QSim
         std::vector<std::tuple<std::size_t, std::size_t, double>> m_transitions;
         std::vector<std::tuple<std::size_t, std::size_t, double>> m_decays;
 
+        // thermal environment
+        TDopplerIntegrator<double> m_doppler;
+
         // auxilliary variables
         TDynamicColVector<double> m_transResonances;
         TDynamicColVector<double> m_dopplerFactors;
@@ -73,7 +131,8 @@ namespace QSim
 
     template<std::size_t N>
     template<typename InputIt, typename>
-    TStaticNLevelSystem<N>::TStaticNLevelSystem(InputIt levelIterator)
+    TStaticNLevelSystem<N>::TStaticNLevelSystem(InputIt levelIterator, double mass)
+        : m_doppler(mass, 300.0) // use room temperature as default
     {
         // levelIterator is a pair containing (name, level)
         for (std::size_t i = 0; i < N; i++, levelIterator++)
@@ -137,7 +196,7 @@ namespace QSim
     
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetSteadyState(const TColVector<VT>& detunings, double velocity) const
+    TStaticDensityMatrix<N> TStaticNLevelSystem<N>::GetSteadyStateNatural(const TColVector<VT>& detunings, double velocity) const
     {
         const TStaticMatrix<std::complex<double>, N, N>& h = GetHamiltonian(detunings, velocity);
         TStaticMatrix<std::complex<double>, N*N + 1, N*N> A;
@@ -186,15 +245,15 @@ namespace QSim
                 ss(i, j) = x(i*N+j, 0);
         }
         
-        return ss;
+        return TStaticDensityMatrix<N>(m_levelNames, ss);
     }
 
     template<std::size_t N>
     template<typename VT>
-    double TStaticNLevelSystem<N>::GetAbsorptionCoeff(const TColVector<VT>& detunings, 
-        double velocity, const std::string& lvl1, const std::string lvl2) const
+    TStaticDensityMatrix<N> TStaticNLevelSystem<N>::GetSteadyState(const TColVector<VT>& detunings) const
     {
-        return std::imag(GetSteadyState(detunings, velocity)(m_levelNames.at(lvl1), m_levelNames.at(lvl2)));
+        auto ss = m_doppler.Integrate([&](double vel){ return this->GetSteadyStateNatural(detunings, vel).GetMatrix(); });
+        return TStaticDensityMatrix<N>(m_levelNames, ss);
     }
 
     template<std::size_t N>
@@ -281,7 +340,6 @@ namespace QSim
             else
                 continue;
             
-
             // check whether a photon is absorbed or emitted
             double relPhotonNumber = 1;
             if (m_levels[transTo] > m_levels[transFrom])

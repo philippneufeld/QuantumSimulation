@@ -25,9 +25,9 @@ namespace QSim
         void AddTask(const std::function<void(void)>& task);
         void WaitUntilFinnished();
 
-        template<typename Ty, typename Lambda>
-        std::vector<decltype(std::declval<Lambda>()(std::declval<Ty>()))> 
-            Map(Lambda func, const std::vector<Ty>& params);
+        template<typename Lambda, typename InputIt>
+        std::vector<decltype(std::declval<Lambda>()(*std::declval<InputIt>()))> 
+            Map(Lambda func, InputIt param_begin, InputIt param_end);
 
 
     private:
@@ -99,17 +99,24 @@ namespace QSim
         }
     }
 
-    template<typename Ty, typename Lambda>
-    std::vector<decltype(std::declval<Lambda>()(std::declval<Ty>()))> 
-        ThreadPool::Map(Lambda func, const std::vector<Ty>& params)
+    template<typename Lambda, typename InputIt>
+    std::vector<decltype(std::declval<Lambda>()(*std::declval<InputIt>()))> 
+        ThreadPool::Map(Lambda func, InputIt param_begin, InputIt param_end)
     {
-        std::vector<decltype(std::declval<Lambda>()(std::declval<Ty>()))> results(params.size());
-        for (std::size_t i = 0; i < params.size(); i++)
+        using Ty = decltype(std::declval<Lambda>()(*std::declval<InputIt>()));
+        auto diff = param_end - param_begin;
+        if (diff <= 0)
+            return std::vector<Ty>();
+        
+        std::vector<Ty> results(diff);
+        auto it = param_begin;
+        for (std::size_t i = 0; it < param_end; i++, it++)
         {
-            Ty param = params[i];
+            auto param = *it;
             AddTask([&, i, param]() { results[i] = func(param); });
         }
         WaitUntilFinnished();
+
         return results;
     }
 

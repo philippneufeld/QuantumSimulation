@@ -110,6 +110,10 @@ namespace QSim
     class TRowVector : public TVector<VT> {};
     template<typename VT>
     class TColVector : public TVector<VT> {};
+
+    // 1x1 matrices are considered column vectors
+    template<typename MT>
+    class TSingleElementMatrix : public TColVector<MT> {};
     
     template<typename MT>
     void TMatrix<MT>::SetZero()
@@ -310,13 +314,126 @@ namespace QSim
         return ~(*this);
     }
 
+    namespace Internal
+    {
+        template<typename MT, typename IT>
+        class TMatrixRCIterator_base
+        {
+        public:
+            TMatrixRCIterator_base(const TMatrix<MT>& mat, std::size_t idx) 
+                : m_mat(mat), m_idx(idx) { }
+            TMatrixRCIterator_base(const TMatrixRCIterator_base&) = default;
+            TMatrixRCIterator_base& operator=(TMatrixRCIterator_base&) = default;
+
+            IT& operator++() { m_idx++; return *this; }
+            IT& operator--() { m_idx--; return *this; }
+            IT operator++(int) { return IT(m_mat, m_idx++); }
+            IT operator--(int) { return IT(m_mat, m_idx--); }
+
+            bool operator==(const IT& rhs) { return (m_idx == rhs.m_idx) && (&m_mat) == (&rhs.m_mat); }
+            bool operator!=(const IT& rhs) { return !((*this) == rhs); }
+            bool operator<(const IT& rhs) { return ((&m_mat) == (&rhs.m_mat) && (m_idx < rhs.m_idx)) || (&m_mat) < (&rhs.m_mat); }
+            bool operator<=(const IT& rhs) { return ((*this) == rhs|| (*this) < rhs); }
+            bool operator>=(const IT& rhs) { return !((*this) < rhs); }
+            bool operator>(const IT& rhs) { return !((*this) <= rhs); }
+
+            std::ptrdiff_t operator-(const IT& rhs) 
+            { 
+                if ((&m_mat) != (&rhs.m_mat)) return -1;
+                return static_cast<std::ptrdiff_t>(m_idx) - static_cast<std::ptrdiff_t>(rhs.m_idx); 
+            }
+            IT operator+(std::ptrdiff_t off) const { return IT(this->m_mat, this->m_idx + off); }
+            IT operator-(std::ptrdiff_t off) const { return IT(this->m_mat, this->m_idx - off); }
+
+        protected:
+            const TMatrix<MT>& m_mat;
+            std::size_t m_idx;
+        };
+    }
+
+    template<typename MT>
+    class TMatrixRowIterator 
+        : public Internal::TMatrixRCIterator_base<MT, TMatrixRowIterator<MT>>
+    {
+        using MyT = TMatrixRowIterator<MT>;
+    public:
+        TMatrixRowIterator(const TMatrix<MT>& mat, std::size_t idx) 
+            : Internal::TMatrixRCIterator_base<MT, MyT>(mat, idx) { }
+        Internal::TMatrixRowType_t<MT> operator*() const { return GetRow(this->m_mat, this->m_idx); }
+    };
+
+    template<typename MT>
+    class TMatrixColIterator
+        : public Internal::TMatrixRCIterator_base<MT, TMatrixColIterator<MT>>
+    {
+        using MyT = TMatrixColIterator<MT>;
+    public:
+        TMatrixColIterator(const TMatrix<MT>& mat, std::size_t idx) 
+            : Internal::TMatrixRCIterator_base<MT, MyT>(mat, idx) { }
+        Internal::TMatrixColType_t<MT> operator*() const { return GetCol(this->m_mat, this->m_idx); }
+    };
+
+    template<typename MT>
+    TMatrixRowIterator<MT> GetRowIteratorBegin(const TMatrix<MT>& mat)
+    {
+        return TMatrixRowIterator<MT>(mat, 0);
+    }
+
+    template<typename MT>
+    TMatrixRowIterator<MT> GetRowIteratorEnd(const TMatrix<MT>& mat)
+    {
+        return TMatrixRowIterator<MT>(mat, (~mat).Rows());
+    }
+
+    template<typename MT>
+    TMatrixColIterator<MT> GetColIteratorBegin(const TMatrix<MT>& mat)
+    {
+        return TMatrixColIterator<MT>(mat, 0);
+    }
+
+    template<typename MT>
+    TMatrixColIterator<MT> GetColIteratorEnd(const TMatrix<MT>& mat)
+    {
+        return TMatrixColIterator<MT>(mat, (~mat).Cols());
+    }
+
     //
     // Statically sized matrix
     //
 
+    namespace Internal
+    {
+        template<typename Ty, std::size_t N, std::size_t M, typename MyT>
+        struct TStaticMatrixHelper
+        {
+            using type = TMatrix<MyT>;
+        };
+
+        template<typename Ty, std::size_t N, typename MyT>
+        struct TStaticMatrixHelper<Ty, N, 1, MyT>
+        {
+            using type = TColVector<MyT>;
+        };
+
+        template<typename Ty, std::size_t M, typename MyT>
+        struct TStaticMatrixHelper<Ty, 1, M, MyT>
+        {
+            using type = TRowVector<MyT>;
+        };
+
+        template<typename Ty, typename MyT>
+        struct TStaticMatrixHelper<Ty, 1, 1, MyT>
+        {
+            using type = TSingleElementMatrix<MyT>;
+        };
+
+
+        template<typename Ty, std::size_t N, std::size_t M, typename MyT>
+        using TStaticMatrixHelper_t = typename TStaticMatrixHelper<Ty, N, M, MyT>::type;
+    }
+
     template<typename Ty, std::size_t N, std::size_t M>
-    class TStaticMatrix : public std::conditional_t<N==1 || M==1, 
-        std::conditional_t<N==1, TRowVector<TStaticMatrix<Ty, N, M>>, TColVector<TStaticMatrix<Ty, N, M>>>, TMatrix<TStaticMatrix<Ty, N, M>>>
+    class TStaticMatrix : public Internal::TStaticMatrixHelper_t<Ty, N, M, TStaticMatrix<Ty, N, M>>
     {
     public:
         TStaticMatrix() : m_data{} {} // m_data is initialized to its default value this way
@@ -980,7 +1097,17 @@ namespace QSim
         return vec;
     }
 
+    template<typename Ty>
+    auto CreateLinspaceRow(Ty start, Ty stop, std::size_t steps)
+    {
+        return CreateLinspace<Ty, false>(start, stop, steps);
+    }
 
+    template<typename Ty>
+    auto CreateLinspaceCol(Ty start, Ty stop, std::size_t steps)
+    {
+        return CreateLinspace<Ty, true>(start, stop, steps);
+    }
 
     template<typename MT, typename VT>
     Internal::TMatrixDecay_t<VT> LinearSolve(const TMatrix<MT>& A, const TVector<VT>& b)

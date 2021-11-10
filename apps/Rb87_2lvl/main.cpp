@@ -14,7 +14,7 @@ int main()
     QSim::ThreadPool pool;
 
     // Generate detuning axis
-    auto probeDetunings = QSim::CreateLinspace(-1.0e9, 1.0e9, 501);
+    auto detunings = QSim::CreateLinspaceRow(-1.0e9, 1.0e9, 501);
 
     // setup Rb87 parameters
     std::map<std::string, double> levels;
@@ -24,23 +24,22 @@ int main()
     double temperature = 300.0;
 
     // create system object
-    QSim::TStaticNLevelSystem<2> system(levels);
+    QSim::TStaticNLevelSystem<2> system(levels, mass);
     system.AddTransition("S1_2", "P3_2", 3.5e6);
     system.AddDecay("P3_2", "S1_2", 6.065e6);
-    QSim::TDopplerIntegrator<double> doppler(mass, temperature);
+    system.SetTemperature(temperature);
 
     auto start_ts = std::chrono::high_resolution_clock::now();
 
-    auto absCoeffs = QSim::CreateZerosLike(probeDetunings);
-    for (std::size_t i = 0; i < absCoeffs.Size(); i++)
-    {
-        auto task = [&, i]()
-        { 
-            QSim::TStaticColVector<double, 2> detunings({ probeDetunings[i], 0.0 });
-            absCoeffs[i] = doppler.IntegrateAbsorptionCoefficient(system, detunings, "S1_2", "P3_2"); 
-        };
-        pool.AddTask(task);
-    }
+    // auto absCoeffs = QSim::CreateZerosLike(detunings);
+    // for (size_t i = 0; i < absCoeffs.Size(); i++)
+    // {
+    //     absCoeffs[i] = system.GetSteadyState(QSim::GetCol(detunings, i)).GetAbsCoeff("S1_2", "P3_2");
+    // }
+    
+
+    auto absCoeffs = pool.Map([&](auto dets){ return system.GetSteadyState(dets).GetAbsCoeff("S1_2", "P3_2"); }, 
+        QSim::GetColIteratorBegin(detunings), QSim::GetColIteratorEnd(detunings));
     
     pool.WaitUntilFinnished();
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
@@ -48,8 +47,8 @@ int main()
     // Write to file
     std::ofstream file;
     file.open("data.txt", std::ios::out);
-    for (std::size_t i = 0; i < probeDetunings.Size(); i++)
-        file << probeDetunings[i] << " " << absCoeffs[i] << std::endl;
+    for (std::size_t i = 0; i < detunings.Size(); i++)
+        file << detunings[i] << " " << absCoeffs[i] << std::endl;
     file.close();
     
     return 0;
