@@ -1,53 +1,36 @@
 // Philipp Neufeld, 2021
-
+#include <Python.h>
 #include <iostream>
-#include <chrono>
-#include <fstream>
+#include <string>
 
-#include <QSim/Matrix.h>
-#include <QSim/NLevelSystemStatic.h>
-#include <QSim/Doppler.h>
-#include <QSim/ThreadPool.h>
+#include <PyEmbed/Interpreter.h>
 
-int main()
+
+int main(int argc, char* argv[])
 {
-    QSim::ThreadPool pool;
+    std::cout << "Hello world" << std::endl;
 
-    // Generate detuning axis
-    constexpr static std::size_t cnt = 5001;
-    QSim::TStaticMatrix<double, 2, cnt> detunings;
-    auto probeDetunings = QSim::CreateLinspaceRow(-100.0e6, 100.0e6, cnt);
-    QSim::SetRow(detunings, probeDetunings, 0);
+    Py::PythonInterpreter python;
+    auto np = python.ImportModule("numpy");
+    auto plt = python.ImportModule("matplotlib.pyplot");
 
-    // setup Rb87 parameters
-    std::map<std::string, double> levels;
-    levels["S1_2_F1"] = -4.271e9;
-    levels["S1_2_F2"] = 2.563e9;
-    levels["P3_2"] = QSim::SpeedOfLight_v / 780.241e-9;
-    double mass = 1.44316060e-25;
-    double temperature = 300.0;
+    Py::PythonCallable np_array = np.GetAttribute("array");
 
-    // create system object
-    QSim::TStaticNLevelSystem<3> system(levels, mass);
-    system.AddTransition("S1_2_F1", "P3_2", 3.5e6);
-    system.AddTransition("S1_2_F2", "P3_2", 10.0e6);
-    system.AddDecay("P3_2", "S1_2_F1", 3.0/8.0 * 6.065e6);
-    system.AddDecay("P3_2", "S1_2_F2", 5.0/8.0 * 6.065e6);
-    system.SetTemperature(temperature);
+    Py::PythonObject arg = PyList_New(0);
+    PyList_Append(arg.Get(), PyLong_FromDouble(1.0));
+    PyList_Append(arg.Get(), PyLong_FromDouble(4.0));
+    PyList_Append(arg.Get(), PyLong_FromDouble(9.0));
+    PyList_Append(arg.Get(), PyLong_FromDouble(16.0));
+    PyList_Append(arg.Get(), PyLong_FromDouble(25.0));
+    PyList_Append(arg.Get(), PyLong_FromDouble(36.0));
+    auto arr = np_array(arg.Get());
+    std::cout << arr.Str() << std::endl;
 
-    auto start_ts = std::chrono::high_resolution_clock::now();
-
-    auto absCoeffs = pool.Map([&](auto dets){ return system.GetSteadyState(dets).GetAbsCoeff("S1_2_F1", "P3_2"); }, 
-        QSim::GetColIteratorBegin(detunings), QSim::GetColIteratorEnd(detunings));
-
-    std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
+    Py::PythonCallable plot = plt.GetAttribute("plot");
+    Py::PythonCallable show = plt.GetAttribute("show");
     
-    // Write to file
-    std::ofstream file;
-    file.open("data.txt", std::ios::out);
-    for (std::size_t i = 0; i < probeDetunings.Size(); i++)
-        file << probeDetunings[i] << " " << absCoeffs[i] << std::endl;
-    file.close();
-    
+    plot(arr);
+    show();
+
     return 0;
 }
