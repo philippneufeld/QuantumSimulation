@@ -19,16 +19,18 @@ set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
 # source files
 set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
 set(PYEMBED_SOURCE_DIR "${CMAKE_SOURCE_DIR}/PyEmbed")
-set(QSIM_SOURCES "${PYEMBED_SOURCE_DIR}/Interpreter.cpp")
+set(QSIM_SOURCES 
+    "${PYEMBED_SOURCE_DIR}/Interpreter.cpp"
+    "${PYEMBED_SOURCE_DIR}/Plotting.cpp")
 
 # find required libs
 find_package(Threads REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development NumPy)
 
 # compiler options
 set(QSIM_PUBLIC_COMPILER_OPTIONS "")
 set(QSIM_PUBLIC_COMPILER_DEFINITIONS "")
-set(QSIM_PUBLIC_INCLUDE_DIRS ${QSIM_INCLUDE_DIR} ${Python3_INCLUDE_DIRS})
+set(QSIM_PUBLIC_INCLUDE_DIRS ${QSIM_INCLUDE_DIR} ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
 set(QSIM_PUBLIC_LINK_LIBRARIES ${CMAKE_THREAD_LIBS_INIT} ${Python3_LIBRARIES})
 
 # executable suffix

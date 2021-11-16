@@ -87,26 +87,6 @@ namespace Py
         return PyObject_CallOneArg(Get(), arg1.Get());
     }
 
-    PythonObject PythonCallable::operator()(std::initializer_list<PythonObject> args)
-    {
-        if (!(*this))
-            return nullptr;
-
-        for (auto& arg: args)
-        {
-            if (!arg)
-                return nullptr;
-        }
-
-        // Build argument list
-        PythonObject argList = PyTuple_New(args.size());
-        auto it = args.begin();
-        for (std::size_t i = 0; i < args.size(); i++, it++)
-            PyTuple_SetItem(argList.Get(), i, (*it).Get());
-
-        return PyObject_CallObject(Get(), argList.Get());
-    }
-
     //
     // PythonInterpreter
     //
@@ -166,12 +146,34 @@ namespace Py
         status = PyConfig_Read(&config);
         status = Py_InitializeFromConfig(&config);
         PyConfig_Clear(&config);
+
+        // Import numpy
+        _import_array();
     }
 
     void PythonInterpreter::Finalize()
     {
         // uninitialize python interpreter
         Py_FinalizeEx();
+    }
+
+    //
+    // Miscellaneous
+    //
+
+    PythonObject MakeNumpyArray(std::initializer_list<double> data)
+    {
+        return MakeNumpyArray(data.begin(), static_cast<npy_intp>(data.size()));
+    }
+
+    PythonObject MakeNumpyArray(const double* data, npy_intp n)
+    {
+        PythonInterpreter python; // make sure python is initialized
+        npy_intp idx = 0;
+        PyObject* arr = PyArray_EMPTY(1, &n, NPY_DOUBLE, 0);
+        double* arr_data = static_cast<double*>(PyArray_GetPtr(reinterpret_cast<PyArrayObject*>(arr), &idx));
+        std::copy(data, data + n, arr_data);
+        return arr;
     }
 
 }
