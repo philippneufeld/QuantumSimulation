@@ -14,7 +14,29 @@
 namespace Py
 {
 
-    class PythonObject
+    namespace Internal
+    {
+        // Inheriting from this class ensures that python is proberly initialized
+        class PythonInitRefCnt
+        {
+        public:
+            PythonInitRefCnt();
+            virtual ~PythonInitRefCnt();
+
+            PythonInitRefCnt(const PythonInitRefCnt& rhs);
+            PythonInitRefCnt& operator=(const PythonInitRefCnt& rhs);
+
+        private:
+            void Initialize();
+            void Finalize();
+
+        private:
+            static std::size_t s_refCnt;
+        };
+    }
+
+    // Wrapper of the PyObject
+    class PythonObject : public Internal::PythonInitRefCnt
     {
     public:
         PythonObject(PyObject* pObj);
@@ -28,106 +50,88 @@ namespace Py
         bool operator!() const { return !m_pObject; }
 
         std::string Str() const;
-        PythonObject GetAttribute(const std::string& attr) const;
-
+        
+        // Functions to handle callable objects
+        bool IsCallable() const;
+        PythonObject Call() const;
+        PythonObject Call(const PythonObject& arg) const;
         template<typename... Ts>
-        PythonObject CallAttribute(const std::string& attr, Ts... args);
+        PythonObject Call(Ts... args) const;
+        template<typename... Ts>
+        PythonObject operator()(Ts... args) const { return Call(std::forward<Ts>(args)...); }
+
+        // Attribute handling
+        PythonObject GetAttribute(const std::string& attr) const;
+        bool IsAttributeCallable(const std::string& attr) const;
+        template<typename... Ts>
+        PythonObject CallAttribute(const std::string& attr, Ts... args) const;
 
     private:
         PyObject* m_pObject;
     };
 
-    class PythonCallable : public PythonObject
+    class PythonInterpreter : public Internal::PythonInitRefCnt
     {
     public:
-        PythonCallable(PyObject* pObj);
-        PythonCallable(const PythonObject& obj) : PythonCallable(obj.Get()) { }
-
-        PythonObject operator()() const;
-        PythonObject operator()(const PythonObject& arg1) const;
-        template<typename... Ts>
-        PythonObject operator()(const PythonObject& arg1, Ts... args) const;
-    };
-
-    class PythonTuple : public PythonObject
-    {
-    public:
-        template<typename... Ts>
-        PythonTuple(Ts... elements) : PythonObject(PyTuple_New(sizeof...(elements)))
-        {
-            SetElement<0>(std::forward<Ts>(elements)...);
-        }
-
-        PythonTuple(const PythonTuple& rhs) = delete;
-        PythonTuple& operator=(const PythonTuple& rhs) = delete;
-
-    private:
-        template<std::size_t idx, typename... Ts>
-        void SetElement(const PythonObject& el, Ts... els)
-        {
-            if (*this)
-                PyTuple_SetItem(Get(), idx, el.Get());
-            SetElement<idx + 1>(std::forward<Ts>(els)...);
-        }
-
-        template<std::size_t idx>
-        void SetElement(const PythonObject& el)
-        {
-            if (*this)
-                PyTuple_SetItem(Get(), idx, el.Get());
-        }
-    };
-
-
-    class PythonInterpreter
-    {
-    public:
-        PythonInterpreter();
-        ~PythonInterpreter();
-
-        PythonInterpreter(const PythonInterpreter& rhs);
-        PythonInterpreter& operator=(const PythonInterpreter& rhs);
-
+        // Miscellaneous function
         void RunCommand(const std::string& cmd);
         PythonObject ImportModule(const std::string& modName);
 
-    private:
-        void Initialize();
-        void Finalize();
+        // Numpy array creation
+        PythonObject CreateNumpyArray(std::initializer_list<double> data);
+        PythonObject CreateNumpyArray(const double* data, npy_intp n);
+        template<npy_intp N>
+        PythonObject CreateNumpyArray(const double(&data)[N]) { return CreateNumpyArray(data, N); }
 
+        // Tuple creation
+        template<typename... Ts>
+        PythonObject CreateTuple(Ts... vals);
     private:
-        static std::size_t s_refCnt;
+        template<std::size_t idx, typename... Ts>
+        void CreateTupleHelper(PyObject* pObj, const PythonObject& val, Ts... vals);
+        template<std::size_t idx>
+        void CreateTupleHelper(PyObject* pObj, const PythonObject& val);
     };
-
-
-    // 
-    // Miscellaneous functions
-    //
-
-    PythonObject MakeNumpyArray(std::initializer_list<double> data);
-    PythonObject MakeNumpyArray(const double* data, npy_intp n);
-    template<npy_intp N>
-    PythonObject MakeNumpyArray(const double(&data)[N]) { return MakeNumpyArray(data, N); }
 
     //
     // Template function implementations
     //
     
     template<typename... Ts>
-    PythonObject PythonObject::CallAttribute(const std::string& attr, Ts... args)
+    PythonObject PythonObject::Call(Ts... args) const
     {
-        PythonCallable callable = GetAttribute(attr);
-        return callable(std::forward<Ts>(args)...);
+        if (!(*this)) return nullptr;
+        PythonInterpreter python;
+        PythonObject argsTuple = python.CreateTuple(std::forward<Ts>(args)...);
+        if (!argsTuple) return nullptr;
+        return PyObject_CallObject(Get(), argsTuple.Get());
     }
-    
-    template<typename... Ts>
-    PythonObject PythonCallable::operator()(const PythonObject& arg1, Ts... args) const
-    {
-        if (!(*this))
-            return nullptr;
 
-        PythonTuple argTuple(arg1, std::forward<Ts>(args)...);
-        return PyObject_CallObject(Get(), argTuple.Get());
+    template<typename... Ts>
+    PythonObject PythonObject::CallAttribute(const std::string& attr, Ts... args) const
+    {
+        return GetAttribute(attr).Call(std::forward<Ts>(args)...);
+    }
+
+    template<typename... Ts>
+    PythonObject PythonInterpreter::CreateTuple(Ts... vals)
+    {
+        PythonObject pObj = PyTuple_New(static_cast<npy_intp>(sizeof...(vals)));
+        CreateTupleHelper<0>(pObj.Get(), std::forward<Ts>(vals)...);
+        return pObj;
+    }
+
+    template<std::size_t idx, typename... Ts>
+    void PythonInterpreter::CreateTupleHelper(PyObject* pObj, const PythonObject& val, Ts... vals)
+    {
+        if (pObj) PyTuple_SetItem(pObj, idx, val.Get());
+        CreateTupleHelper<idx + 1>(pObj, std::forward<Ts>(vals)...);
+    }
+
+    template<std::size_t idx>
+    void PythonInterpreter::CreateTupleHelper(PyObject* pObj, const PythonObject& val)
+    {
+        if (pObj) PyTuple_SetItem(pObj, idx, val.Get());
     }
 
 }

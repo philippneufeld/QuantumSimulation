@@ -14,14 +14,16 @@ namespace Py
 
     void PythonPlotAxis::Plot(double* xdata, std::size_t n)
     {
-        auto x = MakeNumpyArray(xdata, static_cast<npy_intp>(n));
+        PythonInterpreter python;
+        auto x = python.CreateNumpyArray(xdata, static_cast<npy_intp>(n));
         CallAttribute("plot", x);
     }
     
     void PythonPlotAxis::Plot(double* xdata, double* ydata, std::size_t n)
     {
-        auto x = MakeNumpyArray(xdata, static_cast<npy_intp>(n));
-        auto y = MakeNumpyArray(ydata, static_cast<npy_intp>(n));
+        PythonInterpreter python;
+        auto x = python.CreateNumpyArray(xdata, static_cast<npy_intp>(n));
+        auto y = python.CreateNumpyArray(ydata, static_cast<npy_intp>(n));
         CallAttribute("plot", x, y);
     }
     
