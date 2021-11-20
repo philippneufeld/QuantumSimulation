@@ -82,16 +82,14 @@ namespace Py
 
     PythonObject::~PythonObject()
     {
-        if (m_pObject)
-            Py_DECREF(m_pObject);
+        Release();
         m_pObject = nullptr;
     }
     
     PythonObject::PythonObject(const PythonObject& rhs)
         : Internal::PythonInitRefCnt(rhs), m_pObject(rhs.m_pObject)
     {
-        if (m_pObject)
-            Py_INCREF(m_pObject);
+        AddRef();
     }
     
     PythonObject& PythonObject::operator=(const PythonObject& rhs)
@@ -99,15 +97,23 @@ namespace Py
         // call base assignment operator
         Internal::PythonInitRefCnt::operator=(rhs);
 
-        if (m_pObject)
-            Py_DECREF(m_pObject);
-
+        Release();
         m_pObject = rhs.m_pObject;
-
-        if (m_pObject)
-            Py_INCREF(m_pObject);
+        AddRef();
 
         return *this;
+    }
+
+    void PythonObject::AddRef() const
+    { 
+        if (m_pObject) 
+            Py_INCREF(m_pObject); 
+    }
+
+    void PythonObject::Release() const
+    {
+        if (m_pObject)
+            Py_DECREF(m_pObject);
     }
 
     std::string PythonObject::Str() const
@@ -162,8 +168,28 @@ namespace Py
     {
         return PyImport_ImportModule(modName.c_str());
     }
+    
+    PythonObject PythonInterpreter::CreateObject(long num)
+    {
+        return PyLong_FromLong(num);
+    }
 
-    PythonObject PythonInterpreter::CreateNumpyArray(std::initializer_list<double> data)
+    PythonObject PythonInterpreter::CreateObject(double num) 
+    {
+        return PyFloat_FromDouble(num);
+    }
+
+    PythonObject PythonInterpreter::CreateObject(const std::string& str)
+    {
+        return PyUnicode_FromString(str.c_str());
+    }
+
+    PythonObject PythonInterpreter::CreateTuple()
+    {
+        return PyTuple_New(0);
+    }
+
+    PythonObject PythonInterpreter::CreateNumpyArray(const std::initializer_list<double>& data)
     {
         return CreateNumpyArray(data.begin(), static_cast<npy_intp>(data.size()));
     }

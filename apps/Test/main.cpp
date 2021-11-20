@@ -6,11 +6,8 @@
 
 #include <PyEmbed/Plotting.h>
 
-
 int main(int argc, char* argv[])
 {
-    std::cout << "Hello world" << std::endl;
-
     Py::PythonMatplotlib matplotlib;
     auto fig = matplotlib.MakeFigure();
     auto ax = fig.AddSubplot();
@@ -23,7 +20,17 @@ int main(int argc, char* argv[])
         y.push_back(sin(x.back()));
     }
 
-    ax.Plot(x.data(), y.data(), n);
+    ax.Plot(x.data(), y.data(), n, "test", "o-", "C0");
+    ax.FillBetween(x.data(), -0.5, 0.5, n, "hello", "C0", 0.4);
+    ax.Annotate("Hello", 1, 0.25, 1, -0.25);
+    ax.SetXLabel("X-Axis");
+    ax.SetYLabel("Y-Axis");
+    ax.Legend();
+    ax.SetTitle("Example plot");
+
+    fig.TightLayout();
+    fig.Save("Test.pdf");
+
     matplotlib.RunGUILoop();
 
     return 0;

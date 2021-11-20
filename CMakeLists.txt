@@ -28,10 +28,17 @@ find_package(Threads REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development NumPy)
 
 # compiler options
-set(QSIM_PUBLIC_COMPILER_OPTIONS "")
 set(QSIM_PUBLIC_COMPILER_DEFINITIONS "")
 set(QSIM_PUBLIC_INCLUDE_DIRS ${QSIM_INCLUDE_DIR} ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
 set(QSIM_PUBLIC_LINK_LIBRARIES ${CMAKE_THREAD_LIBS_INIT} ${Python3_LIBRARIES})
+
+# GNUC on an ARM system (disable ABI warning)
+if (CMAKE_COMPILER_IS_GNUCC AND ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
+    message("ARM system and GNUC compiler detected. Disabling ABI warnings (-Wno-psabi)")
+    set(QSIM_PUBLIC_COMPILER_OPTIONS "-Wno-psabi")
+else()
+    set(QSIM_PUBLIC_COMPILER_OPTIONS "")
+endif()
 
 # executable suffix
 set(QSIM_EXE_SUFFIX ".out")

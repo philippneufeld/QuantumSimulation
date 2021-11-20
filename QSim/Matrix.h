@@ -566,7 +566,7 @@ namespace QSim
         THybridMatrix(std::size_t size) : THybridMatrix(colDyn ? N : size, colDyn ? size : N) {}
         THybridMatrix(std::size_t rows, std::size_t cols);
         THybridMatrix(std::size_t rows, std::size_t cols, const Ty* data);
-        THybridMatrix(std::size_t rows, std::size_t cols, std::initializer_list<double> lst)
+        THybridMatrix(std::size_t rows, std::size_t cols, const std::initializer_list<double>& lst)
             : THybridMatrix(rows, cols, lst.begin()) {}
         ~THybridMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
 
@@ -847,7 +847,7 @@ namespace QSim
         TDynamicMatrix() : m_rows(0), m_cols(0), m_data(nullptr) {}
         TDynamicMatrix(std::size_t rows, std::size_t cols);
         TDynamicMatrix(std::size_t rows, std::size_t cols, const Ty* data);
-        TDynamicMatrix(std::size_t rows, std::size_t cols, std::initializer_list<double> lst)
+        TDynamicMatrix(std::size_t rows, std::size_t cols, const std::initializer_list<double>& lst)
             : TDynamicMatrix(rows, cols, lst.begin()) {}
         ~TDynamicMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
 

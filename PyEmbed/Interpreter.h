@@ -9,6 +9,7 @@
 #include <numpy/arrayobject.h>
 
 #include <string>
+#include <map>
 #include <type_traits>
 
 namespace Py
@@ -39,6 +40,7 @@ namespace Py
     class PythonObject : public Internal::PythonInitRefCnt
     {
     public:
+        PythonObject() : m_pObject(nullptr) { }
         PythonObject(PyObject* pObj);
         virtual ~PythonObject();
 
@@ -49,6 +51,10 @@ namespace Py
         operator bool() const { return !!m_pObject; }
         bool operator!() const { return !m_pObject; }
 
+        // explicit reference count manipulation -> take special care when using
+        void AddRef() const;
+        void Release() const;
+
         std::string Str() const;
         
         // Functions to handle callable objects
@@ -58,6 +64,8 @@ namespace Py
         template<typename... Ts>
         PythonObject Call(Ts... args) const;
         template<typename... Ts>
+        PythonObject CallKwargs(const std::map<std::string, PythonObject>& kwargs, Ts... args) const;
+        template<typename... Ts>
         PythonObject operator()(Ts... args) const { return Call(std::forward<Ts>(args)...); }
 
         // Attribute handling
@@ -65,6 +73,9 @@ namespace Py
         bool IsAttributeCallable(const std::string& attr) const;
         template<typename... Ts>
         PythonObject CallAttribute(const std::string& attr, Ts... args) const;
+        template<typename... Ts>
+        PythonObject CallAttributeKwargs(const std::string& attr, 
+            const std::map<std::string, PythonObject>& kwargs, Ts... args) const;
 
     private:
         PyObject* m_pObject;
@@ -77,8 +88,13 @@ namespace Py
         void RunCommand(const std::string& cmd);
         PythonObject ImportModule(const std::string& modName);
 
+        // Basic data types
+        PythonObject CreateObject(long num);
+        PythonObject CreateObject(double num);
+        PythonObject CreateObject(const std::string& str);
+
         // Numpy array creation
-        PythonObject CreateNumpyArray(std::initializer_list<double> data);
+        PythonObject CreateNumpyArray(const std::initializer_list<double>& data);
         PythonObject CreateNumpyArray(const double* data, npy_intp n);
         template<npy_intp N>
         PythonObject CreateNumpyArray(const double(&data)[N]) { return CreateNumpyArray(data, N); }
@@ -86,6 +102,7 @@ namespace Py
         // Tuple creation
         template<typename... Ts>
         PythonObject CreateTuple(Ts... vals);
+        PythonObject CreateTuple();
     private:
         template<std::size_t idx, typename... Ts>
         void CreateTupleHelper(PyObject* pObj, const PythonObject& val, Ts... vals);
@@ -104,13 +121,39 @@ namespace Py
         PythonInterpreter python;
         PythonObject argsTuple = python.CreateTuple(std::forward<Ts>(args)...);
         if (!argsTuple) return nullptr;
-        return PyObject_CallObject(Get(), argsTuple.Get());
+        return PyObject_Call(Get(), argsTuple.Get(), nullptr);
+    }
+
+    template<typename... Ts>
+    PythonObject PythonObject::CallKwargs(
+        const std::map<std::string, PythonObject>& kwargs, Ts... args) const
+    {
+        if (!(*this)) return nullptr;
+        PythonInterpreter python;
+
+        // args
+        PythonObject argsTuple = python.CreateTuple(std::forward<Ts>(args)...);
+        if (!argsTuple) return nullptr;
+
+        // kwargs
+        PythonObject kwargsDict = PyDict_New();
+        for (const auto& item: kwargs)
+            PyDict_SetItemString(kwargsDict.Get(), item.first.c_str(), item.second.Get());
+
+        return PyObject_Call(Get(), argsTuple.Get(), kwargsDict.Get());
     }
 
     template<typename... Ts>
     PythonObject PythonObject::CallAttribute(const std::string& attr, Ts... args) const
     {
         return GetAttribute(attr).Call(std::forward<Ts>(args)...);
+    }
+
+    template<typename... Ts>
+    PythonObject PythonObject::CallAttributeKwargs(const std::string& attr, 
+        const std::map<std::string, PythonObject>& kwargs, Ts... args) const
+    {
+        return GetAttribute(attr).CallKwargs(kwargs, std::forward<Ts>(args)...);
     }
 
     template<typename... Ts>
@@ -124,14 +167,19 @@ namespace Py
     template<std::size_t idx, typename... Ts>
     void PythonInterpreter::CreateTupleHelper(PyObject* pObj, const PythonObject& val, Ts... vals)
     {
-        if (pObj) PyTuple_SetItem(pObj, idx, val.Get());
+        CreateTupleHelper<idx>(pObj, val);
         CreateTupleHelper<idx + 1>(pObj, std::forward<Ts>(vals)...);
     }
 
     template<std::size_t idx>
     void PythonInterpreter::CreateTupleHelper(PyObject* pObj, const PythonObject& val)
     {
-        if (pObj) PyTuple_SetItem(pObj, idx, val.Get());
+        if (pObj) 
+        {
+            // PyTuple_SetItem steals the reference to val -> increase reference count in advance
+            val.AddRef();
+            PyTuple_SetItem(pObj, idx, val.Get());
+        }
     }
 
 }
