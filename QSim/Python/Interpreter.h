@@ -59,8 +59,10 @@ namespace Py
         
         // Functions to handle callable objects
         bool IsCallable() const;
+#if PY_MINOR_VERSION >= 9
         PythonObject Call() const;
         PythonObject Call(const PythonObject& arg) const;
+#endif
         template<typename... Ts>
         PythonObject Call(Ts... args) const;
         template<typename... Ts>

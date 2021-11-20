@@ -52,6 +52,7 @@ namespace Py
             std::wstring wProgPath(progPath.begin(), progPath.end());
 
             // initialize python interpreter
+#if PY_MINOR_VERSION >= 8
             PyStatus status;
             PyConfig config;
             PyConfig_InitPythonConfig(&config);
@@ -59,6 +60,10 @@ namespace Py
             status = PyConfig_Read(&config);
             status = Py_InitializeFromConfig(&config);
             PyConfig_Clear(&config);
+#else
+            Py_SetProgramName(wProgPath.c_str());
+            Py_Initialize();
+#endif
 
             // Import numpy
             _import_array();
@@ -143,6 +148,7 @@ namespace Py
         return !(*this) ? false : PyCallable_Check(Get());
     }
 
+#if PY_MINOR_VERSION >= 9
     PythonObject PythonObject::Call() const
     {
         if (!(*this)) return nullptr;
@@ -154,6 +160,7 @@ namespace Py
         if (!(*this)) return nullptr;
         return PyObject_CallOneArg(Get(), arg.Get());
     }
+#endif
 
     //
     // PythonInterpreter
