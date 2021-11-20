@@ -4,10 +4,10 @@
 #include <chrono>
 #include <fstream>
 
-#include <QSim/Matrix.h>
-#include <QSim/NLevelSystemStatic.h>
+#include <QSim/Math/Matrix.h>
+#include <QSim/StaticQSysSS.h>
 #include <QSim/Doppler.h>
-#include <QSim/ThreadPool.h>
+#include <QSim/Util/ThreadPool.h>
 
 int main()
 {
@@ -24,7 +24,7 @@ int main()
     double temperature = 300.0;
 
     // create system object
-    QSim::TStaticNLevelSystem<2> system(levels, mass);
+    QSim::TStaticQSysSS<2> system(levels, mass);
     system.AddTransition("S1_2", "P3_2", 3.5e6);
     system.AddDecay("P3_2", "S1_2", 6.065e6);
     system.SetTemperature(temperature);

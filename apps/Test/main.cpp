@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <PyEmbed/Plotting.h>
+#include <QSim/Python/Plotting.h>
 
 int main(int argc, char* argv[])
 {

@@ -6,8 +6,6 @@
 #include <cstdint>
 #include <functional>
 
-#include "NLevelSystemStatic.h"
-
 namespace QSim
 {
 

@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_NLevelSystemStatic_H_
-#define QSim_NLevelSystemStatic_H_
+#ifndef QSim_QSim_StaticQSysSS_H_
+#define QSim_QSim_StaticQSysSS_H_
 
 #include <cstdint>
 #include <string>
@@ -11,7 +11,7 @@
 #include <set>
 #include <cassert>
 
-#include "Matrix.h"
+#include "Math/Matrix.h"
 #include "Doppler.h"
 
 namespace QSim
@@ -60,11 +60,11 @@ namespace QSim
 
 
     //
-    // N-level system steady state solver
+    // N-level quantum system steady state solver
     //
 
     template<std::size_t N>
-    class TStaticNLevelSystem
+    class TStaticQSysSS
     {
         template<typename InputIt>
         using EnableIfLvlIt_t = std::enable_if_t<
@@ -73,14 +73,14 @@ namespace QSim
 
     public:
         // constructors
-        TStaticNLevelSystem(const std::map<std::string, double>& levels, double mass)
-            : TStaticNLevelSystem(levels.begin(), mass) { assert(levels.size() == N); }
+        TStaticQSysSS(const std::map<std::string, double>& levels, double mass)
+            : TStaticQSysSS(levels.begin(), mass) { assert(levels.size() == N); }
         template<typename InputIt, typename=EnableIfLvlIt_t<InputIt>>
-        TStaticNLevelSystem(InputIt levelIterator, double mass);
+        TStaticQSysSS(InputIt levelIterator, double mass);
 
         // copy operations
-        TStaticNLevelSystem(const TStaticNLevelSystem&) = default;
-        TStaticNLevelSystem& operator=(const TStaticNLevelSystem&) = default;
+        TStaticQSysSS(const TStaticQSysSS&) = default;
+        TStaticQSysSS& operator=(const TStaticQSysSS&) = default;
 
         // get index by name
         std::size_t GetLevelIndexByName(const std::string& name) { return m_levelNames.at(name); }
@@ -131,7 +131,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename InputIt, typename>
-    TStaticNLevelSystem<N>::TStaticNLevelSystem(InputIt levelIterator, double mass)
+    TStaticQSysSS<N>::TStaticQSysSS(InputIt levelIterator, double mass)
         : m_doppler(mass, 300.0) // use room temperature as default
     {
         // levelIterator is a pair containing (name, level)
@@ -143,7 +143,7 @@ namespace QSim
     }
 
     template<std::size_t N>
-    bool TStaticNLevelSystem<N>::AddTransition(const std::string& lvl1, const std::string& lvl2, double rabi)
+    bool TStaticQSysSS<N>::AddTransition(const std::string& lvl1, const std::string& lvl2, double rabi)
     {
         // check that both levels exist in the system
         if (m_levelNames.find(lvl1) == m_levelNames.end() || m_levelNames.find(lvl2) == m_levelNames.end())
@@ -163,7 +163,7 @@ namespace QSim
     }
     
     template<std::size_t N>
-    bool TStaticNLevelSystem<N>::AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi)
+    bool TStaticQSysSS<N>::AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rabi)
     {
         // check that both levels exist in the system
         if (m_levelNames.find(lvlFrom) == m_levelNames.end() || m_levelNames.find(lvlTo) == m_levelNames.end())
@@ -175,7 +175,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticNLevelSystem<N>::GetHamiltonian(const TColVector<VT>& detunings, double velocity) const
+    TStaticMatrix<std::complex<double>, N, N> TStaticQSysSS<N>::GetHamiltonian(const TColVector<VT>& detunings, double velocity) const
     {
         assert((~detunings).Rows() == m_transResonances.Rows());
         auto hamiltonian = m_hamiltonianNoLight;
@@ -196,7 +196,7 @@ namespace QSim
     
     template<std::size_t N>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticNLevelSystem<N>::GetSteadyStateNatural(const TColVector<VT>& detunings, double velocity) const
+    TStaticDensityMatrix<N> TStaticQSysSS<N>::GetSteadyStateNatural(const TColVector<VT>& detunings, double velocity) const
     {
         const TStaticMatrix<std::complex<double>, N, N>& h = GetHamiltonian(detunings, velocity);
         TStaticMatrix<std::complex<double>, N*N + 1, N*N> A;
@@ -250,14 +250,14 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticNLevelSystem<N>::GetSteadyState(const TColVector<VT>& detunings) const
+    TStaticDensityMatrix<N> TStaticQSysSS<N>::GetSteadyState(const TColVector<VT>& detunings) const
     {
         auto ss = m_doppler.Integrate([&](double vel){ return this->GetSteadyStateNatural(detunings, vel).GetMatrix(); });
         return TStaticDensityMatrix<N>(m_levelNames, ss);
     }
 
     template<std::size_t N>
-    bool TStaticNLevelSystem<N>::PrepareCalculation()
+    bool TStaticQSysSS<N>::PrepareCalculation()
     {
         // calculate transition splittings
         std::size_t transCnt = m_transitions.size();
@@ -314,7 +314,7 @@ namespace QSim
     }
 
     template<std::size_t N>
-    bool TStaticNLevelSystem<N>::PreparePhotonBasis(std::vector<std::size_t>& trans_path, 
+    bool TStaticQSysSS<N>::PreparePhotonBasis(std::vector<std::size_t>& trans_path, 
         std::set<std::size_t>& visitedLvls, std::size_t transFrom)
     {
         // cehck for circular transition path

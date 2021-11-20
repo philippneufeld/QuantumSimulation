@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef PyEmbed_Interpreter_H_
-#define PyEmbed_Interpreter_H_
+#ifndef QSim_Python_Interpreter_H_
+#define QSim_Python_Interpreter_H_
 
 #include <Python.h>
 

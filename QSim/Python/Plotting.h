@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef PyEmbed_Plotting_H_
-#define PyEmbed_Plotting_H_
+#ifndef QSim_Python_Plotting_H_
+#define QSim_Python_Plotting_H_
 
 #include "Interpreter.h"
 

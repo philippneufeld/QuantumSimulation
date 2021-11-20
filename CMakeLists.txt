@@ -18,10 +18,9 @@ set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
 
 # source files
 set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
-set(PYEMBED_SOURCE_DIR "${CMAKE_SOURCE_DIR}/PyEmbed")
-set(QSIM_SOURCES 
-    "${PYEMBED_SOURCE_DIR}/Interpreter.cpp"
-    "${PYEMBED_SOURCE_DIR}/Plotting.cpp")
+set(QSIM_SOURCES
+    "${QSIM_SOURCE_DIR}/Python/Interpreter.cpp"
+    "${QSIM_SOURCE_DIR}/Python/Plotting.cpp")
 
 # find required libs
 find_package(Threads REQUIRED)
