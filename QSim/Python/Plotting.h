@@ -3,9 +3,9 @@
 #ifndef QSim_Python_Plotting_H_
 #define QSim_Python_Plotting_H_
 
-#include "Interpreter.h"
+#include "PythonInterpreter.h"
 
-namespace Py
+namespace QSim
 {
 
     class PythonPlotAxis : public PythonObject

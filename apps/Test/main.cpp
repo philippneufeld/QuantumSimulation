@@ -1,14 +1,45 @@
 // Philipp Neufeld, 2021
-#include <Python.h>
+
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include <QSim/Python/Plotting.h>
+#include <QSim/Util/Argparse.h>
 
-int main(int argc, char* argv[])
+int main(int argc, const char* argv[])
 {
-    Py::PythonMatplotlib matplotlib;
+
+    QSim::ArgumentParser parser;
+    parser.AddOption("version", "Print the version of the program");
+    parser.AddOption("t,test1", "test1 option.");
+    parser.AddOptionDefault("r,test2", "test2 option", "42");
+    parser.AddOption("h,help", "Print help string");
+    auto result = parser.Parse(argc, argv);
+    
+    if (result.IsError())
+    {
+        std::cout << result.GetError();
+        return -1;
+    }
+
+    if (result.IsOptionPresent("help"))
+    {
+        std::cout << parser.GetHelpString() << std::endl;
+        return 0;
+    }
+    if (result.IsOptionPresent("v"))
+    {
+        std::cout << "version 1.0" << std::endl;
+        return 0;
+    }
+    
+    if(result.IsOptionPresent("test1"))
+        std::cout << "test1:" << result.GetOptionValue<int>("test1") << std::endl;
+    if(result.IsOptionPresent("test2"))
+        std::cout << "test2:" << result.GetOptionValue<double>("test2") << std::endl;
+
+    QSim::PythonMatplotlib matplotlib;
     auto fig = matplotlib.MakeFigure();
     auto ax = fig.AddSubplot();
 

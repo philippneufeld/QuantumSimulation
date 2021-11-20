@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_Python_Interpreter_H_
-#define QSim_Python_Interpreter_H_
+#ifndef QSim_Python_PythonInterpreter_H_
+#define QSim_Python_PythonInterpreter_H_
 
 #include <Python.h>
 
@@ -12,7 +12,7 @@
 #include <map>
 #include <type_traits>
 
-namespace Py
+namespace QSim
 {
 
     namespace Internal

@@ -3,9 +3,9 @@
 #include <unistd.h> // readlink, getpid
 #include <cstring>
 
-#include "Interpreter.h"
+#include "PythonInterpreter.h"
 
-namespace Py
+namespace QSim
 {
     namespace Internal
     {
@@ -61,7 +61,7 @@ namespace Py
             status = Py_InitializeFromConfig(&config);
             PyConfig_Clear(&config);
 #else
-            Py_SetProgramName(wProgPath.c_str());
+            Py_SetProgramName(const_cast<wchar_t*>(wProgPath.c_str()));
             Py_Initialize();
 #endif
 

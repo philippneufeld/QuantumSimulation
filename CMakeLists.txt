@@ -1,6 +1,6 @@
 # Philipp Neufeld, 2021
 
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.17)
 
 # don't allow build in the source directory
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
@@ -19,8 +19,9 @@ set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
 # source files
 set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
 set(QSIM_SOURCES
-    "${QSIM_SOURCE_DIR}/Python/Interpreter.cpp"
-    "${QSIM_SOURCE_DIR}/Python/Plotting.cpp")
+    "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
+    "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
+    "${QSIM_SOURCE_DIR}/Util/Argparse.cpp")
 
 # find required libs
 find_package(Threads REQUIRED)

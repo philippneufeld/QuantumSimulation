@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_QSim_StaticQSysSS_H_
-#define QSim_QSim_StaticQSysSS_H_
+#ifndef QSim_StaticQSysSS_H_
+#define QSim_StaticQSysSS_H_
 
 #include <cstdint>
 #include <string>
@@ -13,51 +13,11 @@
 
 #include "Math/Matrix.h"
 #include "Doppler.h"
+#include "DensityMatrix.h"
 
 namespace QSim
 {
     constexpr static double SpeedOfLight_v = 2.99792458e8;
-
-    //
-    // Density matrix class
-    //
-
-    template<std::size_t N>
-    class TStaticDensityMatrix
-    {
-    public:
-        TStaticDensityMatrix(std::map<std::string, std::size_t> levelNames, 
-            const TStaticMatrix<std::complex<double>, N, N>& densityMatrix)
-            : m_levelNames(levelNames), m_densityMatrix(densityMatrix) {}
-
-        TStaticDensityMatrix(const TStaticDensityMatrix&) = default;
-        TStaticDensityMatrix& operator=(const TStaticDensityMatrix&) = default;
-        
-        double GetPopulation(const std::string& lvl) const;
-        double GetAbsCoeff(const std::string& lvl1, const std::string& lvl2) const;
-
-        const TStaticMatrix<std::complex<double>, N, N>& GetMatrix() const { return m_densityMatrix; }
-
-    private:
-        std::map<std::string, std::size_t> m_levelNames;
-        TStaticMatrix<std::complex<double>, N, N> m_densityMatrix;
-    };
-
-    template<std::size_t N>
-    double TStaticDensityMatrix<N>::GetPopulation(const std::string& lvl) const 
-    { 
-        std::size_t idx = m_levelNames.at(lvl);
-        return std::real(m_densityMatrix(idx, idx)); 
-    }
-
-    template<std::size_t N>
-    double TStaticDensityMatrix<N>::GetAbsCoeff(const std::string& lvl1, const std::string& lvl2) const 
-    { 
-        std::size_t idx1 = m_levelNames.at(lvl1);
-        std::size_t idx2 = m_levelNames.at(lvl2);
-        return std::imag(m_densityMatrix(idx1, idx2)); 
-    }
-
 
     //
     // N-level quantum system steady state solver

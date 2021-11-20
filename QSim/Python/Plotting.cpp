@@ -2,7 +2,7 @@
 
 #include "Plotting.h"
 
-namespace Py
+namespace QSim
 {
 
     PythonMatplotlib::PythonMatplotlib()
