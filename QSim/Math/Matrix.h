@@ -464,6 +464,8 @@ namespace QSim
         constexpr std::size_t Cols() const { return M; }
         constexpr std::size_t Size() const { return Rows()*Cols(); }
 
+        const Ty* Data() const { return m_data; }
+
     private:
         Ty m_data[N*M];
     };
@@ -598,6 +600,8 @@ namespace QSim
         constexpr std::size_t Size() const { return Rows()*Cols(); }
 
         void Resize(std::size_t dynDim);
+
+        const Ty* Data() const { return m_data; }
 
     private:
         std::size_t m_dynDim;
@@ -874,6 +878,8 @@ namespace QSim
         constexpr std::size_t Size() const { return Rows()*Cols(); }
 
         void Resize(std::size_t rows, std::size_t cols);
+
+        const Ty* Data() const { return m_data; }
 
     private:
         std::size_t m_rows;

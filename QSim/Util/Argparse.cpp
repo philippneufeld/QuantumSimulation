@@ -198,6 +198,13 @@ namespace QSim
 
             help += line + "\n";
         }
+        
+        if (!help.empty())
+        {
+            if (help.back() == '\n')
+                help.pop_back();
+        }
+
         return help;
     }
 
