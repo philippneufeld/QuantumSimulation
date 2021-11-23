@@ -182,7 +182,7 @@ namespace QSim
         for (std::size_t i = 0; i < (~c).Rows(); i++)
         {
             for (std::size_t j = 0; j < (~c).Cols(); j++)
-                (~c)(i, j) = (~a)(i, j) * s;                
+                (~c)(i, j) = (~a)(i, j) * static_cast<decltype((~a)(i, j))>(s);                
         }
     }
     

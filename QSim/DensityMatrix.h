@@ -20,6 +20,8 @@ namespace QSim
     {
         using MyParent = TStaticMatrix<std::complex<double>, N, N>;
     public:
+        TStaticDensityMatrix(std::map<std::string, std::size_t> levelNames)
+            : MyParent(N, N), m_levelNames(levelNames) {}
         TStaticDensityMatrix(std::map<std::string, std::size_t> levelNames, 
             const TStaticMatrix<std::complex<double>, N, N>& densityMatrix)
             : MyParent(densityMatrix), m_levelNames(levelNames) {}
