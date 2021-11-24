@@ -16,6 +16,8 @@
 #include "Doppler.h"
 #include "DensityMatrix.h"
 
+#include <iostream>
+
 namespace QSim
 {
     constexpr static double Pi_v = 3.14159265358979323846;
@@ -28,20 +30,24 @@ namespace QSim
     // N-level quantum system solver
     //
 
-    
-    struct EulerIntegrator
+    template<typename XTy, typename YTy>
+    class EulerIntegrator
     {
-        template<typename XTy, typename YTy, typename Func>
-        static void Step(YTy& y, XTy x, XTy dx, Func func)
+    public:
+        template<typename Func>
+        void Step(YTy& y, XTy x, XTy dx, Func func)
         {
             y += func(x, y) * dx;
         }
     };
 
-    struct RK4Integrator
+    
+    template<typename XTy, typename YTy>
+    class RK4Integrator
     {
-        template<typename XTy, typename YTy, typename Func>
-        static void Step(YTy& y, XTy x, XTy dx, Func func)
+    public:
+        template<typename Func>
+        void Step(YTy& y, XTy x, XTy dx, Func func)
         {
             double dx2 = dx/2;
             auto k1 = func(x, y);
@@ -51,6 +57,134 @@ namespace QSim
             y += dx/6 * (k1 + 2*k2 + 2*k3 + k4);
         }
     };
+
+    
+    template<typename XTy, typename YTy>
+    class RK6Integrator
+    {
+    public:
+        template<typename Func>
+        void Step(YTy& y, XTy x, XTy dx, Func func)
+        {
+            auto k1 = func(x, y);
+            auto k2 = func(x + dx/3, y + (dx/3)*k1);
+            auto k3 = func(x + 2*dx/3, y + (2*dx/3)*k2);
+            auto k4 = func(x + dx/3, y + (dx/12)*k1 + (dx/3)*k2 - (dx/12)*k3);
+            auto k5 = func(x + 5*dx/6, y + (25*dx/48)*k1 - (55*dx/24)*k2 + (35*dx/48)*k3 + (15*dx/8)*k4);
+            auto k6 = func(x + dx/6, y + (3*dx/20)*k1 - (11*dx/20)*k2 - (1*dx/8)*k3 + (dx/2)*k4 + (dx/10)*k5);
+            auto k7 = func(x + dx, y - (261*dx/260)*k1 + (33*dx/13)*k2 + (43*dx/156)*k3 - (118*dx/39)*k4 + (32*dx/195)*k5 + (80*dx/39)*k6);
+            y += (13*dx/200)*k1 + (11*dx/40)*k3 + (11*dx/40)*k4 + (4*dx/25)*k5 + (4*dx/25)*k6 + (13*dx/200)*k7;
+        }
+    };
+
+    template<typename XTy, typename YTy>
+    class BS32Integrator
+    {
+    public:      
+        template<typename Func>
+        void Step(YTy& y, XTy x, XTy dx, Func func)
+        {  
+            std::size_t steps = 0;
+            std::size_t remainingSteps = 1;
+            auto curr_dx = dx;
+            while (remainingSteps > 0)
+            {
+                steps++;
+                auto res = StepHelper(y, x, curr_dx, func);
+                auto dy = res.first;
+                auto hint = res.second;
+
+                // check if step size should be decreased (current step is calculated again)
+                if (hint < 0)
+                {
+                    curr_dx /= 2;
+                    remainingSteps *= 2;
+                    continue;
+                }
+
+                y += dy;
+                remainingSteps--;
+                
+                // check if step size should be increased for the next step
+                if (hint > 0 && remainingSteps % 2 == 0 && 2*curr_dx <= dx)
+                {
+                    curr_dx *= 2;
+                    remainingSteps /= 2;
+                }
+            }
+        }
+
+        template<typename Func>
+        std::pair<YTy, int> StepHelper(const YTy& y, XTy x, XTy dx, Func func)
+        {
+            auto k1 = func(x, y);
+            auto k2 = func(x + (dx/2), y + (dx/2)*k1);
+            auto k3 = func(x + (3*dx/4), y + (3*dx/4)*k2);
+            auto dy1 = (2*dx/9)*k1 + (1*dx/9)*k2 + (4*dx/9)*k3;
+            auto k4 = func(x + dx, y + dy1);
+            auto dy2 = (7*dx/24)*k1 + (dx/4)*k2 + (dx/3)*k3 + (dx/8)*k4;
+            
+            auto err = dy2 - dy1;
+            if (IsAnyAbsGreater(err, 1e-4*y))
+                return {dy2, -1};
+            else if(IsAnyAbsGreater(1e-6*y, err))
+                return {dy2, +1};
+            else
+                return {dy2, 0};
+        }
+
+        bool IsAnyAbsGreater(YTy y1, YTy y2)
+        {
+            for (std::size_t i = 0; i < (~y1).Size(); i++)
+            {
+                if (std::abs((~y1)[i]) > std::abs((~y2)[i] + 1e-15))
+                    return true;
+            }
+            return false;
+        }
+
+    private:
+        XTy m_dx = 0;
+    };
+
+    template<typename XTy, typename YTy>
+    class RKF45Integrator
+    {
+    public:      
+        
+    };
+
+
+    /*namespace Internal
+    {
+
+        template<double B, double C, double... As>
+        struct ButcherTableauRow;
+
+
+        template<typename XTy, typename YTy, typename Func, typename BTR>
+        struct RKIntegratorHelper;
+
+        template<typename XTy, typename YTy, typename Func, double B, double C, double... As>
+        struct RKIntegratorHelper<XTy, YTy, Func, ButcherTableauRow<B, C, As...>>
+        {
+            template<typename... Ks>
+            static auto CalcRKContrib(const YTy& y, XTy x, XTy dx, Func func, Ks... ks)
+        };
+    }
+
+
+    struct RKIntegrator
+    {
+        template<typename XTy, typename YTy, typename Func>
+        static void Step(YTy& y, XTy x, XTy dx, Func func)
+        {
+            auto k1 = func(x, y);
+        }
+
+        template<typename XTy, typename YTy, typename Func, typename... Ks>
+        
+    }*/
 
 
 
@@ -108,11 +242,11 @@ namespace QSim
         TStaticDensityMatrix<N> MakeGroundState() const;
 
         template<typename VT>
-        std::vector<TStaticDensityMatrix<N>> GetTrajectoryNatural(
+        std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> GetTrajectoryNatural(
             const TColVector<VT>& laserFreqs,
             const TColVector<VT>& laserIntensities, 
             const TStaticDensityMatrix<N>& initial, 
-            double dt, std::size_t steps);
+            double dt, double tmax);
 
     private:
         template<typename VT>
@@ -205,7 +339,7 @@ namespace QSim
         VT laserFreqsDoppler = laserFreqs * (1 - velocity / SpeedOfLight2_v);
         
         // Rotating frame
-        // hamiltonian(0, 0) -= TwoPi_v * (~laserFreqsDoppler)(0);
+        hamiltonian(0, 0) -= TwoPi_v * (~laserFreqsDoppler)(0);
 
         // Calculate electric field
         constexpr double twoOverEps0c = 2 / (VacuumPermittivity_v * SpeedOfLight2_v);
@@ -213,9 +347,9 @@ namespace QSim
         for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
         {
             double E0 = twoOverEps0c * std::sqrt((~laserIntensities)(i));
-            electricField += E0 * std::cos(TwoPi_v * (~laserFreqsDoppler)(i) * t);
+            // electricField += E0 * std::cos(TwoPi_v * (~laserFreqsDoppler)(i) * t);
             // electricField += E0 * 0.5 * std::exp(std::complex<double>(1.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t));
-            // electricField += E0 * 0.5 * (1.0 + std::exp(std::complex<double>(-2.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t)));
+            electricField += E0 * 0.5 * (1.0 + std::exp(std::complex<double>(-2.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t)));
         }
 
         // System-Light interaction
@@ -226,30 +360,32 @@ namespace QSim
     
     template<std::size_t N>
     template<typename VT>
-    std::vector<TStaticDensityMatrix<N>> TStaticQSys<N>::GetTrajectoryNatural(
+    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQSys<N>::GetTrajectoryNatural(
         const TColVector<VT>& laserFreqs,
         const TColVector<VT>& laserIntensities, 
         const TStaticDensityMatrix<N>& initial, 
-        double dt, std::size_t steps)
+        double dt, double tmax)
     {
+        std::size_t steps = static_cast<std::size_t>(std::ceil(tmax / dt));
+
         std::vector<TStaticDensityMatrix<N>> trajectory;
         trajectory.reserve(steps + 1);
         trajectory.push_back(initial);
         
-        TStaticMatrix<std::complex<double>, N, N> rho = initial;
+        using YType = TStaticMatrix<std::complex<double>, N, N>;
+        RK4Integrator<double, YType> integrator;
+        YType rho = initial;
+
         for (std::size_t i = 1; i <= steps; i++)
         {
             double t = i * dt;
-            auto func = [&](auto x, const auto& y) { return GetDensityOpDerivative(y, laserFreqs, laserIntensities, 0.0, x); };
+            auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(y, laserFreqs, laserIntensities, 0.0, x); };
 
-            
-            // EulerIntegrator::Step(rho, t, dt, func);
-            RK4Integrator::Step(rho, t, dt, func);
-            
+            integrator.Step(rho, t, dt, func);            
             trajectory.emplace_back(m_levelNames, rho);
         }
         
-        return trajectory;
+        return {QSim::CreateLinspaceCol(0.0, steps*dt, steps + 1), trajectory};
     }
 
     template<std::size_t N>
