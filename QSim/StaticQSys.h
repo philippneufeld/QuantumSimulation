@@ -84,9 +84,21 @@ namespace QSim
         template<typename Func>
         void Step(YTy& y, XTy x, XTy dx, Func func)
         {  
-            std::size_t steps = 0;
+            
+            if (m_dx == 0 || m_dx > dx)
+                m_dx = dx;
+
             std::size_t remainingSteps = 1;
             auto curr_dx = dx;
+
+            while(m_dx < curr_dx)
+            {
+                curr_dx /= 2;
+                remainingSteps *= 2;
+            }
+
+            std::size_t steps = 0;
+            
             while (remainingSteps > 0)
             {
                 steps++;
@@ -99,6 +111,8 @@ namespace QSim
                 {
                     curr_dx /= 2;
                     remainingSteps *= 2;
+                    m_dx = curr_dx;
+                    // std::cout << "Decreasing stepsize " << m_dx << std::endl;
                     continue;
                 }
 
@@ -110,6 +124,8 @@ namespace QSim
                 {
                     curr_dx *= 2;
                     remainingSteps /= 2;
+                    m_dx = curr_dx;
+                    // std::cout << "Increasing stepsize " << m_dx << std::endl;
                 }
             }
         }
@@ -125,9 +141,9 @@ namespace QSim
             auto dy2 = (7*dx/24)*k1 + (dx/4)*k2 + (dx/3)*k3 + (dx/8)*k4;
             
             auto err = dy2 - dy1;
-            if (IsAnyAbsGreater(err, 1e-4*y))
+            if (IsAnyAbsGreater(err, 1e-3*y))
                 return {dy2, -1};
-            else if(IsAnyAbsGreater(1e-6*y, err))
+            else if(IsAnyAbsGreater(1e-5*y, err))
                 return {dy2, +1};
             else
                 return {dy2, 0};
@@ -145,49 +161,8 @@ namespace QSim
 
     private:
         XTy m_dx = 0;
+        XTy m_currDx = 0;
     };
-
-    template<typename XTy, typename YTy>
-    class RKF45Integrator
-    {
-    public:      
-        
-    };
-
-
-    /*namespace Internal
-    {
-
-        template<double B, double C, double... As>
-        struct ButcherTableauRow;
-
-
-        template<typename XTy, typename YTy, typename Func, typename BTR>
-        struct RKIntegratorHelper;
-
-        template<typename XTy, typename YTy, typename Func, double B, double C, double... As>
-        struct RKIntegratorHelper<XTy, YTy, Func, ButcherTableauRow<B, C, As...>>
-        {
-            template<typename... Ks>
-            static auto CalcRKContrib(const YTy& y, XTy x, XTy dx, Func func, Ks... ks)
-        };
-    }
-
-
-    struct RKIntegrator
-    {
-        template<typename XTy, typename YTy, typename Func>
-        static void Step(YTy& y, XTy x, XTy dx, Func func)
-        {
-            auto k1 = func(x, y);
-        }
-
-        template<typename XTy, typename YTy, typename Func, typename... Ks>
-        
-    }*/
-
-
-
 
 
     namespace Internal

@@ -26,7 +26,7 @@ int main(int argc, const char* argv[])
 
     auto start_ts = std::chrono::high_resolution_clock::now();
     
-    double dt = 0.0001;
+    double dt = 0.005;
     auto rho0 = system.MakeGroundState();
     auto traj = system.GetTrajectoryNatural(frequency, intensity, rho0, dt, 100);
 
