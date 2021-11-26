@@ -13,6 +13,7 @@
 #include <algorithm>
 
 #include "Math/Matrix.h"
+#include "Math/Integrator.h"
 #include "Doppler.h"
 #include "DensityMatrix.h"
 
@@ -24,146 +25,13 @@ namespace QSim
     constexpr static double TwoPi_v = 2 * Pi_v;
     constexpr static double SpeedOfLight2_v = 2.99792458e8;
     constexpr static double VacuumPermittivity_v = 8.8541878128e-12;
+    constexpr static double PlanckConstant_v = 6.62607004e-34;
     constexpr static double ReducedPlanckConstant_v = 1.054571817e-34;
+    constexpr static double AtomicMassUnit_v = 1.66053906660e-27;
 
     //
     // N-level quantum system solver
     //
-
-    template<typename XTy, typename YTy>
-    class EulerIntegrator
-    {
-    public:
-        template<typename Func>
-        void Step(YTy& y, XTy x, XTy dx, Func func)
-        {
-            y += func(x, y) * dx;
-        }
-    };
-
-    
-    template<typename XTy, typename YTy>
-    class RK4Integrator
-    {
-    public:
-        template<typename Func>
-        void Step(YTy& y, XTy x, XTy dx, Func func)
-        {
-            double dx2 = dx/2;
-            auto k1 = func(x, y);
-            auto k2 = func(x + dx2, y + dx2*k1);
-            auto k3 = func(x + dx2, y + dx2*k2);
-            auto k4 = func(x + dx, y + dx*k3);
-            y += dx/6 * (k1 + 2*k2 + 2*k3 + k4);
-        }
-    };
-
-    
-    template<typename XTy, typename YTy>
-    class RK6Integrator
-    {
-    public:
-        template<typename Func>
-        void Step(YTy& y, XTy x, XTy dx, Func func)
-        {
-            auto k1 = func(x, y);
-            auto k2 = func(x + dx/3, y + (dx/3)*k1);
-            auto k3 = func(x + 2*dx/3, y + (2*dx/3)*k2);
-            auto k4 = func(x + dx/3, y + (dx/12)*k1 + (dx/3)*k2 - (dx/12)*k3);
-            auto k5 = func(x + 5*dx/6, y + (25*dx/48)*k1 - (55*dx/24)*k2 + (35*dx/48)*k3 + (15*dx/8)*k4);
-            auto k6 = func(x + dx/6, y + (3*dx/20)*k1 - (11*dx/20)*k2 - (1*dx/8)*k3 + (dx/2)*k4 + (dx/10)*k5);
-            auto k7 = func(x + dx, y - (261*dx/260)*k1 + (33*dx/13)*k2 + (43*dx/156)*k3 - (118*dx/39)*k4 + (32*dx/195)*k5 + (80*dx/39)*k6);
-            y += (13*dx/200)*k1 + (11*dx/40)*k3 + (11*dx/40)*k4 + (4*dx/25)*k5 + (4*dx/25)*k6 + (13*dx/200)*k7;
-        }
-    };
-
-    template<typename XTy, typename YTy>
-    class BS32Integrator
-    {
-    public:      
-        template<typename Func>
-        void Step(YTy& y, XTy x, XTy dx, Func func)
-        {  
-            
-            if (m_dx == 0 || m_dx > dx)
-                m_dx = dx;
-
-            std::size_t remainingSteps = 1;
-            auto curr_dx = dx;
-
-            while(m_dx < curr_dx)
-            {
-                curr_dx /= 2;
-                remainingSteps *= 2;
-            }
-
-            std::size_t steps = 0;
-            
-            while (remainingSteps > 0)
-            {
-                steps++;
-                auto res = StepHelper(y, x, curr_dx, func);
-                auto dy = res.first;
-                auto hint = res.second;
-
-                // check if step size should be decreased (current step is calculated again)
-                if (hint < 0)
-                {
-                    curr_dx /= 2;
-                    remainingSteps *= 2;
-                    m_dx = curr_dx;
-                    // std::cout << "Decreasing stepsize " << m_dx << std::endl;
-                    continue;
-                }
-
-                y += dy;
-                remainingSteps--;
-                
-                // check if step size should be increased for the next step
-                if (hint > 0 && remainingSteps % 2 == 0 && 2*curr_dx <= dx)
-                {
-                    curr_dx *= 2;
-                    remainingSteps /= 2;
-                    m_dx = curr_dx;
-                    // std::cout << "Increasing stepsize " << m_dx << std::endl;
-                }
-            }
-        }
-
-        template<typename Func>
-        std::pair<YTy, int> StepHelper(const YTy& y, XTy x, XTy dx, Func func)
-        {
-            auto k1 = func(x, y);
-            auto k2 = func(x + (dx/2), y + (dx/2)*k1);
-            auto k3 = func(x + (3*dx/4), y + (3*dx/4)*k2);
-            auto dy1 = (2*dx/9)*k1 + (1*dx/9)*k2 + (4*dx/9)*k3;
-            auto k4 = func(x + dx, y + dy1);
-            auto dy2 = (7*dx/24)*k1 + (dx/4)*k2 + (dx/3)*k3 + (dx/8)*k4;
-            
-            auto err = dy2 - dy1;
-            if (IsAnyAbsGreater(err, 1e-3*y))
-                return {dy2, -1};
-            else if(IsAnyAbsGreater(1e-5*y, err))
-                return {dy2, +1};
-            else
-                return {dy2, 0};
-        }
-
-        bool IsAnyAbsGreater(YTy y1, YTy y2)
-        {
-            for (std::size_t i = 0; i < (~y1).Size(); i++)
-            {
-                if (std::abs((~y1)[i]) > std::abs((~y2)[i] + 1e-15))
-                    return true;
-            }
-            return false;
-        }
-
-    private:
-        XTy m_dx = 0;
-        XTy m_currDx = 0;
-    };
-
 
     namespace Internal
     {
@@ -173,6 +41,270 @@ namespace QSim
             std::size_t to;
             double rate;
         };
+    }
+
+    template<std::size_t N, typename MyT>
+    class TStaticQLvlSys
+    {
+        using IndexPair = std::pair<std::size_t, std::size_t>;
+        template<typename InputIt>
+        using EnableIfLvlIt_t = std::enable_if_t<
+            std::is_same<std::string, std::decay_t<decltype(std::declval<InputIt>()->first)>>::value &&
+            std::is_same<double, std::decay_t<decltype(std::declval<InputIt>()->second)>>::value>;
+    public:
+        // constructors
+        TStaticQLvlSys();
+        TStaticQLvlSys(const std::array<double, N>& levels);
+        TStaticQLvlSys(const std::array<std::string, N>& lvlNames);
+        TStaticQLvlSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels);
+
+        // copy operations
+        TStaticQLvlSys(const TStaticQLvlSys&) = default;
+        TStaticQLvlSys& operator=(const TStaticQLvlSys&) = default;
+
+        // CRTP operators
+        MyT& operator~() { return static_cast<MyT&>(*this); }
+        const MyT& operator~() const { return static_cast<const MyT&>(*this); }
+
+        // level names
+        std::string GetLevelNameByIndex(std::size_t idx) const;
+        std::size_t GetLevelIndexByName(const std::string& name) const;
+        bool SetLevelName(std::size_t idx, const std::string& newName);
+
+        // levels
+        double GetLevelByName(const std::string& name) const;
+        bool SetLevelByName(const std::string& name, double level);
+        double GetLevel(std::size_t idx) const;
+        bool SetLevel(std::size_t idx, double level);
+
+        // decay rates due to spontaneous emission
+        bool SetDecay(std::size_t from, std::size_t to, double rate);
+        bool SetDecayByName(const std::string& from, std::string& to, double rate);
+        double GetDecay(std::size_t from, std::size_t to) const;
+        double GetDecayByName(const std::string& from, std::string& to) const;
+
+        // Transition dipole operator
+        bool SetTransitionDipole(std::size_t from, std::size_t to, double dip);
+        bool SetTransitionDipoleByName(const std::string& from, std::string& to, double rate);
+        double GetTransitionDipole(std::size_t from, std::size_t to) const;
+        double GetTransitionDipoleByName(const std::string& from, std::string& to) const;
+
+        // thermal environment and properties needed for the doppler integration
+        void SetMass(double mass) { m_doppler.SetMass(mass); }
+        void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
+        double GetMass() const { return m_doppler.GetMass(); }
+        double GetTemperature() const { return m_doppler.GetTemperature(); }
+
+        // create stecific density matrices
+        TStaticDensityMatrix<N> CreateGroundState() const;
+        TStaticDensityMatrix<N> CreateThermalState() const;
+
+    private:
+        TStaticDensityMatrix<N> CreateThermalStateHelper(double temperature) const;
+
+        std::array<double, N> GenerateDefaultLevels() const;
+        std::array<std::string, N> GenerateDefaultLevelNames() const;
+
+    protected:
+        // Properties of the system
+        std::array<std::string, N> m_levelNames;
+        TStaticColVector<double, N> m_levels;
+        std::map<IndexPair, double> m_decays;
+        TStaticMatrix<std::complex<double>, N, N> m_dipoleOperator;
+
+        // thermal environment
+        TDopplerIntegrator<double> m_doppler;
+    };
+
+    template<std::size_t N, typename MyT>
+    TStaticQLvlSys<N, MyT>::TStaticQLvlSys()
+        : TStaticQLvlSys(GenerateDefaultLevelNames(), GenerateDefaultLevels()) { }
+
+    template<std::size_t N, typename MyT>
+    TStaticQLvlSys<N, MyT>::TStaticQLvlSys(const std::array<double, N>& levels)
+        : TStaticQLvlSys(GenerateDefaultLevelNames(), levels) { }
+
+    template<std::size_t N, typename MyT>
+    TStaticQLvlSys<N, MyT>::TStaticQLvlSys(const std::array<std::string, N>& lvlNames)
+        : TStaticQLvlSys(lvlNames, GenerateDefaultLevels()) { }
+
+    template<std::size_t N, typename MyT>
+    TStaticQLvlSys<N, MyT>::TStaticQLvlSys(const std::array<std::string, N>& lvlNames, 
+        const std::array<double, N>& levels)
+        : m_levelNames(lvlNames), m_doppler(AtomicMassUnit_v, 300.0)
+    {
+        for (size_t i = 0; i < N; i++)
+            m_levels(i) = levels[i];
+    }
+
+    template<std::size_t N, typename MyT>
+    std::string TStaticQLvlSys<N, MyT>::GetLevelNameByIndex(std::size_t idx) const
+    {
+        return idx < N ? m_levelNames[idx] : std::string();
+    }
+
+    template<std::size_t N, typename MyT>
+    std::size_t TStaticQLvlSys<N, MyT>::GetLevelIndexByName(const std::string& name) const
+    {
+        auto it = std::find(m_levelNames.begin(), m_levelNames.end(), name);
+        return it != m_levelNames.end() ? it - m_levelNames.begin() : -1;
+    }
+    
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetLevelName(std::size_t idx, const std::string& newName)
+    {
+        if (GetLevelIndexByName(newName) < N)
+            return false;  // level name already present
+        m_levelNames[idx] = newName;
+        return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLevelByName(const std::string& name) const
+    {
+        return GetLevel(GetLevelIndexByName(name));
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetLevelByName(const std::string& name, double level)
+    {
+        return SetLevel(GetLevelIndexByName(name), level);
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLevel(std::size_t idx) const
+    {
+        return idx < N ? m_levels[idx] : 0.0;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetLevel(std::size_t idx, double level)
+    {
+        if (idx >= N)
+            return false;
+        m_levels[idx] = level;
+        return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetDecay(std::size_t from, std::size_t to, double rate)
+    {
+        if (from >= N || to >= N)
+            return false;  // index out of bound
+        m_decays[std::make_pair(from, to)] = rate;
+        return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetDecayByName(const std::string& from, std::string& to, double rate)
+    {
+        return SetDecay(GetLevelIndexByName(from), GetLevelIndexByName(to), rate);
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetDecay(std::size_t from, std::size_t to) const
+    {
+        auto it = m_decays.find(std::make_pair(from, to));
+        return it != m_decays.end() ? it->second : 0.0;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetDecayByName(const std::string& from, std::string& to) const
+    {
+        return GetDecay(GetLevelIndexByName(from), GetLevelIndexByName(to));
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetTransitionDipole(std::size_t from, std::size_t to, double dip)
+    {
+        if (from >= N || to >= N)
+            return false;  // index out of bound
+        m_dipoleOperator(from, to) = dip;
+        m_dipoleOperator(to, from) = dip;
+        return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetTransitionDipoleByName(const std::string& from, std::string& to, double dip)
+    {
+        return SetTransitionDipole(GetLevelIndexByName(from), GetLevelIndexByName(to), dip);
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetTransitionDipole(std::size_t from, std::size_t to) const
+    {
+        return (from < N && to < N) ? m_dipoleOperator(from, to) : 0.0;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetTransitionDipoleByName(const std::string& from, std::string& to) const
+    {
+        return GetTransitionDipole(GetLevelIndexByName(from), GetLevelIndexByName(to));
+    }
+
+    template<std::size_t N, typename MyT>
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateGroundState() const
+    { 
+        return CreateThermalStateHelper(0.0);
+    }
+
+    template<std::size_t N, typename MyT>
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateThermalState() const
+    { 
+        return CreateThermalStateHelper(GetTemperature()); 
+    }
+
+    template<std::size_t N, typename MyT>
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateThermalStateHelper(double temperature) const
+    { 
+        TStaticDensityMatrix<N> res;
+
+        TStaticColVector<double, N> lvlOffset;
+        std::size_t gsIdx = std::min_element(m_levels.begin(), m_levels.end()) - m_levels.begin();
+        for (size_t i = 0; i < N; i++)
+            lvlOffset(i) = m_levels(i) - m_levels(gsIdx);
+
+        TStaticColVector<double, N> thermalWeights;
+        if (temperature <= 0.0)
+        {
+            for (size_t i = 0; i < N; i++)
+            {
+                if (lvlOffset(i) == 0.0)
+                    thermalWeights(i) = 1.0;
+            }
+        }
+        else
+        {
+            double tmp = PlanckConstant_v / (BoltzmannConstant_v * temperature);
+            for (size_t i = 0; i < N; i++)
+                thermalWeights(i) = std::exp(-tmp * lvlOffset(i));
+        }
+
+        double norm = 0.0;
+        for (size_t i = 0; i < N; i++)
+            norm += thermalWeights(i);
+        thermalWeights /= norm;
+
+        for (size_t i = 0; i < N; i++)
+            res(i, i) = thermalWeights(i);
+        return res;
+    }
+
+    template<std::size_t N, typename MyT>
+    std::array<double, N> TStaticQLvlSys<N, MyT>::GenerateDefaultLevels() const
+    {
+        std::array<double, N> lvls;
+        std::fill(lvls.begin(), lvls.end(), 0.0);
+        return lvls;
+    }
+
+    template<std::size_t N, typename MyT>
+    std::array<std::string, N> TStaticQLvlSys<N, MyT>::GenerateDefaultLevelNames() const
+    {
+        std::array<std::string, N> names;
+        for (size_t i = 0; i < N; i++)
+            names[i] = std::to_string(i);
+        return names;
     }
 
     template<std::size_t N>
@@ -356,7 +488,7 @@ namespace QSim
             double t = i * dt;
             auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(y, laserFreqs, laserIntensities, 0.0, x); };
 
-            integrator.Step(rho, t, dt, func);            
+            rho += integrator.Step(rho, t, dt, func);         
             trajectory.emplace_back(m_levelNames, rho);
         }
         
