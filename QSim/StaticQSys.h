@@ -11,13 +11,15 @@
 #include <set>
 #include <cassert>
 #include <algorithm>
+#include <complex>
 
 #include "Math/Matrix.h"
 #include "Math/Integrator.h"
 #include "Doppler.h"
 #include "DensityMatrix.h"
 
-#include <iostream>
+// Enables the i literal for complex numbers
+using namespace std::complex_literals;
 
 namespace QSim
 {
@@ -32,17 +34,7 @@ namespace QSim
     //
     // N-level quantum system solver
     //
-
-    namespace Internal
-    {
-        struct StaticQSysDecayDesc
-        {
-            std::size_t from;
-            std::size_t to;
-            double rate;
-        };
-    }
-
+    
     template<std::size_t N, typename MyT>
     class TStaticQLvlSys
     {
@@ -72,28 +64,30 @@ namespace QSim
         bool SetLevelName(std::size_t idx, const std::string& newName);
 
         // levels
-        double GetLevelByName(const std::string& name) const;
-        bool SetLevelByName(const std::string& name, double level);
+        const TStaticColVector<double, N>& GetLevels() const { return m_levels; }
         double GetLevel(std::size_t idx) const;
+        double GetLevelByName(const std::string& name) const;
         bool SetLevel(std::size_t idx, double level);
+        bool SetLevelByName(const std::string& name, double level);
 
         // decay rates due to spontaneous emission
-        bool SetDecay(std::size_t from, std::size_t to, double rate);
-        bool SetDecayByName(const std::string& from, std::string& to, double rate);
         double GetDecay(std::size_t from, std::size_t to) const;
         double GetDecayByName(const std::string& from, std::string& to) const;
+        bool SetDecay(std::size_t from, std::size_t to, double rate);
+        bool SetDecayByName(const std::string& from, std::string& to, double rate);
 
         // Transition dipole operator
-        bool SetTransitionDipole(std::size_t from, std::size_t to, double dip);
-        bool SetTransitionDipoleByName(const std::string& from, std::string& to, double rate);
-        double GetTransitionDipole(std::size_t from, std::size_t to) const;
-        double GetTransitionDipoleByName(const std::string& from, std::string& to) const;
+        const TStaticMatrix<double, N, N>& GetDipoleOperator() const { return m_dipoleOperator; }
+        double GetDipoleElement(std::size_t from, std::size_t to) const;
+        double GetDipoleElementByName(const std::string& from, const std::string& to) const;
+        bool SetDipoleElement(std::size_t from, std::size_t to, double dip);
+        bool SetDipoleElementByName(const std::string& from, const std::string& to, double rate);
 
         // thermal environment and properties needed for the doppler integration
-        void SetMass(double mass) { m_doppler.SetMass(mass); }
-        void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
         double GetMass() const { return m_doppler.GetMass(); }
         double GetTemperature() const { return m_doppler.GetTemperature(); }
+        void SetMass(double mass) { m_doppler.SetMass(mass); }
+        void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
 
         // create stecific density matrices
         TStaticDensityMatrix<N> CreateGroundState() const;
@@ -160,21 +154,15 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLevelByName(const std::string& name) const
-    {
-        return GetLevel(GetLevelIndexByName(name));
-    }
-
-    template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLevelByName(const std::string& name, double level)
-    {
-        return SetLevel(GetLevelIndexByName(name), level);
-    }
-
-    template<std::size_t N, typename MyT>
     double TStaticQLvlSys<N, MyT>::GetLevel(std::size_t idx) const
     {
         return idx < N ? m_levels[idx] : 0.0;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLevelByName(const std::string& name) const
+    {
+        return GetLevel(GetLevelIndexByName(name));
     }
 
     template<std::size_t N, typename MyT>
@@ -184,6 +172,25 @@ namespace QSim
             return false;
         m_levels[idx] = level;
         return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetLevelByName(const std::string& name, double level)
+    {
+        return SetLevel(GetLevelIndexByName(name), level);
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetDecay(std::size_t from, std::size_t to) const
+    {
+        auto it = m_decays.find(std::make_pair(from, to));
+        return it != m_decays.end() ? it->second : 0.0;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetDecayByName(const std::string& from, std::string& to) const
+    {
+        return GetDecay(GetLevelIndexByName(from), GetLevelIndexByName(to));
     }
 
     template<std::size_t N, typename MyT>
@@ -202,20 +209,19 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDecay(std::size_t from, std::size_t to) const
+    double TStaticQLvlSys<N, MyT>::GetDipoleElement(std::size_t from, std::size_t to) const
     {
-        auto it = m_decays.find(std::make_pair(from, to));
-        return it != m_decays.end() ? it->second : 0.0;
+        return (from < N && to < N) ? m_dipoleOperator(from, to) : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDecayByName(const std::string& from, std::string& to) const
+    double TStaticQLvlSys<N, MyT>::GetDipoleElementByName(const std::string& from, const std::string& to) const
     {
-        return GetDecay(GetLevelIndexByName(from), GetLevelIndexByName(to));
+        return GetDipoleElement(GetLevelIndexByName(from), GetLevelIndexByName(to));
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetTransitionDipole(std::size_t from, std::size_t to, double dip)
+    bool TStaticQLvlSys<N, MyT>::SetDipoleElement(std::size_t from, std::size_t to, double dip)
     {
         if (from >= N || to >= N)
             return false;  // index out of bound
@@ -225,21 +231,9 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetTransitionDipoleByName(const std::string& from, std::string& to, double dip)
+    bool TStaticQLvlSys<N, MyT>::SetDipoleElementByName(const std::string& from, const std::string& to, double dip)
     {
-        return SetTransitionDipole(GetLevelIndexByName(from), GetLevelIndexByName(to), dip);
-    }
-
-    template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetTransitionDipole(std::size_t from, std::size_t to) const
-    {
-        return (from < N && to < N) ? m_dipoleOperator(from, to) : 0.0;
-    }
-
-    template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetTransitionDipoleByName(const std::string& from, std::string& to) const
-    {
-        return GetTransitionDipole(GetLevelIndexByName(from), GetLevelIndexByName(to));
+        return SetDipoleElement(GetLevelIndexByName(from), GetLevelIndexByName(to), dip);
     }
 
     template<std::size_t N, typename MyT>
@@ -257,10 +251,10 @@ namespace QSim
     template<std::size_t N, typename MyT>
     TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateThermalStateHelper(double temperature) const
     { 
-        TStaticDensityMatrix<N> res;
+        TStaticDensityMatrix<N> res(m_levelNames);
 
         TStaticColVector<double, N> lvlOffset;
-        std::size_t gsIdx = std::min_element(m_levels.begin(), m_levels.end()) - m_levels.begin();
+        std::size_t gsIdx = std::min_element(m_levels.Data(), m_levels.Data() + N) - m_levels.Data();
         for (size_t i = 0; i < N; i++)
             lvlOffset(i) = m_levels(i) - m_levels(gsIdx);
 
@@ -283,7 +277,8 @@ namespace QSim
         double norm = 0.0;
         for (size_t i = 0; i < N; i++)
             norm += thermalWeights(i);
-        thermalWeights /= norm;
+        norm = 1.0 / norm;
+        thermalWeights *= norm;
 
         for (size_t i = 0; i < N; i++)
             res(i, i) = thermalWeights(i);
@@ -308,45 +303,26 @@ namespace QSim
     }
 
     template<std::size_t N>
-    class TStaticQSys
+    class TStaticQSys : public TStaticQLvlSys<N, TStaticQSys<N>>
     {
-        template<typename InputIt>
-        using EnableIfLvlIt_t = std::enable_if_t<
-            std::is_same<std::string, std::decay_t<decltype(std::declval<InputIt>()->first)>>::value &&
-            std::is_same<double, std::decay_t<decltype(std::declval<InputIt>()->second)>>::value>;
+        using MyParent = TStaticQLvlSys<N, TStaticQSys<N>>;
     public:
         // constructors
-        TStaticQSys(const std::map<std::string, double>& levels, double mass)
-            : TStaticQSys(levels.begin(), mass) { assert(levels.size() == N); }
-        template<typename InputIt, typename=EnableIfLvlIt_t<InputIt>>
-        TStaticQSys(InputIt levelIterator, double mass);
+        TStaticQSys() : TStaticQLvlSys<N, TStaticQSys<N>>() { }
+        TStaticQSys(const std::array<double, N>& levels) : TStaticQLvlSys<N, TStaticQSys<N>>(levels) { }
+        TStaticQSys(const std::array<std::string, N>& lvlNames) : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames) { }
+        TStaticQSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels) 
+            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames, levels) { }
 
         // copy operations
         TStaticQSys(const TStaticQSys&) = default;
         TStaticQSys& operator=(const TStaticQSys&) = default;
-
-        // level name control
-        bool HasLevel(const std::string& name) const { return m_levelNames.find(name) != m_levelNames.end(); }
-        std::size_t GetLevelIndexByName(const std::string& name) const { return m_levelNames.at(name); }
-
-        // functions to change the system properties 
-        bool SetDipoleMatrixElement(const std::string& lvl1, const std::string& lvl2, double dip);
-        bool AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rate);
 
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
             const TColVector<VT>& laserFreqs,
             const TColVector<VT>& laserIntensities, 
             double velocity, double t) const;
-
-        // thermal environment
-        void SetMass(double mass) { m_doppler.SetMass(mass); }
-        void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
-
-        double GetMass() const { return m_doppler.GetMass(); }
-        double GetTemperature() const { return m_doppler.GetTemperature(); }
-
-        TStaticDensityMatrix<N> MakeGroundState() const;
 
         template<typename VT>
         std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> GetTrajectoryNatural(
@@ -362,69 +338,7 @@ namespace QSim
             const TColVector<VT>& laserFreqs,
             const TColVector<VT>& laserIntensities, 
             double velocity, double t) const;
-
-    private:
-        // Map from the level name to their index
-        std::map<std::string, std::size_t> m_levelNames;
-
-        // Properties of the system
-        TStaticColVector<double, N> m_levels;
-        std::vector<Internal::StaticQSysDecayDesc> m_decays;
-        TStaticMatrix<std::complex<double>, N, N> m_dipoleOperator;
-
-        // thermal environment
-        TDopplerIntegrator<double> m_doppler;
     };
-
-    template<std::size_t N>
-    template<typename InputIt, typename>
-    TStaticQSys<N>::TStaticQSys(InputIt levelIterator, double mass)
-        : m_doppler(mass, 300.0) // use room temperature as default
-    {
-        // levelIterator is a pair containing (name, level)
-        for (std::size_t i = 0; i < N; i++, levelIterator++)
-        {
-            m_levelNames[levelIterator->first] = i;
-            m_levels[i] = levelIterator->second;
-        }
-    }
-
-    template<std::size_t N>
-    bool TStaticQSys<N>::SetDipoleMatrixElement(const std::string& lvl1, const std::string& lvl2, double dip)
-    {
-        if (!HasLevel(lvl1) || !HasLevel(lvl2) || lvl1 == lvl2)
-            return false;
-
-        std::size_t idx1 = GetLevelIndexByName(lvl1);
-        std::size_t idx2 = GetLevelIndexByName(lvl2);
-        m_dipoleOperator(idx1, idx2) = dip;
-        m_dipoleOperator(idx2, idx1) = dip;
-        return true;
-    }
-
-    template<std::size_t N>
-    bool TStaticQSys<N>::AddDecay(const std::string& lvlFrom, const std::string& lvlTo, double rate)
-    {
-        if (!HasLevel(lvlFrom) || !HasLevel(lvlTo) || lvlFrom == lvlTo)
-            return false;
-
-        Internal::StaticQSysDecayDesc decay;
-        decay.from = GetLevelIndexByName(lvlFrom);
-        decay.to = GetLevelIndexByName(lvlTo);
-        decay.rate = rate;
-
-        m_decays.push_back(decay);
-        return true;
-    }
-
-    template<std::size_t N>
-    TStaticDensityMatrix<N> TStaticQSys<N>::MakeGroundState() const
-    {
-        TStaticDensityMatrix<N> rho(m_levelNames);
-        auto gs = std::min_element(m_levels.Data(), m_levels.Data() + N) - m_levels.Data();
-        rho(gs, gs) = 1.0;
-        return rho;
-    }
 
     template<std::size_t N>
     template<typename VT>
@@ -440,13 +354,13 @@ namespace QSim
 
         // Atom hamiltonian
         for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) = TwoPi_v * m_levels[i];  
+            hamiltonian(i, i) = TwoPi_v * this->m_levels[i];  
 
         // Calculate doppler shifted laser frequencies
         VT laserFreqsDoppler = laserFreqs * (1 - velocity / SpeedOfLight2_v);
         
         // Rotating frame
-        hamiltonian(0, 0) -= TwoPi_v * (~laserFreqsDoppler)(0);
+        hamiltonian(1, 1) -= TwoPi_v * (~laserFreqsDoppler)(0);
 
         // Calculate electric field
         constexpr double twoOverEps0c = 2 / (VacuumPermittivity_v * SpeedOfLight2_v);
@@ -460,7 +374,7 @@ namespace QSim
         }
 
         // System-Light interaction
-        hamiltonian -= (electricField / ReducedPlanckConstant_v) * m_dipoleOperator;
+        hamiltonian -= (electricField / ReducedPlanckConstant_v) * this->m_dipoleOperator;
 
         return hamiltonian; 
     }
@@ -489,7 +403,7 @@ namespace QSim
             auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(y, laserFreqs, laserIntensities, 0.0, x); };
 
             rho += integrator.Step(rho, t, dt, func);         
-            trajectory.emplace_back(m_levelNames, rho);
+            trajectory.emplace_back(this->m_levelNames, rho);
         }
         
         return {QSim::CreateLinspaceCol(0.0, steps*dt, steps + 1), trajectory};
@@ -508,13 +422,15 @@ namespace QSim
         TStaticMatrix<std::complex<double>, N, N> rhoPrime = -1.0i * (h * rho - rho * h);
 
         // add lindblad dissipation term
-        for (const auto& decay: m_decays)
+        for (const auto& decay: this->m_decays)
         {
-            std::complex<double> popDecayRate = decay.rate * rho(decay.from, decay.from);
-            rhoPrime(decay.from, decay.from) -= popDecayRate;
-            rhoPrime(decay.to, decay.to) += popDecayRate;
-            rhoPrime(decay.from, decay.to) -= 0.5 * decay.rate * rho(decay.from, decay.to);
-            rhoPrime(decay.to, decay.from) -= 0.5 * decay.rate * rho(decay.to, decay.from);
+            auto idxPair = decay.first; // from, to
+            auto rate = decay.second;
+            std::complex<double> popDecayRate = rate * rho(idxPair.first, idxPair.first);
+            rhoPrime(idxPair.first, idxPair.first) -= popDecayRate;
+            rhoPrime(idxPair.second, idxPair.second) += popDecayRate;
+            rhoPrime(idxPair.first, idxPair.second) -= 0.5 * rate * rho(idxPair.first, idxPair.second);
+            rhoPrime(idxPair.second, idxPair.first) -= 0.5 * rate * rho(idxPair.second, idxPair.first);
         }
 
         return rhoPrime;

@@ -17,8 +17,9 @@ int main(int argc, const char* argv[])
     levels["P3_2"] = 25;
     double mass = 1;
     
-    QSim::TStaticQSys<2> system(levels, mass);
-    system.SetDipoleMatrixElement("S1_2", "P3_2", 1.0e-37);
+    QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, 25});
+    system.SetDipoleElementByName("S1_2", "P3_2", 1.0e-37);
+    system.SetMass(mass);
     // system.AddDecay("P3_2", "S1_2", 0.1);
     
     QSim::TStaticColVector<double, 1> intensity({10});
@@ -27,7 +28,7 @@ int main(int argc, const char* argv[])
     auto start_ts = std::chrono::high_resolution_clock::now();
     
     double dt = 0.005;
-    auto rho0 = system.MakeGroundState();
+    auto rho0 = system.CreateGroundState();
     auto traj = system.GetTrajectoryNatural(frequency, intensity, rho0, dt, 100);
 
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
