@@ -73,7 +73,7 @@ namespace QSim
         double GetDecay(std::size_t from, std::size_t to) const;
         double GetDecayByName(const std::string& from, std::string& to) const;
         bool SetDecay(std::size_t from, std::size_t to, double rate);
-        bool SetDecayByName(const std::string& from, std::string& to, double rate);
+        bool SetDecayByName(const std::string& from, const std::string& to, double rate);
 
         // Transition dipole operator
         const TStaticMatrix<double, N, N>& GetDipoleOperator() const { return m_dipoleOperator; }
@@ -232,7 +232,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     bool TStaticQLvlSys<N, MyT>::SetDecayByName(
-        const std::string& from, std::string& to, double rate)
+        const std::string& from, const std::string& to, double rate)
     {
         return SetDecay(GetLevelIndexByName(from), 
             GetLevelIndexByName(to), rate);
@@ -515,26 +515,27 @@ namespace QSim
             hamiltonian(i, i) = TwoPi_v * this->m_levels[i];  
 
         // Calculate doppler shifted laser frequencies
-        auto laserFreqs = this->GetLaserFrequencies() + detunings;
+        auto laserFreqs = TwoPi_v * (this->GetLaserFrequencies() + detunings);
         VT laserFreqsDoppler = laserFreqs * (1 - velocity / SpeedOfLight2_v);
         
         // Rotating frame
-        hamiltonian(1, 1) -= TwoPi_v * (~laserFreqsDoppler)(0);
+        // hamiltonian(1, 1) -= (~laserFreqsDoppler)(0);
 
         // Calculate electric field
         std::complex<double> electricField = 0;
         for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
         {
-            double E0 = this->GetLaserElectricField(0);
-            // electricField += E0 * std::cos(TwoPi_v * (~laserFreqsDoppler)(i) * t);
+            double E0 = this->GetLaserElectricField(i);
+            electricField += E0 * std::cos((~laserFreqsDoppler)(i) * t);
             // electricField += E0 * 0.5 * std::exp(std::complex<double>(1.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t));
-            electricField += E0 * 0.5 * (1.0 + std::exp(std::complex<double>(-2.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t)));
+            // electricField += E0 * 0.5;
+            // electricField += E0 * 0.5 * (1.0 + std::exp(std::complex<double>(-2.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t)));
         }
 
         // System-Light interaction
         hamiltonian -= (electricField / ReducedPlanckConstant_v) * this->m_dipoleOperator;
 
-        return hamiltonian; 
+        return hamiltonian;
     }
     
     template<std::size_t N>
