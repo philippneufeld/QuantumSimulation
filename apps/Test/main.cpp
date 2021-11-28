@@ -20,16 +20,16 @@ int main(int argc, const char* argv[])
     QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, 25});
     system.SetDipoleElementByName("S1_2", "P3_2", 1.0e-37);
     system.SetMass(mass);
+    system.AddLaserByName("laser", "S1_2", "P3_2", 10.0, false);
     // system.AddDecay("P3_2", "S1_2", 0.1);
     
-    QSim::TStaticColVector<double, 1> intensity({10});
-    QSim::TStaticColVector<double, 1> frequency({25.0});
+    QSim::TStaticColVector<double, 1> detunings({0.0});
 
     auto start_ts = std::chrono::high_resolution_clock::now();
     
-    double dt = 0.005;
+    double dt = 0.05;
     auto rho0 = system.CreateGroundState();
-    auto traj = system.GetTrajectoryNatural(frequency, intensity, rho0, dt, 100);
+    auto traj = system.GetTrajectoryNatural(detunings, rho0, dt, 1000);
 
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
 

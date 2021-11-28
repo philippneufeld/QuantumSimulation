@@ -39,10 +39,9 @@ namespace QSim
     class TStaticQLvlSys
     {
         using IndexPair = std::pair<std::size_t, std::size_t>;
-        template<typename InputIt>
-        using EnableIfLvlIt_t = std::enable_if_t<
-            std::is_same<std::string, std::decay_t<decltype(std::declval<InputIt>()->first)>>::value &&
-            std::is_same<double, std::decay_t<decltype(std::declval<InputIt>()->second)>>::value>;
+
+        // name, lvl1, lvl2, electric field amplitude, counter-propagating
+        using CouplingLaser = std::tuple<std::string, std::size_t, std::size_t, double, bool>;
     public:
         // constructors
         TStaticQLvlSys();
@@ -83,6 +82,25 @@ namespace QSim
         bool SetDipoleElement(std::size_t from, std::size_t to, double dip);
         bool SetDipoleElementByName(const std::string& from, const std::string& to, double rate);
 
+        // coupling laser
+        std::size_t GetLaserIdxByName(const std::string& name) const;
+        std::size_t GetLaserCount() const { return m_couplingLasers.size(); }
+        IndexPair GetLaserLevels(std::size_t idx) const;
+        double GetLaserIntensity(std::size_t idx) const;
+        double GetLaserElectricField(std::size_t idx) const;
+        bool GetLaserCounterPropagation(std::size_t idx) const;
+        IndexPair GetLaserLevelsByName(const std::string& name) const;
+        double GetLaserIntensityByName(const std::string& name) const;
+        double GetLaserElectricFieldByName(const std::string& name) const;
+        bool GetLaserCounterPropagationByName(const std::string& name) const;
+        TDynamicRowVector<double> GetLaserFrequencies() const;
+        bool AddLaser(const std::string& name, std::size_t lvl1, 
+            std::size_t lvl2, double intensity, bool counter);
+        bool AddLaserByName(const std::string& name, const std::string& lvl1, 
+            const std::string& lvl2, double intensity, bool counter);
+        bool RemoveLaser(const std::string& name);
+        bool SetLaserIntensity(const std::string& name, double intensity);
+
         // thermal environment and properties needed for the doppler integration
         double GetMass() const { return m_doppler.GetMass(); }
         double GetTemperature() const { return m_doppler.GetTemperature(); }
@@ -105,6 +123,9 @@ namespace QSim
         TStaticColVector<double, N> m_levels;
         std::map<IndexPair, double> m_decays;
         TStaticMatrix<std::complex<double>, N, N> m_dipoleOperator;
+
+        // coupling lasers
+        std::vector<CouplingLaser> m_couplingLasers;
 
         // thermal environment
         TDopplerIntegrator<double> m_doppler;
@@ -138,14 +159,16 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    std::size_t TStaticQLvlSys<N, MyT>::GetLevelIndexByName(const std::string& name) const
+    std::size_t TStaticQLvlSys<N, MyT>::GetLevelIndexByName(
+        const std::string& name) const
     {
         auto it = std::find(m_levelNames.begin(), m_levelNames.end(), name);
         return it != m_levelNames.end() ? it - m_levelNames.begin() : -1;
     }
     
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLevelName(std::size_t idx, const std::string& newName)
+    bool TStaticQLvlSys<N, MyT>::SetLevelName(
+        std::size_t idx, const std::string& newName)
     {
         if (GetLevelIndexByName(newName) < N)
             return false;  // level name already present
@@ -175,26 +198,31 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLevelByName(const std::string& name, double level)
+    bool TStaticQLvlSys<N, MyT>::SetLevelByName(
+        const std::string& name, double level)
     {
         return SetLevel(GetLevelIndexByName(name), level);
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDecay(std::size_t from, std::size_t to) const
+    double TStaticQLvlSys<N, MyT>::GetDecay(
+        std::size_t from, std::size_t to) const
     {
         auto it = m_decays.find(std::make_pair(from, to));
         return it != m_decays.end() ? it->second : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDecayByName(const std::string& from, std::string& to) const
+    double TStaticQLvlSys<N, MyT>::GetDecayByName(
+        const std::string& from, std::string& to) const
     {
-        return GetDecay(GetLevelIndexByName(from), GetLevelIndexByName(to));
+        return GetDecay(GetLevelIndexByName(from), 
+            GetLevelIndexByName(to));
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDecay(std::size_t from, std::size_t to, double rate)
+    bool TStaticQLvlSys<N, MyT>::SetDecay(
+        std::size_t from, std::size_t to, double rate)
     {
         if (from >= N || to >= N)
             return false;  // index out of bound
@@ -203,25 +231,31 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDecayByName(const std::string& from, std::string& to, double rate)
+    bool TStaticQLvlSys<N, MyT>::SetDecayByName(
+        const std::string& from, std::string& to, double rate)
     {
-        return SetDecay(GetLevelIndexByName(from), GetLevelIndexByName(to), rate);
+        return SetDecay(GetLevelIndexByName(from), 
+            GetLevelIndexByName(to), rate);
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDipoleElement(std::size_t from, std::size_t to) const
+    double TStaticQLvlSys<N, MyT>::GetDipoleElement(
+        std::size_t from, std::size_t to) const
     {
         return (from < N && to < N) ? m_dipoleOperator(from, to) : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDipoleElementByName(const std::string& from, const std::string& to) const
+    double TStaticQLvlSys<N, MyT>::GetDipoleElementByName(
+        const std::string& from, const std::string& to) const
     {
-        return GetDipoleElement(GetLevelIndexByName(from), GetLevelIndexByName(to));
+        return GetDipoleElement(GetLevelIndexByName(from), 
+            GetLevelIndexByName(to));
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDipoleElement(std::size_t from, std::size_t to, double dip)
+    bool TStaticQLvlSys<N, MyT>::SetDipoleElement(
+        std::size_t from, std::size_t to, double dip)
     {
         if (from >= N || to >= N)
             return false;  // index out of bound
@@ -231,9 +265,136 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDipoleElementByName(const std::string& from, const std::string& to, double dip)
+    bool TStaticQLvlSys<N, MyT>::SetDipoleElementByName(
+        const std::string& from, const std::string& to, double dip)
     {
-        return SetDipoleElement(GetLevelIndexByName(from), GetLevelIndexByName(to), dip);
+        return SetDipoleElement(GetLevelIndexByName(from), 
+            GetLevelIndexByName(to), dip);
+    }
+
+    template<std::size_t N, typename MyT>
+    std::size_t TStaticQLvlSys<N, MyT>::GetLaserIdxByName(const std::string& name) const
+    {
+        auto it = m_couplingLasers.begin();
+        for (;it != m_couplingLasers.end() && std::get<0>(*it) != name; it++);
+        return it != m_couplingLasers.end() ? it - m_couplingLasers.begin() : -1;
+    }
+
+    template<std::size_t N, typename MyT>
+    typename TStaticQLvlSys<N, MyT>::IndexPair 
+        TStaticQLvlSys<N, MyT>::GetLaserLevels(std::size_t idx) const
+    {
+        return (idx < m_couplingLasers.size()) ? 
+            std::make_pair(std::get<1>(m_couplingLasers[idx]), std::get<2>(m_couplingLasers[idx])) 
+            : std::make_pair<std::size_t, std::size_t>(-1, -1);
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLaserIntensity(std::size_t idx) const
+    {
+        constexpr double conv = (SpeedOfLight2_v * VacuumPermittivity_v) / 2;
+        double el = GetLaserElectricField(idx);
+        return el * el * conv;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLaserElectricField(std::size_t idx) const
+    {
+        return (idx < m_couplingLasers.size()) ? std::get<3>(m_couplingLasers[idx]) : 0.0;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::GetLaserCounterPropagation(std::size_t idx) const
+    {
+        return (idx < m_couplingLasers.size()) ? std::get<4>(m_couplingLasers[idx]) : false;
+    }
+
+    template<std::size_t N, typename MyT>
+    typename TStaticQLvlSys<N, MyT>::IndexPair 
+        TStaticQLvlSys<N, MyT>::GetLaserLevelsByName(const std::string& name) const
+    {
+        return GetLaserLevels(GetLaserIdxByName(name));
+    }
+    
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLaserIntensityByName(
+        const std::string& name) const 
+    {
+        return GetLaserIntensity(GetLaserIdxByName(name));
+    }
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetLaserElectricFieldByName(
+        const std::string& name) const
+    {
+        return GetLaserElectricField(GetLaserIdxByName(name));
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::GetLaserCounterPropagationByName(
+        const std::string& name) const
+    {
+        return GetLaserCounterPropagation(GetLaserIdxByName(name));
+    }
+
+    template<std::size_t N, typename MyT>
+    TDynamicRowVector<double> TStaticQLvlSys<N, MyT>::GetLaserFrequencies() const
+    {
+        TDynamicRowVector<double> frequencies(GetLaserCount());
+        for (size_t i = 0; i < frequencies.Size(); i++)
+        {
+            auto lvls = GetLaserLevels(i);
+            frequencies[i] = abs(GetLevel(lvls.first) - GetLevel(lvls.second));
+        }
+        return frequencies;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::AddLaser(
+        const std::string& name, std::size_t lvl1, 
+        std::size_t lvl2, double intensity, bool counter)
+    {
+        if (GetLaserIdxByName(name) < m_couplingLasers.size())
+            return false; // coupling laser with the given name already exists
+
+        if (lvl1 >= N  || lvl2 >= N || lvl1 == lvl2)
+            return false; // invalid levels
+
+        m_couplingLasers.emplace_back(name, lvl1, lvl2, 0.0, counter);
+        return SetLaserIntensity(name, intensity);
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::AddLaserByName(
+        const std::string& name, const std::string& lvl1, 
+        const std::string& lvl2, double intensity, bool counter)
+    {
+        return AddLaser(name, GetLevelIndexByName(lvl1), 
+            GetLevelIndexByName(lvl2), intensity, counter);
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::RemoveLaser(const std::string& name)
+    {
+        auto idx = GetLaserIdxByName(name);
+        if (idx >= m_couplingLasers.size())
+            return false;
+        m_couplingLasers.erase(m_couplingLasers.begin() + idx);
+        return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    bool TStaticQLvlSys<N, MyT>::SetLaserIntensity(
+        const std::string& name, double intensity)
+    {
+        std::size_t idx = GetLaserIdxByName(name);
+        if (idx >= m_couplingLasers.size())
+            return false;
+
+        double conv = 2 / (SpeedOfLight2_v * VacuumPermittivity_v);
+        double electricField = std::sqrt(conv * std::abs(intensity));
+        std::get<3>(m_couplingLasers[idx]) = electricField;
+
+        return true;
     }
 
     template<std::size_t N, typename MyT>
@@ -309,8 +470,10 @@ namespace QSim
     public:
         // constructors
         TStaticQSys() : TStaticQLvlSys<N, TStaticQSys<N>>() { }
-        TStaticQSys(const std::array<double, N>& levels) : TStaticQLvlSys<N, TStaticQSys<N>>(levels) { }
-        TStaticQSys(const std::array<std::string, N>& lvlNames) : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames) { }
+        TStaticQSys(const std::array<double, N>& levels) 
+            : TStaticQLvlSys<N, TStaticQSys<N>>(levels) { }
+        TStaticQSys(const std::array<std::string, N>& lvlNames) 
+            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames) { }
         TStaticQSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels) 
             : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames, levels) { }
 
@@ -320,14 +483,12 @@ namespace QSim
 
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
-            const TColVector<VT>& laserFreqs,
-            const TColVector<VT>& laserIntensities, 
-            double velocity, double t) const;
+            const TColVector<VT>& detunings, double velocity, double t) const;
 
-        template<typename VT>
-        std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> GetTrajectoryNatural(
-            const TColVector<VT>& laserFreqs,
-            const TColVector<VT>& laserIntensities, 
+        template<typename VT> 
+        std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> 
+        GetTrajectoryNatural(
+            const TColVector<VT>& detunings,
             const TStaticDensityMatrix<N>& initial, 
             double dt, double tmax);
 
@@ -335,19 +496,16 @@ namespace QSim
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetDensityOpDerivative(
             const TStaticMatrix<std::complex<double>, N, N>& rho,
-            const TColVector<VT>& laserFreqs,
-            const TColVector<VT>& laserIntensities, 
+            const TColVector<VT>& detunings,
             double velocity, double t) const;
     };
 
     template<std::size_t N>
     template<typename VT>
     TStaticMatrix<std::complex<double>, N, N> TStaticQSys<N>::GetHamiltonian(
-        const TColVector<VT>& laserFreqs,
-        const TColVector<VT>& laserIntensities, 
-        double velocity, double t) const
+        const TColVector<VT>& detunings, double velocity, double t) const
     {
-        assert((~laserFreqs).Rows() == (~laserIntensities).Rows());
+        assert((~detunings).Rows() == this->GetLaserCount());
         
         using HamiltonianType = TStaticMatrix<std::complex<double>, N, N>;
         HamiltonianType hamiltonian(N, N);
@@ -357,17 +515,17 @@ namespace QSim
             hamiltonian(i, i) = TwoPi_v * this->m_levels[i];  
 
         // Calculate doppler shifted laser frequencies
+        auto laserFreqs = this->GetLaserFrequencies() + detunings;
         VT laserFreqsDoppler = laserFreqs * (1 - velocity / SpeedOfLight2_v);
         
         // Rotating frame
         hamiltonian(1, 1) -= TwoPi_v * (~laserFreqsDoppler)(0);
 
         // Calculate electric field
-        constexpr double twoOverEps0c = 2 / (VacuumPermittivity_v * SpeedOfLight2_v);
         std::complex<double> electricField = 0;
         for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
         {
-            double E0 = twoOverEps0c * std::sqrt((~laserIntensities)(i));
+            double E0 = this->GetLaserElectricField(0);
             // electricField += E0 * std::cos(TwoPi_v * (~laserFreqsDoppler)(i) * t);
             // electricField += E0 * 0.5 * std::exp(std::complex<double>(1.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t));
             electricField += E0 * 0.5 * (1.0 + std::exp(std::complex<double>(-2.0i * TwoPi_v * (~laserFreqsDoppler)(i) * t)));
@@ -382,10 +540,7 @@ namespace QSim
     template<std::size_t N>
     template<typename VT>
     std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQSys<N>::GetTrajectoryNatural(
-        const TColVector<VT>& laserFreqs,
-        const TColVector<VT>& laserIntensities, 
-        const TStaticDensityMatrix<N>& initial, 
-        double dt, double tmax)
+        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, double dt, double tmax)
     {
         std::size_t steps = static_cast<std::size_t>(std::ceil(tmax / dt));
 
@@ -400,7 +555,7 @@ namespace QSim
         for (std::size_t i = 1; i <= steps; i++)
         {
             double t = i * dt;
-            auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(y, laserFreqs, laserIntensities, 0.0, x); };
+            auto func = [&](double x, const YType& y) { return this->GetDensityOpDerivative(y, detunings, 0.0, x); };
 
             rho += integrator.Step(rho, t, dt, func);         
             trajectory.emplace_back(this->m_levelNames, rho);
@@ -413,12 +568,10 @@ namespace QSim
     template<typename VT>
     TStaticMatrix<std::complex<double>, N, N> TStaticQSys<N>::GetDensityOpDerivative(
         const TStaticMatrix<std::complex<double>, N, N>& rho,
-        const TColVector<VT>& laserFreqs,
-        const TColVector<VT>& laserIntensities, 
-        double velocity, double t) const
+        const TColVector<VT>& detunings, double velocity, double t) const
     {
         // von Neumann term
-        auto h = GetHamiltonian(laserFreqs, laserIntensities, 0, t);
+        auto h = this->GetHamiltonian(detunings, 0, t);
         TStaticMatrix<std::complex<double>, N, N> rhoPrime = -1.0i * (h * rho - rho * h);
 
         // add lindblad dissipation term
