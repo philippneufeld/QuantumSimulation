@@ -32,6 +32,7 @@ namespace QSim
         double GetPopulation(const std::string& lvl) const;
         double GetAbsCoeff(const std::string& lvl1, const std::string& lvl2) const;
 
+        const std::array<std::string, N>& GetLevelNames() const { return m_levelNames; }
         const MyParent& GetMatrix() const { return static_cast<const MyParent&>(*this); }
 
     private:
