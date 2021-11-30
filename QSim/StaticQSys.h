@@ -93,7 +93,7 @@ namespace QSim
         double GetLaserIntensityByName(const std::string& name) const;
         double GetLaserElectricFieldByName(const std::string& name) const;
         bool GetLaserCounterPropagationByName(const std::string& name) const;
-        TDynamicRowVector<double> GetLaserFrequencies() const;
+        TDynamicColVector<double> GetLaserFrequencies() const;
         bool AddLaser(const std::string& name, std::size_t lvl1, 
             std::size_t lvl2, double intensity, bool counter);
         bool AddLaserByName(const std::string& name, const std::string& lvl1, 
@@ -337,9 +337,9 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    TDynamicRowVector<double> TStaticQLvlSys<N, MyT>::GetLaserFrequencies() const
+    TDynamicColVector<double> TStaticQLvlSys<N, MyT>::GetLaserFrequencies() const
     {
-        TDynamicRowVector<double> frequencies(GetLaserCount());
+        TDynamicColVector<double> frequencies(GetLaserCount());
         for (size_t i = 0; i < frequencies.Size(); i++)
         {
             auto lvls = GetLaserLevels(i);
@@ -498,7 +498,7 @@ namespace QSim
         GetTrajectoryNatural(
             const TColVector<VT>& detunings,
             const TStaticDensityMatrix<N>& initial, 
-            double t, double dt);
+            double t0, double t, double dt);
 
     private:
         template<typename VT>
@@ -526,11 +526,16 @@ namespace QSim
 
         // Calculate doppler shifted laser frequencies
         auto laserFreqs = TwoPi_v * (this->GetLaserFrequencies() + detunings);
-        VT laserFreqsDoppler = laserFreqs * (1 - velocity / SpeedOfLight2_v);
+        auto laserFreqsDoppler = laserFreqs;
+        for (std::size_t i = 0; i < laserFreqsDoppler.Size(); i++)
+        {
+            auto doppler = velocity / SpeedOfLight2_v;
+            laserFreqsDoppler[i] += this->GetLaserCounterPropagation(i) ? doppler : -doppler;
+        }
         
         // Rotating frame
         TStaticColVector<double, N> frameFrequencies;
-        frameFrequencies[0] = TwoPi_v * angularFreqLevels[0];
+        frameFrequencies[0] = angularFreqLevels[0];
         for (std::size_t i = 1; i < N; i++)
         {
             // find closest matching laser frequency
@@ -548,7 +553,7 @@ namespace QSim
         for (std::size_t i = 0; i < N; i++)
             hamiltonian(i, i) -= frameFrequencies(i);
         
-        // Calculate electric field and system-Light interaction
+        // Calculate electric field and system-light interaction
         maxFreq *= TwoPi_v;
         for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
         {
@@ -560,7 +565,7 @@ namespace QSim
                     // calculate frequencies of the electric field components
                     double elFieldFreq = (~laserFreqsDoppler)(i);
                     double frame_kj = frameFrequencies(k) - frameFrequencies(j);
-                    double freqs[2] = { elFieldFreq - frame_kj, elFieldFreq + frame_kj };
+                    double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
 
                     std::complex<double> electricField = 0.0;
                     for (double freq: freqs)
@@ -589,13 +594,13 @@ namespace QSim
         RK4Integrator<double, YType> integrator;
         YType rho = initial;
 
-        for (std::size_t i = 1; i <= steps; i++)
+        for (std::size_t i = 0; i < steps; i++)
         {
             auto func = [&](double x, const YType& y) 
             { 
                 return this->GetDensityOpDerivative(y, detunings, velocity, x, maxFreq);
             };
-            rho += integrator.Step(rho, t0 + i * dt, dt, func);         
+            rho += integrator.Step(rho, t0 + i * dt, dt, func);       
         }
 
         return TStaticDensityMatrix<N>(initial.GetLevelNames(), rho);
@@ -604,9 +609,9 @@ namespace QSim
     template<std::size_t N>
     template<typename VT>
     std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQSys<N>::GetTrajectoryNatural(
-        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, double t, double dt)
+        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, double t0, double t, double dt)
     {
-        std::size_t steps = static_cast<std::size_t>(std::ceil(t / dt));
+        std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
 
         std::vector<TStaticDensityMatrix<N>> trajectory;
         trajectory.reserve(steps + 1);
@@ -618,11 +623,11 @@ namespace QSim
         for (std::size_t i = 0; i < steps; i++)
         {
             rho = this->EvolveNaturalDensityMatrix(
-                detunings, rho, 0.0, i*dt, dt, 1, maxFreq);
+                detunings, rho, 0.0, t0 + i*dt, dt, 1, maxFreq);
             trajectory.push_back(rho);
         }
 
-        return {QSim::CreateLinspaceCol(0.0, steps*dt, steps + 1), trajectory};
+        return {QSim::CreateLinspaceCol(t0, t0+steps*dt, steps + 1), trajectory};
     }
 
     template<std::size_t N>
@@ -639,7 +644,7 @@ namespace QSim
         for (const auto& decay: this->m_decays)
         {
             auto idxPair = decay.first; // from, to
-            auto rate = decay.second;
+            auto rate = TwoPi_v * decay.second;
             std::complex<double> popDecayRate = rate * rho(idxPair.first, idxPair.first);
             rhoPrime(idxPair.first, idxPair.first) -= popDecayRate;
             rhoPrime(idxPair.second, idxPair.second) += popDecayRate;
