@@ -485,6 +485,11 @@ namespace QSim
         TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
             const TColVector<VT>& detunings, double velocity, double t, double maxFreq) const;
 
+
+        //
+        // time evolution of density matrix
+        //
+
         template<typename VT>
         TStaticDensityMatrix<N> GetNaturalDensityMatrix(
             const TColVector<VT>& detunings,
@@ -501,10 +506,27 @@ namespace QSim
 
         template<typename VT> 
         std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> 
-        GetTrajectoryNatural(
+        GetNaturalTrajectory(
+            const TColVector<VT>& detunings,
+            const TStaticDensityMatrix<N>& initial, 
+            double velocity,
+            double t0, double t, double dt);
+        
+        //
+        // time evolution of doppler broadened density matrix
+        //
+
+        template<typename VT>
+        TStaticDensityMatrix<N> GetDensityMatrix(
             const TColVector<VT>& detunings,
             const TStaticDensityMatrix<N>& initial, 
             double t0, double t, double dt);
+
+        template<typename VT>
+        TStaticDensityMatrix<N> GetDensityMatrixAv(
+            const TColVector<VT>& detunings,
+            const TStaticDensityMatrix<N>& initial, 
+            double t0, double t, double tav, double dt);
 
     private:
         // 
@@ -546,7 +568,7 @@ namespace QSim
         for (std::size_t i = 0; i < laserFreqsDoppler.Size(); i++)
         {
             auto doppler = velocity / SpeedOfLight2_v;
-            laserFreqsDoppler[i] += this->GetLaserCounterPropagation(i) ? doppler : -doppler;
+            laserFreqsDoppler[i] *= this->GetLaserCounterPropagation(i) ? 1.0 + doppler : 1.0 - doppler;
         }
         
         // Rotating frame
@@ -651,8 +673,9 @@ namespace QSim
     
     template<std::size_t N>
     template<typename VT>
-    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQSys<N>::GetTrajectoryNatural(
-        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, double t0, double t, double dt)
+    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQSys<N>::GetNaturalTrajectory(
+        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+        double velocity, double t0, double t, double dt)
     {
         std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
 
@@ -664,11 +687,43 @@ namespace QSim
         for (std::size_t i = 0; i < steps; i++)
         {
             rho = this->EvolveNaturalDensityMatrix(
-                detunings, rho, 0.0, t0 + i*dt, dt, 1);
+                detunings, rho, velocity, t0 + i*dt, dt, 1);
             trajectory.push_back(rho);
         }
 
         return {QSim::CreateLinspaceCol(t0, t0+steps*dt, steps + 1), trajectory};
+    }
+
+    template<std::size_t N>
+    template<typename VT>
+    TStaticDensityMatrix<N> TStaticQSys<N>::GetDensityMatrix(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double t0, double t, double dt)
+    {
+        auto func = [&](double vel)
+        {
+            return this->GetNaturalDensityMatrix(
+                detunings, initial, vel, t0, t, dt).GetMatrix();
+        };
+        auto rho = this->m_doppler.Integrate(func);
+        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
+    }
+
+    template<std::size_t N>
+    template<typename VT>
+    TStaticDensityMatrix<N> TStaticQSys<N>::GetDensityMatrixAv(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double t0, double t, double tav, double dt)
+    {
+        auto func = [&](double vel)
+        {
+            return this->GetNaturalDensityMatrixAv(
+                detunings, initial, vel, t0, t, tav, dt).GetMatrix();
+        };
+        auto rho = this->m_doppler.Integrate(func);
+        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
     }
 
     template<std::size_t N>
@@ -678,7 +733,7 @@ namespace QSim
         const TColVector<VT>& detunings, double velocity, double t, double maxFreq) const
     {
         // von Neumann term
-        auto h = this->GetHamiltonian(detunings, 0, t, maxFreq);
+        auto h = this->GetHamiltonian(detunings, velocity, t, maxFreq);
         TStaticMatrix<std::complex<double>, N, N> rhoPrime = -1.0i * (h * rho - rho * h);
 
         // add lindblad dissipation term
@@ -716,7 +771,7 @@ namespace QSim
             rho += integrator.Step(rho, t0 + i * dt, dt, func);       
         }
 
-        return TStaticDensityMatrix<N>(initial.GetLevelNames(), rho);
+        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
     }
 }
 

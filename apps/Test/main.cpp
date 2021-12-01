@@ -8,59 +8,47 @@
 #include <QSim/Python/Plotting.h>
 #include <QSim/Util/Argparse.h>
 #include <QSim/StaticQSys.h>
+#include <QSim/Util/ThreadPool.h>
 
 int main(int argc, const char* argv[])
 {
-    QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, 100.0});
+    QSim::ThreadPool pool;
+
+    QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, 1000.0});
     system.SetDipoleElementByName("S1_2", "P3_2", 1.0e-36);
     system.AddLaserByName("Probe", "S1_2", "P3_2", 1.0, false);
     system.AddLaserByName("Pump", "S1_2", "P3_2", 1.0, true);
-    system.SetDecayByName("P3_2", "S1_2", 0.2);
+    system.SetDecayByName("P3_2", "S1_2", 0.1);
+    system.SetMass(1.0e-31);
     
-    double dt = 0.1;
+    double dt = 1e-2;
+    double tmax = 20;
     auto rho0 = system.CreateGroundState();
 
-    double pdet = 0.3;
-    auto laserDetunings = QSim::CreateLinspaceRow(-0.6, 0.6, 201);
+    auto laserDetunings = QSim::CreateLinspaceRow(-3.0, 3.0, 201);
     QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
     QSim::SetRow(detunings, laserDetunings, 0);
     QSim::SetRow(detunings, laserDetunings, 1);
 
     auto start_ts = std::chrono::high_resolution_clock::now();
-    double tmax = 15.0;
 
-    auto traj1 = system.GetTrajectoryNatural(QSim::TStaticColVector<double, 2>({-0.1, 0}), rho0, 0.0, tmax*10, dt/10.0);
-    auto x_axis2 = traj1.first;
-    auto y_axis2 = QSim::CreateZerosLike(x_axis2);
-    for (std::size_t i = 0; i < x_axis2.Size(); i++)
-    {
-        // y_axis2(i) = std::imag(traj1.second[i](0, 1));// * std::exp(std::complex<double>(1.0i*QSim::TwoPi_v*x_axis(i))));
-        y_axis2(i) = traj1.second[i].GetPopulation("P3_2");
-        // y_axis2(i) = std::real(traj1.second[i].GetPopulation("P3_2") / std::exp(1.0i * std::complex<double>(QSim::TwoPi_v*25.0*i*dt)));
-    }
-
-    auto x_axis1 = laserDetunings;
-    auto y_axis1 = QSim::CreateZerosLike(x_axis1);
-    for (std::size_t i=0; i< detunings.Cols(); i++)
-    {
-        auto dets = *(QSim::GetColIteratorBegin(detunings) + i);
-        auto rho = system.GetNaturalDensityMatrixAv(
-            dets, rho0, 0.0, 0.0, tmax, 0.1*tmax, dt);
-        y_axis1(i) += rho.GetPopulation("S1_2");
-    }
+    auto func = [&](auto dets)
+    { 
+        auto rho = system.GetDensityMatrixAv(
+            dets, rho0, 0.0, tmax, 0.1*tmax, dt);
+        return rho.GetAbsCoeff("S1_2", "P3_2");
+    }; 
+    auto absCoeffs = pool.Map(func, 
+        QSim::GetColIteratorBegin(detunings), 
+        QSim::GetColIteratorEnd(detunings));
 
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
 
-    
     QSim::PythonMatplotlib matplotlib;
 
-    auto figure1 = matplotlib.MakeFigure();
-    auto ax1 = figure1.AddSubplot();
-    ax1.Plot(x_axis1.Data(), y_axis1.Data(), x_axis1.Size());
-
-    // auto figure2 = matplotlib.MakeFigure();
-    // auto ax2 = figure2.AddSubplot();
-    // ax2.Plot(x_axis2.Data(), y_axis2.Data(), x_axis2.Size());
+    auto figure = matplotlib.MakeFigure();
+    auto ax = figure.AddSubplot();
+    ax.Plot(laserDetunings.Data(), absCoeffs.data(), laserDetunings.Size());
 
     matplotlib.RunGUILoop();
 
