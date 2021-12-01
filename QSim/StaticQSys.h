@@ -486,12 +486,18 @@ namespace QSim
             const TColVector<VT>& detunings, double velocity, double t, double maxFreq) const;
 
         template<typename VT>
-        TStaticDensityMatrix<N> EvolveNaturalDensityMatrix(
+        TStaticDensityMatrix<N> GetNaturalDensityMatrix(
             const TColVector<VT>& detunings,
             const TStaticDensityMatrix<N>& initial, 
             double velocity,
-            double t0, double dt, 
-            std::size_t steps, double maxFreq);
+            double t0, double t, double dt);
+
+        template<typename VT>
+        TStaticDensityMatrix<N> GetNaturalDensityMatrixAv(
+            const TColVector<VT>& detunings,
+            const TStaticDensityMatrix<N>& initial, 
+            double velocity,
+            double t0, double t, double tav, double dt);
 
         template<typename VT> 
         std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> 
@@ -501,11 +507,21 @@ namespace QSim
             double t0, double t, double dt);
 
     private:
+        // 
+        // Helper methods
+        //
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetDensityOpDerivative(
             const TStaticMatrix<std::complex<double>, N, N>& rho,
             const TColVector<VT>& detunings,
             double velocity, double t, double maxFreq) const;
+
+        template<typename VT>
+        TStaticDensityMatrix<N> EvolveNaturalDensityMatrix(
+            const TColVector<VT>& detunings,
+            const TStaticDensityMatrix<N>& initial, 
+            double velocity,
+            double t0, double dt, std::size_t steps);
     };
 
     template<std::size_t N>
@@ -586,24 +602,51 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQSys<N>::EvolveNaturalDensityMatrix(
-        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
-        double velocity, double t0, double dt, std::size_t steps, double maxFreq)
+    TStaticDensityMatrix<N> TStaticQSys<N>::GetNaturalDensityMatrix(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double velocity,
+        double t0, double t, double dt)
     {
-        using YType = TStaticMatrix<std::complex<double>, N, N>;
-        RK4Integrator<double, YType> integrator;
-        YType rho = initial;
+        // calculate appropriate amount of steps to obtain a dt near to the required dt
+        std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
+        dt = (t-t0) / steps;
+        return this->EvolveNaturalDensityMatrix(
+            detunings, initial, velocity, t0, dt, steps);
+    }
 
+    template<std::size_t N>
+    template<typename VT>
+    TStaticDensityMatrix<N> TStaticQSys<N>::GetNaturalDensityMatrixAv(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double velocity,
+        double t0, double t, double tav, double dt)
+    {
+        // validate averaging time and generate starting and 
+        // end time of the averaging process
+        tav = tav > t - t0 ? t - t0 : tav;
+        double t1 = t - tav / 2;
+        double t2 = t1 + tav;
+
+        // evolve up to the starting point of the averaging
+        auto rho = this->GetNaturalDensityMatrix(
+            detunings, initial, velocity, t0, t1, dt);
+
+        std::size_t steps = static_cast<std::size_t>(std::ceil((t2-t1) / dt));
+        dt = (t2 - t1) / steps;
+
+        
+        auto rhoAv = rho;
         for (std::size_t i = 0; i < steps; i++)
         {
-            auto func = [&](double x, const YType& y) 
-            { 
-                return this->GetDensityOpDerivative(y, detunings, velocity, x, maxFreq);
-            };
-            rho += integrator.Step(rho, t0 + i * dt, dt, func);       
+            rho = this->EvolveNaturalDensityMatrix(
+                detunings, initial, velocity, t1 + i*dt, dt, 1);
+            rhoAv += rho;
         }
+        rhoAv *= 1.0 / (steps + 1);
 
-        return TStaticDensityMatrix<N>(initial.GetLevelNames(), rho);
+        return rhoAv;
     }
     
     template<std::size_t N>
@@ -618,12 +661,10 @@ namespace QSim
         trajectory.push_back(initial);
         
         auto rho = initial;
-        double maxFreq = 0.16 / dt; // should have at least 6 integration points per oscillation
-
         for (std::size_t i = 0; i < steps; i++)
         {
             rho = this->EvolveNaturalDensityMatrix(
-                detunings, rho, 0.0, t0 + i*dt, dt, 1, maxFreq);
+                detunings, rho, 0.0, t0 + i*dt, dt, 1);
             trajectory.push_back(rho);
         }
 
@@ -653,6 +694,29 @@ namespace QSim
         }
 
         return rhoPrime;
+    }
+
+    template<std::size_t N>
+    template<typename VT>
+    TStaticDensityMatrix<N> TStaticQSys<N>::EvolveNaturalDensityMatrix(
+        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+        double velocity, double t0, double dt, std::size_t steps)
+    {
+        using YType = TStaticMatrix<std::complex<double>, N, N>;
+        RK4Integrator<double, YType> integrator;
+        YType rho = initial;
+
+        double maxFreq = 0.16 / dt; // should have at least 6 integration points per oscillation
+        for (std::size_t i = 0; i < steps; i++)
+        {
+            auto func = [&](double x, const YType& y) 
+            { 
+                return this->GetDensityOpDerivative(y, detunings, velocity, x, maxFreq);
+            };
+            rho += integrator.Step(rho, t0 + i * dt, dt, func);       
+        }
+
+        return TStaticDensityMatrix<N>(initial.GetLevelNames(), rho);
     }
 }
 
