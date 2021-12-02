@@ -9,7 +9,9 @@
 namespace QSim
 {
 
+    constexpr static double SpeedOfLight2_v = 2.99792458e8;
     constexpr static double BoltzmannConstant_v = 1.38064852e-23;
+    constexpr static double Ln2_v = 0.69314718056;
 
     template<typename Ty>
     class TDopplerIntegrator
@@ -30,6 +32,8 @@ namespace QSim
         double GetMass() const { return m_mass; }
         void SetTemperature(double temp) { m_temperature = temp; }
         double GetTemperature() const { return m_temperature; }
+
+        double GetDopplerWidth(double frequency) const;
 
         template<typename Lambda, typename Ret = decltype(std::declval<Lambda>()(std::declval<Ty>()))>
         Ret Integrate(Lambda func) const;
@@ -71,6 +75,14 @@ namespace QSim
         else
             return func(0);
     }
+    
+    template<typename Ty>
+    double TDopplerIntegrator<Ty>::GetDopplerWidth(double frequency) const
+    {
+        constexpr double constants = 8*BoltzmannConstant_v*Ln2_v / (SpeedOfLight2_v * SpeedOfLight2_v); 
+        return std::sqrt(constants * m_temperature / m_mass) * frequency;
+    }
+
 }
 
 #endif

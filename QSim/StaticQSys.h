@@ -25,16 +25,65 @@ namespace QSim
 {
     constexpr static double Pi_v = 3.14159265358979323846;
     constexpr static double TwoPi_v = 2 * Pi_v;
-    constexpr static double SpeedOfLight2_v = 2.99792458e8;
     constexpr static double VacuumPermittivity_v = 8.8541878128e-12;
     constexpr static double PlanckConstant_v = 6.62607004e-34;
     constexpr static double ReducedPlanckConstant_v = 1.054571817e-34;
     constexpr static double AtomicMassUnit_v = 1.66053906660e-27;
 
+
+    namespace Internal
+    {
+        constexpr double ConstexprSqrt(double a)
+        {
+            double x = a;
+            for (std::size_t i = 0; i < 10; i++)
+                x -= 0.5 * (x - a/x);
+            return x;
+        }
+    }
+
+    // General prupose function
+    constexpr double GetIntensityFromPower(double power, double waistRadius);
+    constexpr double GetElectricFieldFromIntensity(double intensity);
+    constexpr double GetIntensityFromElectricField(double electricField);
+    constexpr double GetRabiFrequencyFromIntensity(double dipole, double intensity);
+    constexpr double GetIntensityFromRabiFrequency(double dipole, double rabi);
+
+
+    inline constexpr double GetIntensityFromPower(double power, double waistRadius)
+    {
+        // I(r, 0) = I0 * exp(-2*r^2 / w0^2)
+        // I0 = 2*P/(pi*w0^2)
+        return 2 * power / (Pi_v * waistRadius * waistRadius);
+    }
+
+    inline constexpr double GetElectricFieldFromIntensity(double intensity)
+    {
+        constexpr double conv = 2 / (SpeedOfLight2_v * VacuumPermittivity_v); 
+        return Internal::ConstexprSqrt(conv * intensity);
+    }
+
+    inline constexpr double GetIntensityFromElectricField(double electricField)
+    {
+        constexpr double conv = 0.5 * SpeedOfLight2_v * VacuumPermittivity_v; 
+        return conv * electricField * electricField;
+    }
+
+    inline constexpr double GetRabiFrequencyFromIntensity(double dipole, double intensity)
+    {
+        return dipole * GetElectricFieldFromIntensity(intensity) / PlanckConstant_v;
+    }
+
+    inline constexpr double GetIntensityFromRabiFrequency(double dipole, double rabi)
+    {
+        return GetIntensityFromElectricField(PlanckConstant_v * rabi / dipole);
+    }
+
+
     //
     // N-level quantum system solver
     //
-    
+
     template<std::size_t N, typename MyT>
     class TStaticQLvlSys
     {
@@ -82,6 +131,12 @@ namespace QSim
         bool SetDipoleElement(std::size_t from, std::size_t to, double dip);
         bool SetDipoleElementByName(const std::string& from, const std::string& to, double rate);
 
+        // calculation of rabi frequency
+        static double CalcElectricFieldFromIntensity(double electricField);
+        static double CalcIntensityFromElectricField(double intensity);
+        double CalcRabiFromIntensity(std::size_t from, std::size_t to, double intensity);
+        double CalcIntensityFromRabi(std::size_t from, std::size_t to, double rabi);
+
         // coupling laser
         std::size_t GetLaserIdxByName(const std::string& name) const;
         std::size_t GetLaserCount() const { return m_couplingLasers.size(); }
@@ -106,6 +161,9 @@ namespace QSim
         double GetTemperature() const { return m_doppler.GetTemperature(); }
         void SetMass(double mass) { m_doppler.SetMass(mass); }
         void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
+
+        double GetDopplerWidth(std::size_t from, std::size_t to) const;
+        double GetDopplerWidthByName(const std::string& from, const std::string& to) const;
 
         // create stecific density matrices
         TStaticDensityMatrix<N> CreateGroundState() const;
@@ -273,6 +331,18 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
+    double CalcRabiFromIntensity(std::size_t from, std::size_t to, double intensity)
+    {
+
+    }
+
+    template<std::size_t N, typename MyT>
+    double CalcIntensityFromRabi(std::size_t from, std::size_t to, double rabi)
+    {
+
+    }
+
+    template<std::size_t N, typename MyT>
     std::size_t TStaticQLvlSys<N, MyT>::GetLaserIdxByName(const std::string& name) const
     {
         auto it = m_couplingLasers.begin();
@@ -292,9 +362,7 @@ namespace QSim
     template<std::size_t N, typename MyT>
     double TStaticQLvlSys<N, MyT>::GetLaserIntensity(std::size_t idx) const
     {
-        constexpr double conv = (SpeedOfLight2_v * VacuumPermittivity_v) / 2;
-        double el = GetLaserElectricField(idx);
-        return el * el * conv;
+        return GetIntensityFromElectricField(GetLaserElectricField());
     }
 
     template<std::size_t N, typename MyT>
@@ -392,9 +460,22 @@ namespace QSim
 
         double conv = 2 / (SpeedOfLight2_v * VacuumPermittivity_v);
         double electricField = std::sqrt(conv * std::abs(intensity));
-        std::get<3>(m_couplingLasers[idx]) = electricField;
+        std::get<3>(m_couplingLasers[idx]) = GetElectricFieldFromIntensity(intensity);
 
         return true;
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetDopplerWidth(std::size_t from, std::size_t to) const
+    {
+        double frequency = std::abs(GetLevel(to) - GetLevel(from));
+        return m_doppler.GetDopplerWidth(frequency);
+    }
+
+    template<std::size_t N, typename MyT>
+    double TStaticQLvlSys<N, MyT>::GetDopplerWidthByName(const std::string& from, const std::string& to) const
+    {
+        return GetDopplerWidth(GetLevelIndexByName(from), GetLevelIndexByName(to));
     }
 
     template<std::size_t N, typename MyT>
@@ -592,6 +673,7 @@ namespace QSim
             hamiltonian(i, i) -= frameFrequencies(i);
         
         // Calculate electric field and system-light interaction
+        double zc = velocity * t / SpeedOfLight2_v;
         maxFreq *= TwoPi_v;
         for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
         {
@@ -663,7 +745,7 @@ namespace QSim
         for (std::size_t i = 0; i < steps; i++)
         {
             rho = this->EvolveNaturalDensityMatrix(
-                detunings, initial, velocity, t1 + i*dt, dt, 1);
+                detunings, rho, velocity, t1 + i*dt, dt, 1);
             rhoAv += rho;
         }
         rhoAv *= 1.0 / (steps + 1);
