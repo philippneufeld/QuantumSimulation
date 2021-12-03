@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <fstream>
 
 #include <QSim/Python/Plotting.h>
 #include <QSim/Util/Argparse.h>
@@ -12,37 +13,58 @@
 
 int main(int argc, const char* argv[])
 {
+    // parse command line arguents
+    QSim::ArgumentParser parser;
+    parser.AddOptionDefault("f,file", "Output filename.", "./data.txt");
+    parser.AddOption("h,help", "Print this help string.");
+    parser.AddOption("noplot", "Don't plot the results.");
+    auto cmdArgs = parser.Parse(argc, argv);
+
+    if (cmdArgs.IsError())
+    {
+        std::cout << cmdArgs.GetError() << std::endl;
+        return -1;
+    }
+    else if (cmdArgs.IsOptionPresent("help"))
+    {
+        std::cout << parser.GetHelpString() << std::endl;
+        return 0;
+    }
+
     QSim::ThreadPool pool;
 
-    QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, 1.0e8});
-    system.SetDipoleElementByName("S1_2", "P3_2", 1.0e-35);
-    system.AddLaserByName("Probe", "S1_2", "P3_2", 20, false);
-    system.AddLaserByName("Pump", "S1_2", "P3_2", 2, true);
-    system.SetDecayByName("P3_2", "S1_2", 1);
-    system.SetMass(1.0e-23);
+    // define parameters
+    constexpr double dip = 4.227 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+    constexpr double intProbe = QSim::GetIntensityFromRabiFrequency(dip, 3.5e6);
+    constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10e6);
+    constexpr double decay = 6.065e6;
+    constexpr double mass = 1.44316060e-25;
 
-    constexpr auto rabi = QSim::GetRabiFrequencyFromIntensity(1e-35, 20);
-    
-    double dt = 3e-3;
-    double tmax = 10;
+    // Create system
+    QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight2_v / 780.241e-9});
+    system.SetDipoleElementByName("S1_2", "P3_2", dip);
+    system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
+    system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
+    system.SetDecayByName("P3_2", "S1_2", decay);
+    system.SetMass(mass);
+
+    // dt << Rabi^-1, Doppler^-1, detuning^-1
+    double dt = 1e-10;
+    constexpr double tint = 15 / decay;
+
     auto rho0 = system.CreateGroundState();
 
-    auto laserDetunings = QSim::CreateLinspaceRow(-25.0, 25.0, 201);
+    auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 1001);
     QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
     QSim::SetRow(detunings, laserDetunings, 0);
     QSim::SetRow(detunings, laserDetunings, 1);
 
     auto start_ts = std::chrono::high_resolution_clock::now();
 
-    // auto trace = system.GetNaturalTrajectory(QSim::TStaticColVector<double, 2>({10.0, 60.0}), rho0, 0.0, 0, tmax, dt);
-    // auto y_axis = QSim::CreateZerosLike(trace.first);
-    // for (std::size_t i = 0; i < y_axis.Size(); i++)
-    //     y_axis[i] = trace.second[i].GetPopulation("P3_2");
-
     auto func = [&](auto dets)
     { 
         auto rho = system.GetDensityMatrixAv(
-            dets, rho0, 0.0, tmax, 0.25*tmax, dt);
+            dets, rho0, 0.0, tint, 0.25*tint, dt);
         return rho.GetPopulation("P3_2");
     }; 
     auto absCoeffs = pool.Map(func, 
@@ -51,14 +73,25 @@ int main(int argc, const char* argv[])
 
     std::cout << "Calculation took " << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 << "s" << std::endl;
 
-    QSim::PythonMatplotlib matplotlib;
+    // Write to file
+    if (!cmdArgs.GetOptionStringValue("file").empty())
+    {
+        std::ofstream file;
+        file.open(cmdArgs.GetOptionStringValue("file"), std::ios::out);
+        for (std::size_t i = 0; i < laserDetunings.Size(); i++)
+            file << laserDetunings[i] << " " << absCoeffs[i] << std::endl;
+        file.close();
+    }
 
-    auto figure = matplotlib.MakeFigure();
-    auto ax = figure.AddSubplot();
-    ax.Plot(laserDetunings.Data(), absCoeffs.data(), laserDetunings.Size());
-    // ax.Plot(trace.first.Data(), y_axis.Data(), y_axis.Size());
-
-    matplotlib.RunGUILoop();
+    // Plot
+    if (!cmdArgs.IsOptionPresent("noplot"))
+    {
+        QSim::PythonMatplotlib matplotlib;
+        auto figure = matplotlib.MakeFigure();
+        auto ax = figure.AddSubplot();
+        ax.Plot(laserDetunings.Data(), absCoeffs.data(), laserDetunings.Size());
+        matplotlib.RunGUILoop();
+    }
 
     return 0;
 }
