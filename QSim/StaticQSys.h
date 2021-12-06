@@ -15,6 +15,7 @@
 
 #include "Math/Matrix.h"
 #include "Math/Integrator.h"
+#include "Constants.h"
 #include "Doppler.h"
 #include "DensityMatrix.h"
 
@@ -23,15 +24,6 @@ using namespace std::complex_literals;
 
 namespace QSim
 {
-    constexpr static double Pi_v = 3.14159265358979323846;
-    constexpr static double TwoPi_v = 2 * Pi_v;
-    constexpr static double VacuumPermittivity_v = 8.8541878128e-12;
-    constexpr static double PlanckConstant_v = 6.62607004e-34;
-    constexpr static double ReducedPlanckConstant_v = 1.054571817e-34;
-    constexpr static double AtomicMassUnit_v = 1.66053906660e-27;
-    constexpr static double ElementaryCharge_v = 1.602176462e-19;
-    constexpr static double BohrRadius_v = 0.5291772083e-10;
-
 
     namespace Internal
     {
@@ -61,13 +53,13 @@ namespace QSim
 
     inline constexpr double GetElectricFieldFromIntensity(double intensity)
     {
-        constexpr double conv = 2 / (SpeedOfLight2_v * VacuumPermittivity_v); 
+        constexpr double conv = 2 / (SpeedOfLight_v * VacuumPermittivity_v); 
         return Internal::ConstexprSqrt(conv * intensity);
     }
 
     inline constexpr double GetIntensityFromElectricField(double electricField)
     {
-        constexpr double conv = 0.5 * SpeedOfLight2_v * VacuumPermittivity_v; 
+        constexpr double conv = 0.5 * SpeedOfLight_v * VacuumPermittivity_v; 
         return conv * electricField * electricField;
     }
 
@@ -171,11 +163,52 @@ namespace QSim
         TStaticDensityMatrix<N> CreateGroundState() const;
         TStaticDensityMatrix<N> CreateThermalState() const;
 
+        // time evolution of density matrix
+        template<typename VT>
+        TStaticDensityMatrix<N> GetNaturalDensityMatrix(
+            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+            double velocity, double t0, double t, double dt);
+
+        template<typename VT>
+        TStaticDensityMatrix<N> GetNaturalDensityMatrixAv(
+            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+            double velocity, double t0, double t, double tav, double dt);
+
+        template<typename VT> 
+        std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> 
+        GetNaturalTrajectory(
+            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+            double velocity, double t0, double t, double dt);
+        
+        // time evolution of doppler broadened density matrix
+        template<typename VT>
+        TStaticDensityMatrix<N> GetDensityMatrix(
+            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+            double t0, double t, double dt);
+
+        template<typename VT>
+        TStaticDensityMatrix<N> GetDensityMatrixAv(
+            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+            double t0, double t, double tav, double dt);
+
     private:
+        // helper method for thermal state creation
         TStaticDensityMatrix<N> CreateThermalStateHelper(double temperature) const;
 
+        // helper methods for default initialization
         std::array<double, N> GenerateDefaultLevels() const;
         std::array<std::string, N> GenerateDefaultLevelNames() const;
+
+        // helper methods for time evolution
+        template<typename VT>
+        TStaticMatrix<std::complex<double>, N, N> GetDensityOpDerivative(
+            const TStaticMatrix<std::complex<double>, N, N>& rho,
+            const TColVector<VT>& detunings, double velocity, double t) const;
+
+        template<typename VT>
+        TStaticDensityMatrix<N> EvolveNaturalDensityMatrix(
+            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+            double velocity, double t0, double dt, std::size_t steps);
 
     protected:
         // Properties of the system
@@ -460,7 +493,7 @@ namespace QSim
         if (idx >= m_couplingLasers.size())
             return false;
 
-        double conv = 2 / (SpeedOfLight2_v * VacuumPermittivity_v);
+        double conv = 2 / (SpeedOfLight_v * VacuumPermittivity_v);
         double electricField = std::sqrt(conv * std::abs(intensity));
         std::get<3>(m_couplingLasers[idx]) = GetElectricFieldFromIntensity(intensity);
 
@@ -546,169 +579,9 @@ namespace QSim
         return names;
     }
 
-    template<std::size_t N>
-    class TStaticQSys : public TStaticQLvlSys<N, TStaticQSys<N>>
-    {
-        using MyParent = TStaticQLvlSys<N, TStaticQSys<N>>;
-    public:
-        // constructors
-        TStaticQSys() : TStaticQLvlSys<N, TStaticQSys<N>>() { }
-        TStaticQSys(const std::array<double, N>& levels) 
-            : TStaticQLvlSys<N, TStaticQSys<N>>(levels) { }
-        TStaticQSys(const std::array<std::string, N>& lvlNames) 
-            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames) { }
-        TStaticQSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels) 
-            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames, levels) { }
-
-        // copy operations
-        TStaticQSys(const TStaticQSys&) = default;
-        TStaticQSys& operator=(const TStaticQSys&) = default;
-
-        template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
-            const TColVector<VT>& detunings, double velocity, double t, double maxFreq) const;
-
-
-        //
-        // time evolution of density matrix
-        //
-
-        template<typename VT>
-        TStaticDensityMatrix<N> GetNaturalDensityMatrix(
-            const TColVector<VT>& detunings,
-            const TStaticDensityMatrix<N>& initial, 
-            double velocity,
-            double t0, double t, double dt);
-
-        template<typename VT>
-        TStaticDensityMatrix<N> GetNaturalDensityMatrixAv(
-            const TColVector<VT>& detunings,
-            const TStaticDensityMatrix<N>& initial, 
-            double velocity,
-            double t0, double t, double tav, double dt);
-
-        template<typename VT> 
-        std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> 
-        GetNaturalTrajectory(
-            const TColVector<VT>& detunings,
-            const TStaticDensityMatrix<N>& initial, 
-            double velocity,
-            double t0, double t, double dt);
-        
-        //
-        // time evolution of doppler broadened density matrix
-        //
-
-        template<typename VT>
-        TStaticDensityMatrix<N> GetDensityMatrix(
-            const TColVector<VT>& detunings,
-            const TStaticDensityMatrix<N>& initial, 
-            double t0, double t, double dt);
-
-        template<typename VT>
-        TStaticDensityMatrix<N> GetDensityMatrixAv(
-            const TColVector<VT>& detunings,
-            const TStaticDensityMatrix<N>& initial, 
-            double t0, double t, double tav, double dt);
-
-    private:
-        // 
-        // Helper methods
-        //
-        template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetDensityOpDerivative(
-            const TStaticMatrix<std::complex<double>, N, N>& rho,
-            const TColVector<VT>& detunings,
-            double velocity, double t, double maxFreq) const;
-
-        template<typename VT>
-        TStaticDensityMatrix<N> EvolveNaturalDensityMatrix(
-            const TColVector<VT>& detunings,
-            const TStaticDensityMatrix<N>& initial, 
-            double velocity,
-            double t0, double dt, std::size_t steps);
-    };
-
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticQSys<N>::GetHamiltonian(
-        const TColVector<VT>& detunings, double velocity, double t, double maxFreq) const
-    {
-        // The returned hamiltonian is in units of angular frequency
-        assert((~detunings).Rows() == this->GetLaserCount());
-        
-        using HamiltonianType = TStaticMatrix<std::complex<double>, N, N>;
-        HamiltonianType hamiltonian(N, N);
-
-        // Atom hamiltonian
-        auto angularFreqLevels = TwoPi_v * this->m_levels;
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) = angularFreqLevels[i];  
-
-        // Calculate doppler shifted laser frequencies
-        auto laserFreqs = TwoPi_v * (this->GetLaserFrequencies() + detunings);
-        auto laserFreqsDoppler = laserFreqs;
-        for (std::size_t i = 0; i < laserFreqsDoppler.Size(); i++)
-        {
-            auto doppler = velocity / SpeedOfLight2_v;
-            laserFreqsDoppler[i] *= this->GetLaserCounterPropagation(i) ? 1.0 + doppler : 1.0 - doppler;
-        }
-        
-        // Rotating frame
-        TStaticColVector<double, N> frameFrequencies;
-        frameFrequencies[0] = angularFreqLevels[0];
-        for (std::size_t i = 1; i < N; i++)
-        {
-            // find closest matching laser frequency
-            double closest = 0.0;
-            for (std::size_t j = 0; j < (~laserFreqsDoppler).Size(); j++)
-            {
-                if (std::abs(angularFreqLevels[i] - (~laserFreqsDoppler)[j]) < std::abs(angularFreqLevels[i] - closest))
-                    closest = (~laserFreqsDoppler)[j];
-            }
-            frameFrequencies[i] = frameFrequencies[i-1] + closest;    
-        }
-
-        // apply roatating frame to hamiltonian 
-        // (additional term that comes from the temporal derivative of rho in the rotating frame)
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) -= frameFrequencies(i);
-        
-        // Calculate electric field and system-light interaction
-        double zc = velocity * t / SpeedOfLight2_v;
-        maxFreq *= TwoPi_v;
-        for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
-        {
-            double E0 = this->GetLaserElectricField(i);    
-            for (std::size_t j = 0; j < N; j++)
-            {
-                for (std::size_t k = j + 1; k < N; k++)
-                {
-                    // calculate frequencies of the electric field components
-                    double elFieldFreq = (~laserFreqsDoppler)(i);
-                    double frame_kj = frameFrequencies(k) - frameFrequencies(j);
-                    double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
-
-                    std::complex<double> electricField = 0.0;
-                    for (double freq: freqs)
-                    {
-                        if (std::abs(freq) <= maxFreq) 
-                            electricField += 0.5* E0 * (freq != 0.0 ? std::exp(std::complex<double>(1.0i * freq * t)) : 1.0);
-                    }
-
-                    electricField /= ReducedPlanckConstant_v;
-                    hamiltonian(k, j) += electricField * this->m_dipoleOperator(k, j);
-                    hamiltonian(j, k) += std::conj(electricField) * this->m_dipoleOperator(j, k);
-                }
-            }
-        }
-
-        return hamiltonian;
-    }
-
-    template<std::size_t N>
-    template<typename VT>
-    TStaticDensityMatrix<N> TStaticQSys<N>::GetNaturalDensityMatrix(
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetNaturalDensityMatrix(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double velocity,
@@ -721,9 +594,9 @@ namespace QSim
             detunings, initial, velocity, t0, dt, steps);
     }
 
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQSys<N>::GetNaturalDensityMatrixAv(
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetNaturalDensityMatrixAv(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double velocity,
@@ -755,9 +628,9 @@ namespace QSim
         return rhoAv;
     }
     
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQSys<N>::GetNaturalTrajectory(
+    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQLvlSys<N, MyT>::GetNaturalTrajectory(
         const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
         double velocity, double t0, double t, double dt)
     {
@@ -778,9 +651,9 @@ namespace QSim
         return {QSim::CreateLinspaceCol(t0, t0+steps*dt, steps + 1), trajectory};
     }
 
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQSys<N>::GetDensityMatrix(
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetDensityMatrix(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double t0, double t, double dt)
@@ -794,9 +667,9 @@ namespace QSim
         return TStaticDensityMatrix<N>(this->m_levelNames, rho);
     }
 
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQSys<N>::GetDensityMatrixAv(
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetDensityMatrixAv(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double t0, double t, double tav, double dt)
@@ -810,14 +683,14 @@ namespace QSim
         return TStaticDensityMatrix<N>(this->m_levelNames, rho);
     }
 
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticQSys<N>::GetDensityOpDerivative(
+    TStaticMatrix<std::complex<double>, N, N> TStaticQLvlSys<N, MyT>::GetDensityOpDerivative(
         const TStaticMatrix<std::complex<double>, N, N>& rho,
-        const TColVector<VT>& detunings, double velocity, double t, double maxFreq) const
+        const TColVector<VT>& detunings, double velocity, double t) const
     {
         // von Neumann term
-        auto h = this->GetHamiltonian(detunings, velocity, t, maxFreq);
+        auto h = (~(*this)).GetHamiltonian(detunings, velocity, t);
         TStaticMatrix<std::complex<double>, N, N> rhoPrime = -1.0i * (h * rho - rho * h);
 
         // add lindblad dissipation term
@@ -835,9 +708,9 @@ namespace QSim
         return rhoPrime;
     }
 
-    template<std::size_t N>
+    template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQSys<N>::EvolveNaturalDensityMatrix(
+    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::EvolveNaturalDensityMatrix(
         const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
         double velocity, double t0, double dt, std::size_t steps)
     {
@@ -845,18 +718,126 @@ namespace QSim
         RK4Integrator<double, YType> integrator;
         YType rho = initial;
 
-        double maxFreq = 0.16 / dt; // should have at least 6 integration points per oscillation
         for (std::size_t i = 0; i < steps; i++)
         {
             auto func = [&](double x, const YType& y) 
             { 
-                return this->GetDensityOpDerivative(y, detunings, velocity, x, maxFreq);
+                return this->GetDensityOpDerivative(y, detunings, velocity, x);
             };
             rho += integrator.Step(rho, t0 + i * dt, dt, func);       
         }
 
         return TStaticDensityMatrix<N>(this->m_levelNames, rho);
     }
+
+
+    template<std::size_t N>
+    class TStaticQSys : public TStaticQLvlSys<N, TStaticQSys<N>>
+    {
+        using MyParent = TStaticQLvlSys<N, TStaticQSys<N>>;
+    public:
+        // constructors
+        TStaticQSys() : TStaticQLvlSys<N, TStaticQSys<N>>() { }
+        TStaticQSys(const std::array<double, N>& levels) 
+            : TStaticQLvlSys<N, TStaticQSys<N>>(levels) { }
+        TStaticQSys(const std::array<std::string, N>& lvlNames) 
+            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames) { }
+        TStaticQSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels) 
+            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames, levels) { }
+
+        // copy operations
+        TStaticQSys(const TStaticQSys&) = default;
+        TStaticQSys& operator=(const TStaticQSys&) = default;
+
+        template<typename VT>
+        TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
+            const TColVector<VT>& detunings, double velocity, double t) const;
+
+
+
+    private:
+    };
+
+    template<std::size_t N>
+    template<typename VT>
+    TStaticMatrix<std::complex<double>, N, N> TStaticQSys<N>::GetHamiltonian(
+        const TColVector<VT>& detunings, double velocity, double t) const
+    {
+        // The returned hamiltonian is in units of angular frequency
+        assert((~detunings).Rows() == this->GetLaserCount());
+        
+        using HamiltonianType = TStaticMatrix<std::complex<double>, N, N>;
+        HamiltonianType hamiltonian(N, N);
+
+        // Atom hamiltonian
+        auto angularFreqLevels = TwoPi_v * this->m_levels;
+        for (std::size_t i = 0; i < N; i++)
+            hamiltonian(i, i) = angularFreqLevels[i];  
+
+        // Calculate doppler shifted laser frequencies
+        auto laserFreqs = TwoPi_v * (this->GetLaserFrequencies() + detunings);
+        auto laserFreqsDoppler = laserFreqs;
+        for (std::size_t i = 0; i < laserFreqsDoppler.Size(); i++)
+        {
+            auto doppler = velocity / SpeedOfLight_v;
+            laserFreqsDoppler[i] *= this->GetLaserCounterPropagation(i) ? 1.0 + doppler : 1.0 - doppler;
+        }
+        
+        // Rotating frame
+        TStaticColVector<double, N> frameFrequencies;
+        frameFrequencies[0] = angularFreqLevels[0];
+        for (std::size_t i = 1; i < N; i++)
+        {
+            // find closest matching laser frequency
+            double closest = 0.0;
+            for (std::size_t j = 0; j < (~laserFreqsDoppler).Size(); j++)
+            {
+                if (std::abs(angularFreqLevels[i] - (~laserFreqsDoppler)[j]) < std::abs(angularFreqLevels[i] - closest))
+                    closest = (~laserFreqsDoppler)[j];
+            }
+            frameFrequencies[i] = frameFrequencies[i-1] + closest;    
+        }
+
+        // apply roatating frame to hamiltonian 
+        // (additional term that comes from the temporal derivative of rho in the rotating frame)
+        for (std::size_t i = 0; i < N; i++)
+            hamiltonian(i, i) -= frameFrequencies(i);
+        
+        // Calculate electric field and system-light interaction
+        double zc = velocity * t / SpeedOfLight_v;
+        for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
+        {
+            double E0 = this->GetLaserElectricField(i);    
+            for (std::size_t j = 0; j < N; j++)
+            {
+                for (std::size_t k = j + 1; k < N; k++)
+                {
+                    // calculate frequencies of the electric field components
+                    double elFieldFreq = (~laserFreqsDoppler)(i);
+                    double frame_kj = frameFrequencies(k) - frameFrequencies(j);
+                    double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
+
+                    std::complex<double> electricField = 0.0;
+
+                    // Rotating wave approximation: Ignore counter rotating propagating wave
+                    // if both frequencies are equal (in absolute terms) then keep both
+                    double maxFreq = std::abs(freqs[0]) < std::abs(freqs[1]) ? std::abs(freqs[0]) : std::abs(freqs[1]);
+                    for (double freq: freqs)
+                    {
+                        if (std::abs(freq) <= maxFreq) 
+                            electricField += 0.5* E0 * (freq != 0.0 ? std::exp(std::complex<double>(1.0i * freq * t)) : 1.0);
+                    }
+
+                    electricField /= ReducedPlanckConstant_v;
+                    hamiltonian(k, j) += electricField * this->m_dipoleOperator(k, j);
+                    hamiltonian(j, k) += std::conj(electricField) * this->m_dipoleOperator(j, k);
+                }
+            }
+        }
+
+        return hamiltonian;
+    }
+
 }
 
 #endif

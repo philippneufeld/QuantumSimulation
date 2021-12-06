@@ -12,13 +12,13 @@
 #include <cassert>
 
 #include "Math/Matrix.h"
+#include "Constants.h"
 #include "Doppler.h"
 #include "DensityMatrix.h"
+#include "StaticQSys.h"
 
 namespace QSim
 {
-    constexpr static double SpeedOfLight_v = 2.99792458e8;
-
     //
     // N-level quantum system steady state solver
     //

@@ -6,12 +6,10 @@
 #include <cstdint>
 #include <functional>
 
+#include "Constants.h"
+
 namespace QSim
 {
-
-    constexpr static double SpeedOfLight2_v = 2.99792458e8;
-    constexpr static double BoltzmannConstant_v = 1.38064852e-23;
-    constexpr static double Ln2_v = 0.69314718056;
 
     template<typename Ty>
     class TDopplerIntegrator
@@ -79,7 +77,7 @@ namespace QSim
     template<typename Ty>
     double TDopplerIntegrator<Ty>::GetDopplerWidth(double frequency) const
     {
-        constexpr double constants = 8*BoltzmannConstant_v*Ln2_v / (SpeedOfLight2_v * SpeedOfLight2_v); 
+        constexpr double constants = 8*BoltzmannConstant_v*Ln2_v / (SpeedOfLight_v * SpeedOfLight_v); 
         return std::sqrt(constants * m_temperature / m_mass) * frequency;
     }
 

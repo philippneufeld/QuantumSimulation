@@ -1,8 +1,8 @@
 # Philipp Neufeld, 2021
 
 # ignore output directory
-out/
-build/
+out*/
+build*/
 
 # ignore Visual Studio specific files
 .vs/

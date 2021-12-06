@@ -47,7 +47,7 @@ int main(int argc, const char* argv[])
         constexpr double mass = 1.44316060e-25;
 
         // Create system
-        QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight2_v / 780.241e-9});
+        QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
         system.SetDipoleElementByName("S1_2", "P3_2", dip);
         system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
         system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
@@ -60,7 +60,7 @@ int main(int argc, const char* argv[])
 
         auto rho0 = system.CreateGroundState();
 
-        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 1001);
+        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 51);
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
         QSim::SetRow(detunings, laserDetunings, 0);
         QSim::SetRow(detunings, laserDetunings, 1);

@@ -47,7 +47,7 @@ int main(int argc, const char* argv[])
         constexpr double mass = 1.44316060e-25;
 
         // Create system
-        QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight2_v / 780.241e-9});
+        QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
         system.SetDipoleElementByName("S1_2", "P3_2", dip);
         system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
         system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
