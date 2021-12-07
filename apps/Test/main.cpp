@@ -8,7 +8,8 @@
 
 #include <QSim/Python/Plotting.h>
 #include <QSim/Util/Argparse.h>
-#include <QSim/StaticQSys.h>
+#include <QSim/NLevel/Laser.h>
+#include <QSim/NLevel/NLevelSystemSC.h>
 #include <QSim/Util/ThreadPool.h>
 
 int main(int argc, const char* argv[])
@@ -47,7 +48,7 @@ int main(int argc, const char* argv[])
         constexpr double mass = 1.44316060e-25;
 
         // Create system
-        QSim::TStaticQSys<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
+        QSim::TNLevelSystemSC<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
         system.SetDipoleElementByName("S1_2", "P3_2", dip);
         system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
         system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);

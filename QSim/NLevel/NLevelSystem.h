@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_StaticQSys_H_
-#define QSim_StaticQSys_H_
+#ifndef QSim_NLevelSystem_H_
+#define QSim_NLevelSystem_H_
 
 #include <cstdint>
 #include <string>
@@ -13,73 +13,24 @@
 #include <algorithm>
 #include <complex>
 
-#include "Math/Matrix.h"
-#include "Math/Integrator.h"
-#include "Constants.h"
-#include "Doppler.h"
-#include "DensityMatrix.h"
-
-// Enables the i literal for complex numbers
-using namespace std::complex_literals;
+#include "../Math/Matrix.h"
+#include "../Math/Integrator.h"
+#include "../Constants.h"
+#include "../Doppler.h"
+#include "../DensityMatrix.h"
 
 namespace QSim
 {
-
-    namespace Internal
-    {
-        constexpr double ConstexprSqrt(double a)
-        {
-            double x = a;
-            for (std::size_t i = 0; i < 10; i++)
-                x -= 0.5 * (x - a/x);
-            return x;
-        }
-    }
-
-    // General prupose function
-    constexpr double GetIntensityFromPower(double power, double waistRadius);
-    constexpr double GetElectricFieldFromIntensity(double intensity);
-    constexpr double GetIntensityFromElectricField(double electricField);
-    constexpr double GetRabiFrequencyFromIntensity(double dipole, double intensity);
-    constexpr double GetIntensityFromRabiFrequency(double dipole, double rabi);
-
-
-    inline constexpr double GetIntensityFromPower(double power, double waistRadius)
-    {
-        // I(r, 0) = I0 * exp(-2*r^2 / w0^2)
-        // I0 = 2*P/(pi*w0^2)
-        return 2 * power / (Pi_v * waistRadius * waistRadius);
-    }
-
-    inline constexpr double GetElectricFieldFromIntensity(double intensity)
-    {
-        constexpr double conv = 2 / (SpeedOfLight_v * VacuumPermittivity_v); 
-        return Internal::ConstexprSqrt(conv * intensity);
-    }
-
-    inline constexpr double GetIntensityFromElectricField(double electricField)
-    {
-        constexpr double conv = 0.5 * SpeedOfLight_v * VacuumPermittivity_v; 
-        return conv * electricField * electricField;
-    }
-
-    inline constexpr double GetRabiFrequencyFromIntensity(double dipole, double intensity)
-    {
-        return dipole * GetElectricFieldFromIntensity(intensity) / PlanckConstant_v;
-    }
-
-    inline constexpr double GetIntensityFromRabiFrequency(double dipole, double rabi)
-    {
-        return GetIntensityFromElectricField(PlanckConstant_v * rabi / dipole);
-    }
+    // Enables the i literal for complex numbers
+    using namespace std::complex_literals;
 
 
     //
-    // N-level quantum system solver
+    // N-level quantum system solver (CRTP base class)
     //
 
     template<std::size_t N, typename MyT>
-    class TStaticQLvlSys
+    class TNLevelSystemCRTP
     {
         using IndexPair = std::pair<std::size_t, std::size_t>;
 
@@ -87,14 +38,14 @@ namespace QSim
         using CouplingLaser = std::tuple<std::string, std::size_t, std::size_t, double, bool>;
     public:
         // constructors
-        TStaticQLvlSys();
-        TStaticQLvlSys(const std::array<double, N>& levels);
-        TStaticQLvlSys(const std::array<std::string, N>& lvlNames);
-        TStaticQLvlSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels);
+        TNLevelSystemCRTP();
+        TNLevelSystemCRTP(const std::array<double, N>& levels);
+        TNLevelSystemCRTP(const std::array<std::string, N>& lvlNames);
+        TNLevelSystemCRTP(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels);
 
         // copy operations
-        TStaticQLvlSys(const TStaticQLvlSys&) = default;
-        TStaticQLvlSys& operator=(const TStaticQLvlSys&) = default;
+        TNLevelSystemCRTP(const TNLevelSystemCRTP&) = default;
+        TNLevelSystemCRTP& operator=(const TNLevelSystemCRTP&) = default;
 
         // CRTP operators
         MyT& operator~() { return static_cast<MyT&>(*this); }
@@ -124,12 +75,6 @@ namespace QSim
         double GetDipoleElementByName(const std::string& from, const std::string& to) const;
         bool SetDipoleElement(std::size_t from, std::size_t to, double dip);
         bool SetDipoleElementByName(const std::string& from, const std::string& to, double rate);
-
-        // calculation of rabi frequency
-        static double CalcElectricFieldFromIntensity(double electricField);
-        static double CalcIntensityFromElectricField(double intensity);
-        double CalcRabiFromIntensity(std::size_t from, std::size_t to, double intensity);
-        double CalcIntensityFromRabi(std::size_t from, std::size_t to, double rabi);
 
         // coupling laser
         std::size_t GetLaserIdxByName(const std::string& name) const;
@@ -225,19 +170,19 @@ namespace QSim
     };
 
     template<std::size_t N, typename MyT>
-    TStaticQLvlSys<N, MyT>::TStaticQLvlSys()
-        : TStaticQLvlSys(GenerateDefaultLevelNames(), GenerateDefaultLevels()) { }
+    TNLevelSystemCRTP<N, MyT>::TNLevelSystemCRTP()
+        : TNLevelSystemCRTP(GenerateDefaultLevelNames(), GenerateDefaultLevels()) { }
 
     template<std::size_t N, typename MyT>
-    TStaticQLvlSys<N, MyT>::TStaticQLvlSys(const std::array<double, N>& levels)
-        : TStaticQLvlSys(GenerateDefaultLevelNames(), levels) { }
+    TNLevelSystemCRTP<N, MyT>::TNLevelSystemCRTP(const std::array<double, N>& levels)
+        : TNLevelSystemCRTP(GenerateDefaultLevelNames(), levels) { }
 
     template<std::size_t N, typename MyT>
-    TStaticQLvlSys<N, MyT>::TStaticQLvlSys(const std::array<std::string, N>& lvlNames)
-        : TStaticQLvlSys(lvlNames, GenerateDefaultLevels()) { }
+    TNLevelSystemCRTP<N, MyT>::TNLevelSystemCRTP(const std::array<std::string, N>& lvlNames)
+        : TNLevelSystemCRTP(lvlNames, GenerateDefaultLevels()) { }
 
     template<std::size_t N, typename MyT>
-    TStaticQLvlSys<N, MyT>::TStaticQLvlSys(const std::array<std::string, N>& lvlNames, 
+    TNLevelSystemCRTP<N, MyT>::TNLevelSystemCRTP(const std::array<std::string, N>& lvlNames, 
         const std::array<double, N>& levels)
         : m_levelNames(lvlNames), m_doppler(AtomicMassUnit_v, 300.0)
     {
@@ -246,13 +191,13 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    std::string TStaticQLvlSys<N, MyT>::GetLevelNameByIndex(std::size_t idx) const
+    std::string TNLevelSystemCRTP<N, MyT>::GetLevelNameByIndex(std::size_t idx) const
     {
         return idx < N ? m_levelNames[idx] : std::string();
     }
 
     template<std::size_t N, typename MyT>
-    std::size_t TStaticQLvlSys<N, MyT>::GetLevelIndexByName(
+    std::size_t TNLevelSystemCRTP<N, MyT>::GetLevelIndexByName(
         const std::string& name) const
     {
         auto it = std::find(m_levelNames.begin(), m_levelNames.end(), name);
@@ -260,7 +205,7 @@ namespace QSim
     }
     
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLevelName(
+    bool TNLevelSystemCRTP<N, MyT>::SetLevelName(
         std::size_t idx, const std::string& newName)
     {
         if (GetLevelIndexByName(newName) < N)
@@ -270,19 +215,19 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLevel(std::size_t idx) const
+    double TNLevelSystemCRTP<N, MyT>::GetLevel(std::size_t idx) const
     {
         return idx < N ? m_levels[idx] : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLevelByName(const std::string& name) const
+    double TNLevelSystemCRTP<N, MyT>::GetLevelByName(const std::string& name) const
     {
         return GetLevel(GetLevelIndexByName(name));
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLevel(std::size_t idx, double level)
+    bool TNLevelSystemCRTP<N, MyT>::SetLevel(std::size_t idx, double level)
     {
         if (idx >= N)
             return false;
@@ -291,14 +236,14 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLevelByName(
+    bool TNLevelSystemCRTP<N, MyT>::SetLevelByName(
         const std::string& name, double level)
     {
         return SetLevel(GetLevelIndexByName(name), level);
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDecay(
+    double TNLevelSystemCRTP<N, MyT>::GetDecay(
         std::size_t from, std::size_t to) const
     {
         auto it = m_decays.find(std::make_pair(from, to));
@@ -306,7 +251,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDecayByName(
+    double TNLevelSystemCRTP<N, MyT>::GetDecayByName(
         const std::string& from, std::string& to) const
     {
         return GetDecay(GetLevelIndexByName(from), 
@@ -314,7 +259,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDecay(
+    bool TNLevelSystemCRTP<N, MyT>::SetDecay(
         std::size_t from, std::size_t to, double rate)
     {
         if (from >= N || to >= N)
@@ -324,7 +269,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDecayByName(
+    bool TNLevelSystemCRTP<N, MyT>::SetDecayByName(
         const std::string& from, const std::string& to, double rate)
     {
         return SetDecay(GetLevelIndexByName(from), 
@@ -332,14 +277,14 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDipoleElement(
+    double TNLevelSystemCRTP<N, MyT>::GetDipoleElement(
         std::size_t from, std::size_t to) const
     {
         return (from < N && to < N) ? m_dipoleOperator(from, to) : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDipoleElementByName(
+    double TNLevelSystemCRTP<N, MyT>::GetDipoleElementByName(
         const std::string& from, const std::string& to) const
     {
         return GetDipoleElement(GetLevelIndexByName(from), 
@@ -347,7 +292,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDipoleElement(
+    bool TNLevelSystemCRTP<N, MyT>::SetDipoleElement(
         std::size_t from, std::size_t to, double dip)
     {
         if (from >= N || to >= N)
@@ -358,7 +303,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetDipoleElementByName(
+    bool TNLevelSystemCRTP<N, MyT>::SetDipoleElementByName(
         const std::string& from, const std::string& to, double dip)
     {
         return SetDipoleElement(GetLevelIndexByName(from), 
@@ -366,19 +311,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double CalcRabiFromIntensity(std::size_t from, std::size_t to, double intensity)
-    {
-
-    }
-
-    template<std::size_t N, typename MyT>
-    double CalcIntensityFromRabi(std::size_t from, std::size_t to, double rabi)
-    {
-
-    }
-
-    template<std::size_t N, typename MyT>
-    std::size_t TStaticQLvlSys<N, MyT>::GetLaserIdxByName(const std::string& name) const
+    std::size_t TNLevelSystemCRTP<N, MyT>::GetLaserIdxByName(const std::string& name) const
     {
         auto it = m_couplingLasers.begin();
         for (;it != m_couplingLasers.end() && std::get<0>(*it) != name; it++);
@@ -386,8 +319,8 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    typename TStaticQLvlSys<N, MyT>::IndexPair 
-        TStaticQLvlSys<N, MyT>::GetLaserLevels(std::size_t idx) const
+    typename TNLevelSystemCRTP<N, MyT>::IndexPair 
+        TNLevelSystemCRTP<N, MyT>::GetLaserLevels(std::size_t idx) const
     {
         return (idx < m_couplingLasers.size()) ? 
             std::make_pair(std::get<1>(m_couplingLasers[idx]), std::get<2>(m_couplingLasers[idx])) 
@@ -395,52 +328,52 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLaserIntensity(std::size_t idx) const
+    double TNLevelSystemCRTP<N, MyT>::GetLaserIntensity(std::size_t idx) const
     {
         return GetIntensityFromElectricField(GetLaserElectricField());
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLaserElectricField(std::size_t idx) const
+    double TNLevelSystemCRTP<N, MyT>::GetLaserElectricField(std::size_t idx) const
     {
         return (idx < m_couplingLasers.size()) ? std::get<3>(m_couplingLasers[idx]) : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::GetLaserCounterPropagation(std::size_t idx) const
+    bool TNLevelSystemCRTP<N, MyT>::GetLaserCounterPropagation(std::size_t idx) const
     {
         return (idx < m_couplingLasers.size()) ? std::get<4>(m_couplingLasers[idx]) : false;
     }
 
     template<std::size_t N, typename MyT>
-    typename TStaticQLvlSys<N, MyT>::IndexPair 
-        TStaticQLvlSys<N, MyT>::GetLaserLevelsByName(const std::string& name) const
+    typename TNLevelSystemCRTP<N, MyT>::IndexPair 
+        TNLevelSystemCRTP<N, MyT>::GetLaserLevelsByName(const std::string& name) const
     {
         return GetLaserLevels(GetLaserIdxByName(name));
     }
     
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLaserIntensityByName(
+    double TNLevelSystemCRTP<N, MyT>::GetLaserIntensityByName(
         const std::string& name) const 
     {
         return GetLaserIntensity(GetLaserIdxByName(name));
     }
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetLaserElectricFieldByName(
+    double TNLevelSystemCRTP<N, MyT>::GetLaserElectricFieldByName(
         const std::string& name) const
     {
         return GetLaserElectricField(GetLaserIdxByName(name));
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::GetLaserCounterPropagationByName(
+    bool TNLevelSystemCRTP<N, MyT>::GetLaserCounterPropagationByName(
         const std::string& name) const
     {
         return GetLaserCounterPropagation(GetLaserIdxByName(name));
     }
 
     template<std::size_t N, typename MyT>
-    TDynamicColVector<double> TStaticQLvlSys<N, MyT>::GetLaserFrequencies() const
+    TDynamicColVector<double> TNLevelSystemCRTP<N, MyT>::GetLaserFrequencies() const
     {
         TDynamicColVector<double> frequencies(GetLaserCount());
         for (size_t i = 0; i < frequencies.Size(); i++)
@@ -452,7 +385,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::AddLaser(
+    bool TNLevelSystemCRTP<N, MyT>::AddLaser(
         const std::string& name, std::size_t lvl1, 
         std::size_t lvl2, double intensity, bool counter)
     {
@@ -463,11 +396,15 @@ namespace QSim
             return false; // invalid levels
 
         m_couplingLasers.emplace_back(name, lvl1, lvl2, 0.0, counter);
-        return SetLaserIntensity(name, intensity);
+        SetLaserIntensity(name, intensity);
+
+        // TODO: OnLaserAdded
+
+        return true;
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::AddLaserByName(
+    bool TNLevelSystemCRTP<N, MyT>::AddLaserByName(
         const std::string& name, const std::string& lvl1, 
         const std::string& lvl2, double intensity, bool counter)
     {
@@ -476,7 +413,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::RemoveLaser(const std::string& name)
+    bool TNLevelSystemCRTP<N, MyT>::RemoveLaser(const std::string& name)
     {
         auto idx = GetLaserIdxByName(name);
         if (idx >= m_couplingLasers.size())
@@ -486,7 +423,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    bool TStaticQLvlSys<N, MyT>::SetLaserIntensity(
+    bool TNLevelSystemCRTP<N, MyT>::SetLaserIntensity(
         const std::string& name, double intensity)
     {
         std::size_t idx = GetLaserIdxByName(name);
@@ -501,32 +438,32 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDopplerWidth(std::size_t from, std::size_t to) const
+    double TNLevelSystemCRTP<N, MyT>::GetDopplerWidth(std::size_t from, std::size_t to) const
     {
         double frequency = std::abs(GetLevel(to) - GetLevel(from));
         return m_doppler.GetDopplerWidth(frequency);
     }
 
     template<std::size_t N, typename MyT>
-    double TStaticQLvlSys<N, MyT>::GetDopplerWidthByName(const std::string& from, const std::string& to) const
+    double TNLevelSystemCRTP<N, MyT>::GetDopplerWidthByName(const std::string& from, const std::string& to) const
     {
         return GetDopplerWidth(GetLevelIndexByName(from), GetLevelIndexByName(to));
     }
 
     template<std::size_t N, typename MyT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateGroundState() const
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateGroundState() const
     { 
         return CreateThermalStateHelper(0.0);
     }
 
     template<std::size_t N, typename MyT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateThermalState() const
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateThermalState() const
     { 
         return CreateThermalStateHelper(GetTemperature()); 
     }
 
     template<std::size_t N, typename MyT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::CreateThermalStateHelper(double temperature) const
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateThermalStateHelper(double temperature) const
     { 
         TStaticDensityMatrix<N> res(m_levelNames);
 
@@ -563,7 +500,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    std::array<double, N> TStaticQLvlSys<N, MyT>::GenerateDefaultLevels() const
+    std::array<double, N> TNLevelSystemCRTP<N, MyT>::GenerateDefaultLevels() const
     {
         std::array<double, N> lvls;
         std::fill(lvls.begin(), lvls.end(), 0.0);
@@ -571,7 +508,7 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    std::array<std::string, N> TStaticQLvlSys<N, MyT>::GenerateDefaultLevelNames() const
+    std::array<std::string, N> TNLevelSystemCRTP<N, MyT>::GenerateDefaultLevelNames() const
     {
         std::array<std::string, N> names;
         for (size_t i = 0; i < N; i++)
@@ -581,7 +518,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetNaturalDensityMatrix(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrix(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double velocity,
@@ -596,7 +533,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetNaturalDensityMatrixAv(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrixAv(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double velocity,
@@ -630,7 +567,7 @@ namespace QSim
     
     template<std::size_t N, typename MyT>
     template<typename VT>
-    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TStaticQLvlSys<N, MyT>::GetNaturalTrajectory(
+    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TNLevelSystemCRTP<N, MyT>::GetNaturalTrajectory(
         const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
         double velocity, double t0, double t, double dt)
     {
@@ -653,7 +590,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetDensityMatrix(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrix(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double t0, double t, double dt)
@@ -669,7 +606,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::GetDensityMatrixAv(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrixAv(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double t0, double t, double tav, double dt)
@@ -685,7 +622,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticQLvlSys<N, MyT>::GetDensityOpDerivative(
+    TStaticMatrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetDensityOpDerivative(
         const TStaticMatrix<std::complex<double>, N, N>& rho,
         const TColVector<VT>& detunings, double velocity, double t) const
     {
@@ -710,7 +647,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TStaticQLvlSys<N, MyT>::EvolveNaturalDensityMatrix(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::EvolveNaturalDensityMatrix(
         const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
         double velocity, double t0, double dt, std::size_t steps)
     {
@@ -730,110 +667,10 @@ namespace QSim
         return TStaticDensityMatrix<N>(this->m_levelNames, rho);
     }
 
-
-    template<std::size_t N>
-    class TStaticQSys : public TStaticQLvlSys<N, TStaticQSys<N>>
-    {
-        using MyParent = TStaticQLvlSys<N, TStaticQSys<N>>;
-    public:
-        // constructors
-        TStaticQSys() : TStaticQLvlSys<N, TStaticQSys<N>>() { }
-        TStaticQSys(const std::array<double, N>& levels) 
-            : TStaticQLvlSys<N, TStaticQSys<N>>(levels) { }
-        TStaticQSys(const std::array<std::string, N>& lvlNames) 
-            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames) { }
-        TStaticQSys(const std::array<std::string, N>& lvlNames, const std::array<double, N>& levels) 
-            : TStaticQLvlSys<N, TStaticQSys<N>>(lvlNames, levels) { }
-
-        // copy operations
-        TStaticQSys(const TStaticQSys&) = default;
-        TStaticQSys& operator=(const TStaticQSys&) = default;
-
-        template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
-            const TColVector<VT>& detunings, double velocity, double t) const;
-    };
-
-    template<std::size_t N>
-    template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TStaticQSys<N>::GetHamiltonian(
-        const TColVector<VT>& detunings, double velocity, double t) const
-    {
-        // The returned hamiltonian is in units of angular frequency
-        assert((~detunings).Rows() == this->GetLaserCount());
-        
-        using HamiltonianType = TStaticMatrix<std::complex<double>, N, N>;
-        HamiltonianType hamiltonian(N, N);
-
-        // Atom hamiltonian
-        auto angularFreqLevels = TwoPi_v * this->m_levels;
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) = angularFreqLevels[i];  
-
-        // Calculate doppler shifted laser frequencies
-        auto laserFreqs = TwoPi_v * (this->GetLaserFrequencies() + detunings);
-        auto laserFreqsDoppler = laserFreqs;
-        for (std::size_t i = 0; i < laserFreqsDoppler.Size(); i++)
-        {
-            auto doppler = velocity / SpeedOfLight_v;
-            laserFreqsDoppler[i] *= this->GetLaserCounterPropagation(i) ? 1.0 + doppler : 1.0 - doppler;
-        }
-        
-        // Rotating frame
-        TStaticColVector<double, N> frameFrequencies;
-        frameFrequencies[0] = angularFreqLevels[0];
-        for (std::size_t i = 1; i < N; i++)
-        {
-            // find closest matching laser frequency
-            double closest = 0.0;
-            for (std::size_t j = 0; j < (~laserFreqsDoppler).Size(); j++)
-            {
-                if (std::abs(angularFreqLevels[i] - (~laserFreqsDoppler)[j]) < std::abs(angularFreqLevels[i] - closest))
-                    closest = (~laserFreqsDoppler)[j];
-            }
-            frameFrequencies[i] = frameFrequencies[i-1] + closest;    
-        }
-
-        // apply roatating frame to hamiltonian 
-        // (additional term that comes from the temporal derivative of rho in the rotating frame)
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) -= frameFrequencies(i);
-        
-        // Calculate electric field and system-light interaction
-        double zc = velocity * t / SpeedOfLight_v;
-        for (std::size_t i = 0; i < (~laserFreqsDoppler).Size(); i++)
-        {
-            double E0 = this->GetLaserElectricField(i);    
-            for (std::size_t j = 0; j < N; j++)
-            {
-                for (std::size_t k = j + 1; k < N; k++)
-                {
-                    // calculate frequencies of the electric field components
-                    double elFieldFreq = (~laserFreqsDoppler)(i);
-                    double frame_kj = frameFrequencies(k) - frameFrequencies(j);
-                    double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
-
-                    std::complex<double> electricField = 0.0;
-
-                    // Rotating wave approximation: Ignore counter rotating propagating wave
-                    // if both frequencies are equal (in absolute terms) then keep both
-                    double maxFreq = std::abs(freqs[0]) < std::abs(freqs[1]) ? std::abs(freqs[0]) : std::abs(freqs[1]);
-                    for (double freq: freqs)
-                    {
-                        if (std::abs(freq) <= maxFreq) 
-                            electricField += 0.5* E0 * (freq != 0.0 ? std::exp(std::complex<double>(1.0i * freq * t)) : 1.0);
-                    }
-
-                    electricField /= ReducedPlanckConstant_v;
-                    hamiltonian(k, j) += electricField * this->m_dipoleOperator(k, j);
-                    hamiltonian(j, k) += std::conj(electricField) * this->m_dipoleOperator(j, k);
-                }
-            }
-        }
-
-        return hamiltonian;
-    }
-
 }
+
+// Include specific implementations
+#include "NLevelSystemSC.h"
+#include "NLevelSystemQM.h"
 
 #endif
