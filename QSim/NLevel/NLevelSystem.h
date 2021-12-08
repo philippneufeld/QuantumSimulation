@@ -70,11 +70,11 @@ namespace QSim
         bool SetDecayByName(const std::string& from, const std::string& to, double rate);
 
         // Transition dipole operator
-        const TStaticMatrix<double, N, N>& GetDipoleOperator() const { return m_dipoleOperator; }
-        double GetDipoleElement(std::size_t from, std::size_t to) const;
-        double GetDipoleElementByName(const std::string& from, const std::string& to) const;
-        bool SetDipoleElement(std::size_t from, std::size_t to, double dip);
-        bool SetDipoleElementByName(const std::string& from, const std::string& to, double rate);
+        const TStaticMatrix<std::complex<double>, N, N>& GetDipoleOperator() const { return m_dipoleOperator; }
+        std::complex<double> GetDipoleElement(std::size_t from, std::size_t to) const;
+        std::complex<double> GetDipoleElementByName(const std::string& from, const std::string& to) const;
+        bool SetDipoleElement(std::size_t from, std::size_t to, std::complex<double> dip);
+        bool SetDipoleElementByName(const std::string& from, const std::string& to, std::complex<double> rate);
 
         // coupling laser
         std::size_t GetLaserIdxByName(const std::string& name) const;
@@ -145,17 +145,18 @@ namespace QSim
         std::array<std::string, N> GenerateDefaultLevelNames() const;
 
         // helper methods for time evolution
-        template<typename VT>
+        template<typename AuxType>
         TStaticMatrix<std::complex<double>, N, N> GetDensityOpDerivative(
+            const AuxType& auxData, 
             const TStaticMatrix<std::complex<double>, N, N>& rho,
-            const TColVector<VT>& detunings, double velocity, double t) const;
+            double t) const;
 
-        template<typename VT>
+        template<typename AuxType>
         TStaticDensityMatrix<N> EvolveNaturalDensityMatrix(
-            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
-            double velocity, double t0, double dt, std::size_t steps);
+            const AuxType& auxData, const TStaticDensityMatrix<N>& initial, 
+            double t0, double dt, std::size_t steps);
 
-    protected:
+    private:
         // Properties of the system
         std::array<std::string, N> m_levelNames;
         TStaticColVector<double, N> m_levels;
@@ -277,14 +278,14 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetDipoleElement(
+    std::complex<double> TNLevelSystemCRTP<N, MyT>::GetDipoleElement(
         std::size_t from, std::size_t to) const
     {
         return (from < N && to < N) ? m_dipoleOperator(from, to) : 0.0;
     }
 
     template<std::size_t N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetDipoleElementByName(
+    std::complex<double> TNLevelSystemCRTP<N, MyT>::GetDipoleElementByName(
         const std::string& from, const std::string& to) const
     {
         return GetDipoleElement(GetLevelIndexByName(from), 
@@ -293,7 +294,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     bool TNLevelSystemCRTP<N, MyT>::SetDipoleElement(
-        std::size_t from, std::size_t to, double dip)
+        std::size_t from, std::size_t to, std::complex<double> dip)
     {
         if (from >= N || to >= N)
             return false;  // index out of bound
@@ -304,7 +305,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     bool TNLevelSystemCRTP<N, MyT>::SetDipoleElementByName(
-        const std::string& from, const std::string& to, double dip)
+        const std::string& from, const std::string& to, std::complex<double> dip)
     {
         return SetDipoleElement(GetLevelIndexByName(from), 
             GetLevelIndexByName(to), dip);
@@ -398,7 +399,11 @@ namespace QSim
         m_couplingLasers.emplace_back(name, lvl1, lvl2, 0.0, counter);
         SetLaserIntensity(name, intensity);
 
-        // TODO: OnLaserAdded
+        if (!(~(*this)).OnLaserAdded(lvl1, lvl2, counter))
+        {
+            m_couplingLasers.pop_back();
+            return false;
+        }
 
         return true;
     }
@@ -418,7 +423,11 @@ namespace QSim
         auto idx = GetLaserIdxByName(name);
         if (idx >= m_couplingLasers.size())
             return false;
+
         m_couplingLasers.erase(m_couplingLasers.begin() + idx);
+
+        (~(*this)).OnLaserRemoved();
+
         return true;
     }
 
@@ -527,8 +536,9 @@ namespace QSim
         // calculate appropriate amount of steps to obtain a dt near to the required dt
         std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
         dt = (t-t0) / steps;
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
         return this->EvolveNaturalDensityMatrix(
-            detunings, initial, velocity, t0, dt, steps);
+            auxData, initial, t0, dt, steps);
     }
 
     template<std::size_t N, typename MyT>
@@ -539,6 +549,8 @@ namespace QSim
         double velocity,
         double t0, double t, double tav, double dt)
     {
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        
         // validate averaging time and generate starting and 
         // end time of the averaging process
         tav = tav > t - t0 ? t - t0 : tav;
@@ -552,12 +564,11 @@ namespace QSim
         std::size_t steps = static_cast<std::size_t>(std::ceil((t2-t1) / dt));
         dt = (t2 - t1) / steps;
 
-        
         auto rhoAv = rho;
         for (std::size_t i = 0; i < steps; i++)
         {
             rho = this->EvolveNaturalDensityMatrix(
-                detunings, rho, velocity, t1 + i*dt, dt, 1);
+                auxData, rho, t1 + i*dt, dt, 1);
             rhoAv += rho;
         }
         rhoAv *= 1.0 / (steps + 1);
@@ -578,10 +589,11 @@ namespace QSim
         trajectory.push_back(initial);
         
         auto rho = initial;
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
         for (std::size_t i = 0; i < steps; i++)
         {
             rho = this->EvolveNaturalDensityMatrix(
-                detunings, rho, velocity, t0 + i*dt, dt, 1);
+                auxData, rho, t0 + i*dt, dt, 1);
             trajectory.push_back(rho);
         }
 
@@ -621,13 +633,12 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    template<typename VT>
+    template<typename AuxType>
     TStaticMatrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetDensityOpDerivative(
-        const TStaticMatrix<std::complex<double>, N, N>& rho,
-        const TColVector<VT>& detunings, double velocity, double t) const
+        const AuxType& auxData, const TStaticMatrix<std::complex<double>, N, N>& rho, double t) const
     {
         // von Neumann term
-        auto h = (~(*this)).GetHamiltonian(detunings, velocity, t);
+        auto h = (~(*this)).GetHamiltonianFast(auxData, t);
         TStaticMatrix<std::complex<double>, N, N> rhoPrime = -1.0i * (h * rho - rho * h);
 
         // add lindblad dissipation term
@@ -646,10 +657,10 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    template<typename VT>
+    template<typename AuxType>
     TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::EvolveNaturalDensityMatrix(
-        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
-        double velocity, double t0, double dt, std::size_t steps)
+        const AuxType& auxData, const TStaticDensityMatrix<N>& initial, 
+        double t0, double dt, std::size_t steps)
     {
         using YType = TStaticMatrix<std::complex<double>, N, N>;
         RK4Integrator<double, YType> integrator;
@@ -659,7 +670,7 @@ namespace QSim
         {
             auto func = [&](double x, const YType& y) 
             { 
-                return this->GetDensityOpDerivative(y, detunings, velocity, x);
+                return this->GetDensityOpDerivative(auxData, y, x);
             };
             rho += integrator.Step(rho, t0 + i * dt, dt, func);       
         }

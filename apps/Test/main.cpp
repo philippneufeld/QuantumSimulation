@@ -57,11 +57,11 @@ int main(int argc, const char* argv[])
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;
-        constexpr double tint = 15 / decay;
+        constexpr double tint = 1.5 / decay;
 
         auto rho0 = system.CreateGroundState();
 
-        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 51);
+        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 61);
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
         QSim::SetRow(detunings, laserDetunings, 0);
         QSim::SetRow(detunings, laserDetunings, 1);

@@ -20,6 +20,7 @@ namespace QSim
     {
     public:
         ThreadPool();
+        ThreadPool(std::size_t threadCnt);
         ~ThreadPool();
 
         void AddTask(const std::function<void(void)>& task);
@@ -45,10 +46,14 @@ namespace QSim
     };
 
     ThreadPool::ThreadPool()
+        : ThreadPool(std::thread::hardware_concurrency()) { }
+    
+    ThreadPool::ThreadPool(std::size_t threadCnt)
         : m_stopThreads(false), m_ongoingTasks(0)
     {
-        for (unsigned int i = 0; i < std::thread::hardware_concurrency(); i++)
-            m_threads.push_back(std::thread([this]{ ThreadFunc(); }));
+        threadCnt = threadCnt > 0 ? threadCnt : 1;
+        for (unsigned int i = 0; i < threadCnt; i++)
+            m_threads.push_back(std::thread([this](){ ThreadFunc(); }));
     }
 
     ThreadPool::~ThreadPool()
