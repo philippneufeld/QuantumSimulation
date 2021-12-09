@@ -64,6 +64,7 @@ namespace QSim
         const MyT& operator~() const { return static_cast<const MyT&>(*this); }
 
         // level names
+        const std::array<std::string, N>& GetLevelNames() const { return m_levelNames; }
         std::string GetLevelNameByIndex(std::size_t idx) const;
         std::size_t GetLevelIndexByName(const std::string& name) const;
         bool SetLevelName(std::size_t idx, const std::string& newName);
@@ -99,7 +100,8 @@ namespace QSim
         double GetLaserIntensityByName(const std::string& name) const;
         double GetLaserElectricFieldByName(const std::string& name) const;
         bool GetLaserCounterPropagationByName(const std::string& name) const;
-        TDynamicColVector<double> GetLaserFrequencies() const;
+        const TDynamicColVector<double>& GetLaserFrequencies() const { return m_laserFrequencies; }
+        const TDynamicColVector<double>& GetLasersCounterPropagation() const { return m_laserPropagationFactor; }
         bool AddLaser(const std::string& name, std::size_t lvl1, 
             std::size_t lvl2, double intensity, bool counter);
         bool AddLaserByName(const std::string& name, const std::string& lvl1, 
@@ -154,6 +156,9 @@ namespace QSim
         TStaticDensityMatrix<N> CreateThermalState() const;
 
     private:
+        // auxilliary laser variable update
+        void UpdateAuxLaserVars();
+
         // helper method for thermal state creation
         TStaticDensityMatrix<N> CreateThermalStateHelper(double temperature) const;
 
@@ -182,6 +187,11 @@ namespace QSim
 
         // coupling lasers
         std::vector<CouplingLaser> m_couplingLasers;
+
+        // laser related performance enhancing auxilliary variables 
+        // (removes need of dynamic memory allocation in every integration iteration)
+        TDynamicColVector<double> m_laserFrequencies;
+        TDynamicColVector<double> m_laserPropagationFactor;
 
         // thermal environment
         TDopplerIntegrator<double> m_doppler;
@@ -376,6 +386,7 @@ namespace QSim
     {
         return GetLaserIntensity(GetLaserIdxByName(name));
     }
+
     template<std::size_t N, typename MyT>
     double TNLevelSystemCRTP<N, MyT>::GetLaserElectricFieldByName(
         const std::string& name) const
@@ -391,18 +402,6 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    TDynamicColVector<double> TNLevelSystemCRTP<N, MyT>::GetLaserFrequencies() const
-    {
-        TDynamicColVector<double> frequencies(GetLaserCount());
-        for (size_t i = 0; i < frequencies.Size(); i++)
-        {
-            auto lvls = GetLaserLevels(i);
-            frequencies[i] = abs(GetLevel(lvls.first) - GetLevel(lvls.second));
-        }
-        return frequencies;
-    }
-
-    template<std::size_t N, typename MyT>
     bool TNLevelSystemCRTP<N, MyT>::AddLaser(
         const std::string& name, std::size_t lvl1, 
         std::size_t lvl2, double intensity, bool counter)
@@ -415,10 +414,12 @@ namespace QSim
 
         m_couplingLasers.emplace_back(name, lvl1, lvl2, 0.0, counter);
         SetLaserIntensity(name, intensity);
+        UpdateAuxLaserVars();
 
         if (!(~(*this)).OnLaserAdded(lvl1, lvl2, counter))
         {
             m_couplingLasers.pop_back();
+            UpdateAuxLaserVars();
             (~(*this)).OnLaserRemoved();
             return false;
         }
@@ -443,6 +444,7 @@ namespace QSim
             return false;
 
         m_couplingLasers.erase(m_couplingLasers.begin() + idx);
+        UpdateAuxLaserVars();
 
         (~(*this)).OnLaserRemoved();
 
@@ -607,6 +609,21 @@ namespace QSim
     TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateThermalState() const
     { 
         return CreateThermalStateHelper(GetTemperature()); 
+    }
+
+    template<std::size_t N, typename MyT>
+    void TNLevelSystemCRTP<N, MyT>::UpdateAuxLaserVars()
+    {
+        m_laserFrequencies.Resize(GetLaserCount());
+        for (size_t i = 0; i < m_laserFrequencies.Size(); i++)
+        {
+            auto lvls = GetLaserLevels(i);
+            m_laserFrequencies[i] = abs(GetLevel(lvls.first) - GetLevel(lvls.second));
+        }
+        
+        m_laserPropagationFactor.Resize(GetLaserCount());
+        for (size_t i = 0; i < m_laserPropagationFactor.Size(); i++)
+            m_laserPropagationFactor(i) = GetLaserCounterPropagation(i) ? 1.0 : -1.0;
     }
 
     template<std::size_t N, typename MyT>

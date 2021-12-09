@@ -53,9 +53,9 @@ namespace QSim
         TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(const TColVector<VT>& detunings, double velocity) const;
 
         // thermal environment
+        const TDopplerIntegrator<double>& GetDopplerIntegrator() const { return m_doppler; }
         void SetMass(double mass) { m_doppler.SetMass(mass); }
         void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
-
         double GetMass() const { return m_doppler.GetMass(); }
         double GetTemperature() const { return m_doppler.GetTemperature(); }
 

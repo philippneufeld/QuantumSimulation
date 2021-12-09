@@ -4,7 +4,8 @@
 #define QSim_NLevelSystemQM_H_
 
 #include <cstdint>
-#include <memory>
+#include <set>
+#include <vector>
 
 #include "../Math/Matrix.h"
 #include "NLevelSystem.h"
@@ -32,7 +33,13 @@ namespace QSim
 
         // copy operations
         TNLevelSystemQM(const TNLevelSystemQM&) = default;
-        TNLevelSystemQM& operator=(const TNLevelSystemQM&) = default;  
+        TNLevelSystemQM& operator=(const TNLevelSystemQM&) = default;
+
+        // Steady state
+        template<typename VT>
+        TStaticDensityMatrix<N> GetNaturalDensityMatrixSS(const TColVector<VT>& detunings, double velocity) const;
+        template<typename VT>
+        TStaticDensityMatrix<N> GetDensityMatrixSS(const TColVector<VT>& detunings) const;
 
     private:
 
@@ -48,8 +55,148 @@ namespace QSim
 
         template<typename VT>
         HamiltonianType GetHamiltonianAux(const TColVector<VT>& detunings, double velocity) const;
-        HamiltonianType GetHamiltonianFast(const HamiltonianType& auxData, double t) const { return auxData; }   
+        HamiltonianType GetHamiltonianFast(const HamiltonianType& auxData, double t) const { return auxData; }
+
+    private:
+        TDynamicMatrix<double> m_photonBasis;
+        TStaticMatrix<std::complex<double>, N, N> m_hamiltonianNoLight;
     };
+ 
+    template<std::size_t N>
+    template<typename VT>
+    TStaticDensityMatrix<N> TNLevelSystemQM<N>::GetNaturalDensityMatrixSS(
+        const TColVector<VT>& detunings, double velocity) const
+    {
+        // TODO:
+    }
+    
+    template<std::size_t N>
+    template<typename VT>
+    TStaticDensityMatrix<N> TNLevelSystemQM<N>::GetDensityMatrixSS(
+        const TColVector<VT>& detunings) const
+    {
+        auto& doppler = this->GetDopplerIntegrator();
+        auto ss = doppler.Integrate([&](double vel)
+            { return this->GetNaturalDensityMatrixSS(detunings, vel).GetMatrix(); });
+        return TStaticDensityMatrix<N>(this->GetLevelNames(), ss);
+    }
+
+    template<std::size_t N>
+    bool TNLevelSystemQM<N>::PrepareCalculation()
+    {
+        // calculate transition splittings
+        auto laserFrequencies = this->GetLaserFrequencies();
+
+        // create photon basis matrix
+        m_photonBasis.Resize(N, laserFrequencies.Size());
+        m_photonBasis.SetZero();
+        std::vector<std::size_t> trans_path;
+        std::set<std::size_t> visited_levels;
+        trans_path.reserve(laserFrequencies.Size());
+
+        while (visited_levels.size() < N)
+        {
+            std::size_t head = 0;
+            for(; visited_levels.count(head) != 0; head++);
+
+            if (!PreparePhotonBasis(trans_path, visited_levels, head))
+            {
+                m_photonBasis.Resize(0, 0);
+                return false;
+            }
+        }
+
+        // Atom hamiltonian
+        m_hamiltonianNoLight.SetZero();
+        for (std::size_t i = 0; i < N; i++)
+            m_hamiltonianNoLight(i, i) += TwoPi_v * this->GetLevel(i);
+        
+        // Interaction hamiltonian
+        for (std::size_t i = 0; i < this->GetLaserCount(); i++)
+        {
+            auto lvls = this->GetLaserLevels(i);
+            auto rabi = 0.5 * this->GetLaserElectricField(i) * 
+                this->GetDipoleElement(lvls.first, lvls.second) / ReducedPlanckConstant_v;
+            m_hamiltonianNoLight(lvls.first, lvls.second) += rabi;
+            m_hamiltonianNoLight(lvls.second, lvls.first) += std::conj(rabi);
+        }
+
+        return true;
+    }
+
+    template<std::size_t N>
+    bool TNLevelSystemQM<N>::PreparePhotonBasis(std::vector<std::size_t>& trans_path, 
+        std::set<std::size_t>& visitedLvls, std::size_t transFrom)
+    {
+        // cehck for circular transition path
+        if (visitedLvls.count(transFrom) != 0)
+            return false;
+        else
+            visitedLvls.insert(transFrom);
+
+        // Iterate over all transitions
+        for (std::size_t tIdx = 0; tIdx < this->GetLaserCount(); tIdx++)
+        {
+            // skip if the transition was already in the current transition path
+            if (std::find(trans_path.begin(), trans_path.end(), tIdx) != trans_path.end())
+                continue;
+
+            // skip if currLevel is not involved in the current transition
+            // otherwise check to which level the transition leads
+            auto lvls = this->GetLaserLevels(tIdx);
+            std::size_t transTo = 0;
+            if (lvls.first == transFrom)
+                transTo = lvls.second;
+            else if (lvls.second == transFrom)
+                transTo = lvls.first;
+            else
+                continue;
+            
+            // check whether a photon is absorbed or emitted
+            double relPhotonNumber = 1;
+            if (this->GetLevel(transTo) > this->GetLevel(transFrom))
+                relPhotonNumber = -1;
+
+            // Add(Subtract) one photon to(from) the "from" state to obtain the "to" state
+            for (std::size_t j=0; j<m_photonBasis.Cols(); j++)
+                m_photonBasis(transTo, j) = m_photonBasis(transFrom, j);
+            m_photonBasis(transTo, tIdx) += relPhotonNumber;
+
+            // continue recursively
+            trans_path.push_back(tIdx);
+            auto success = PreparePhotonBasis(trans_path, visitedLvls, transTo);
+            trans_path.pop_back();
+
+            if (!success)
+                return false;
+        }
+
+        return true;
+    }
+
+    template<std::size_t N>
+    template<typename VT>
+    typename TNLevelSystemQM<N>::HamiltonianType TNLevelSystemQM<N>::GetHamiltonianAux(
+        const TColVector<VT>& detunings, double velocity) const
+    {
+        assert((~detunings).Rows() == this->GetLaserCount());
+        auto hamiltonian = m_hamiltonianNoLight;
+
+        // Calculate doppler shifted laser frequencies
+        auto laserFreqs = this->GetLaserFrequencies() + detunings;
+        const auto& propagation = this->GetLasersCounterPropagation();
+        auto doppler = velocity / SpeedOfLight_v;
+        for (std::size_t i = 0; i < laserFreqs.Size(); i++)
+            laserFreqs[i] *= 1 + propagation[i] * doppler;
+
+        // Add light term to the hamiltonian
+        TStaticColVector<double, N> photonTerms;
+        MatrixMul(photonTerms, m_photonBasis, laserFreqs);
+        for (std::size_t i = 0; i < (~hamiltonian).Rows(); i++)
+            hamiltonian(i, i) += TwoPi_v * photonTerms(i, 0); 
+
+        return hamiltonian; 
+    }
 
 }
 

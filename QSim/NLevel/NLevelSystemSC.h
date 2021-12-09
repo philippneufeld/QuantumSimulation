@@ -96,11 +96,10 @@ namespace QSim
 
         // Calculate doppler shifted laser frequencies
         auto laserFreqs = this->GetLaserFrequencies() + detunings;
+        const auto& propagation = this->GetLasersCounterPropagation();
+        auto doppler = velocity / SpeedOfLight_v;
         for (std::size_t i = 0; i < laserFreqs.Size(); i++)
-        {
-            auto doppler = velocity / SpeedOfLight_v;
-            laserFreqs[i] *= this->GetLaserCounterPropagation(i) ? 1.0 + doppler : 1.0 - doppler;
-        }
+            laserFreqs[i] *= 1 + propagation[i] * doppler;
         
         // Rotating frame
         auto frame = this->CalculateRotatingFrame(laserFreqs);
