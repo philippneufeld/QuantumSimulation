@@ -29,6 +29,18 @@ namespace QSim
     // N-level quantum system solver (CRTP base class)
     //
 
+    //
+    // Classes that derive from this must implement the following methods:
+    // 1.) bool OnLaserAdded(std::size_t lvl1, std::size_t lvl2, bool counter) { return true; }
+    // 2.) void OnLaserRemoved() { }
+    // 3.) template<typename VT>
+    //     HAuxData GetHamiltonianAux(const TColVector<VT>& detunings, double velocity) const;
+    // 4.) HamiltonianType GetHamiltonianFast(const HAuxData& auxData, double t) const;
+    //
+    // HAuxData is a arbitrary type that contains data that is calculated in a preprocessing step
+    // HamiltonianType is a square matrix type that is of the dimension of the system
+    //
+
     template<std::size_t N, typename MyT>
     class TNLevelSystemCRTP
     {
@@ -104,9 +116,10 @@ namespace QSim
         double GetDopplerWidth(std::size_t from, std::size_t to) const;
         double GetDopplerWidthByName(const std::string& from, const std::string& to) const;
 
-        // create stecific density matrices
-        TStaticDensityMatrix<N> CreateGroundState() const;
-        TStaticDensityMatrix<N> CreateThermalState() const;
+        // hamiltonian
+        template<typename VT>
+        TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
+            const TColVector<VT>& detunings, double velocity, double t) const;
 
         // time evolution of density matrix
         template<typename VT>
@@ -135,6 +148,10 @@ namespace QSim
         TStaticDensityMatrix<N> GetDensityMatrixAv(
             const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
             double t0, double t, double tav, double dt);
+
+        // create stecific density matrices
+        TStaticDensityMatrix<N> CreateGroundState() const;
+        TStaticDensityMatrix<N> CreateThermalState() const;
 
     private:
         // helper method for thermal state creation
@@ -402,6 +419,7 @@ namespace QSim
         if (!(~(*this)).OnLaserAdded(lvl1, lvl2, counter))
         {
             m_couplingLasers.pop_back();
+            (~(*this)).OnLaserRemoved();
             return false;
         }
 
@@ -458,6 +476,126 @@ namespace QSim
     {
         return GetDopplerWidth(GetLevelIndexByName(from), GetLevelIndexByName(to));
     }
+
+    template<std::size_t N, typename MyT>
+    template<typename VT>
+    TStaticMatrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetHamiltonian(
+        const TColVector<VT>& detunings, double velocity, double t) const
+    {
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        return (~(*this)).GetHamiltonianFast(auxData, t);
+    }
+
+    template<std::size_t N, typename MyT>
+    template<typename VT>
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrix(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double velocity,
+        double t0, double t, double dt)
+    {
+        // calculate appropriate amount of steps to obtain a dt near to the required dt
+        std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
+        dt = (t-t0) / steps;
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        return this->EvolveNaturalDensityMatrix(
+            auxData, initial, t0, dt, steps);
+    }
+
+    template<std::size_t N, typename MyT>
+    template<typename VT>
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrixAv(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double velocity,
+        double t0, double t, double tav, double dt)
+    {
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        
+        // validate averaging time and generate starting and 
+        // end time of the averaging process
+        tav = tav > t - t0 ? t - t0 : tav;
+        double t1 = t - tav / 2;
+        double t2 = t1 + tav;
+
+        // evolve up to the starting point of the averaging
+        std::size_t steps1 = static_cast<std::size_t>(std::ceil((t1-t0) / dt));
+        double dt1 = (t1 - t0) / steps1;
+        auto rho = this->EvolveNaturalDensityMatrix(
+                auxData, initial, t0, dt1, steps1);
+
+        // continue evolving while averaging the newly calculated density matrices
+        std::size_t steps2 = static_cast<std::size_t>(std::ceil((t2-t1) / dt));
+        double dt2 = (t2 - t1) / steps2;
+
+        auto rhoAv = rho;
+        for (std::size_t i = 0; i < steps2; i++)
+        {
+            rho = this->EvolveNaturalDensityMatrix(
+                auxData, rho, t1 + i*dt2, dt2, 1);
+            rhoAv += rho;
+        }
+        rhoAv *= 1.0 / (steps2 + 1);
+
+        return rhoAv;
+    }
+    
+    template<std::size_t N, typename MyT>
+    template<typename VT>
+    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TNLevelSystemCRTP<N, MyT>::GetNaturalTrajectory(
+        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
+        double velocity, double t0, double t, double dt)
+    {
+        std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
+
+        std::vector<TStaticDensityMatrix<N>> trajectory;
+        trajectory.reserve(steps + 1);
+        trajectory.push_back(initial);
+        
+        auto rho = initial;
+        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        for (std::size_t i = 0; i < steps; i++)
+        {
+            rho = this->EvolveNaturalDensityMatrix(
+                auxData, rho, t0 + i*dt, dt, 1);
+            trajectory.push_back(rho);
+        }
+
+        return {QSim::CreateLinspaceCol(t0, t0+steps*dt, steps + 1), trajectory};
+    }
+
+    template<std::size_t N, typename MyT>
+    template<typename VT>
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrix(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double t0, double t, double dt)
+    {
+        auto func = [&](double vel)
+        {
+            return this->GetNaturalDensityMatrix(
+                detunings, initial, vel, t0, t, dt).GetMatrix();
+        };
+        auto rho = this->m_doppler.Integrate(func);
+        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
+    }
+
+    template<std::size_t N, typename MyT>
+    template<typename VT>
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrixAv(
+        const TColVector<VT>& detunings,
+        const TStaticDensityMatrix<N>& initial, 
+        double t0, double t, double tav, double dt)
+    {
+        auto func = [&](double vel)
+        {
+            return this->GetNaturalDensityMatrixAv(
+                detunings, initial, vel, t0, t, tav, dt).GetMatrix();
+        };
+        auto rho = this->m_doppler.Integrate(func);
+        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
+    }
+
 
     template<std::size_t N, typename MyT>
     TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateGroundState() const
@@ -525,112 +663,6 @@ namespace QSim
         return names;
     }
 
-    template<std::size_t N, typename MyT>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrix(
-        const TColVector<VT>& detunings,
-        const TStaticDensityMatrix<N>& initial, 
-        double velocity,
-        double t0, double t, double dt)
-    {
-        // calculate appropriate amount of steps to obtain a dt near to the required dt
-        std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
-        dt = (t-t0) / steps;
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
-        return this->EvolveNaturalDensityMatrix(
-            auxData, initial, t0, dt, steps);
-    }
-
-    template<std::size_t N, typename MyT>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrixAv(
-        const TColVector<VT>& detunings,
-        const TStaticDensityMatrix<N>& initial, 
-        double velocity,
-        double t0, double t, double tav, double dt)
-    {
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
-        
-        // validate averaging time and generate starting and 
-        // end time of the averaging process
-        tav = tav > t - t0 ? t - t0 : tav;
-        double t1 = t - tav / 2;
-        double t2 = t1 + tav;
-
-        // evolve up to the starting point of the averaging
-        auto rho = this->GetNaturalDensityMatrix(
-            detunings, initial, velocity, t0, t1, dt);
-
-        std::size_t steps = static_cast<std::size_t>(std::ceil((t2-t1) / dt));
-        dt = (t2 - t1) / steps;
-
-        auto rhoAv = rho;
-        for (std::size_t i = 0; i < steps; i++)
-        {
-            rho = this->EvolveNaturalDensityMatrix(
-                auxData, rho, t1 + i*dt, dt, 1);
-            rhoAv += rho;
-        }
-        rhoAv *= 1.0 / (steps + 1);
-
-        return rhoAv;
-    }
-    
-    template<std::size_t N, typename MyT>
-    template<typename VT>
-    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TNLevelSystemCRTP<N, MyT>::GetNaturalTrajectory(
-        const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
-        double velocity, double t0, double t, double dt)
-    {
-        std::size_t steps = static_cast<std::size_t>(std::ceil((t-t0) / dt));
-
-        std::vector<TStaticDensityMatrix<N>> trajectory;
-        trajectory.reserve(steps + 1);
-        trajectory.push_back(initial);
-        
-        auto rho = initial;
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
-        for (std::size_t i = 0; i < steps; i++)
-        {
-            rho = this->EvolveNaturalDensityMatrix(
-                auxData, rho, t0 + i*dt, dt, 1);
-            trajectory.push_back(rho);
-        }
-
-        return {QSim::CreateLinspaceCol(t0, t0+steps*dt, steps + 1), trajectory};
-    }
-
-    template<std::size_t N, typename MyT>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrix(
-        const TColVector<VT>& detunings,
-        const TStaticDensityMatrix<N>& initial, 
-        double t0, double t, double dt)
-    {
-        auto func = [&](double vel)
-        {
-            return this->GetNaturalDensityMatrix(
-                detunings, initial, vel, t0, t, dt).GetMatrix();
-        };
-        auto rho = this->m_doppler.Integrate(func);
-        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
-    }
-
-    template<std::size_t N, typename MyT>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrixAv(
-        const TColVector<VT>& detunings,
-        const TStaticDensityMatrix<N>& initial, 
-        double t0, double t, double tav, double dt)
-    {
-        auto func = [&](double vel)
-        {
-            return this->GetNaturalDensityMatrixAv(
-                detunings, initial, vel, t0, t, tav, dt).GetMatrix();
-        };
-        auto rho = this->m_doppler.Integrate(func);
-        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
-    }
 
     template<std::size_t N, typename MyT>
     template<typename AuxType>

@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_NLevelSystemQM_H_
-#define QSim_NLevelSystemQM_H_
+#ifndef QSim_NLevelSystemSC_H_
+#define QSim_NLevelSystemSC_H_
 
 #include <cstdint>
 #include <memory>
@@ -31,11 +31,7 @@ namespace QSim
 
         // copy operations
         TNLevelSystemSC(const TNLevelSystemSC&) = default;
-        TNLevelSystemSC& operator=(const TNLevelSystemSC&) = default;
-
-        template<typename VT>
-        TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
-            const TColVector<VT>& detunings, double velocity, double t) const;
+        TNLevelSystemSC& operator=(const TNLevelSystemSC&) = default;  
 
     private:
         bool OnLaserAdded(std::size_t lvl1, std::size_t lvl2, bool counter) { return true; }
@@ -57,8 +53,7 @@ namespace QSim
 
         template<typename VT>
         HAuxData GetHamiltonianAux(const TColVector<VT>& detunings, double velocity) const;
-        HamiltonianType GetHamiltonianFast(
-                const HAuxData auxData, double t) const;   
+        HamiltonianType GetHamiltonianFast(const HAuxData& auxData, double t) const;   
     };
 
     template<std::size_t N>
@@ -83,76 +78,6 @@ namespace QSim
         }
 
         return frame;
-    }
-
-    template<std::size_t N>
-    template<typename VT>
-    TStaticMatrix<std::complex<double>, N, N> TNLevelSystemSC<N>::GetHamiltonian(
-        const TColVector<VT>& detunings, double velocity, double t) const
-    {
-        const auto auxData = this->GetHamiltonianAux(detunings, velocity);
-        return this->GetHamiltonianFast(auxData, t);
-        
-        
-        
-        assert((~detunings).Rows() == this->GetLaserCount());
-        
-        using HamiltonianType = TStaticMatrix<std::complex<double>, N, N>;
-        HamiltonianType hamiltonian(N, N);
-
-        // Atom hamiltonian
-        auto levels = this->GetLevels();
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) = TwoPi_v * levels[i];  
-
-        // Calculate doppler shifted laser frequencies
-        auto laserFreqs = this->GetLaserFrequencies() + detunings;
-        for (std::size_t i = 0; i < laserFreqs.Size(); i++)
-        {
-            auto doppler = velocity / SpeedOfLight_v;
-            laserFreqs[i] *= this->GetLaserCounterPropagation(i) ? 1.0 + doppler : 1.0 - doppler;
-        }
-        
-        // Rotating frame
-        auto frame = this->CalculateRotatingFrame(laserFreqs);
-        
-        // apply roatating frame to hamiltonian 
-        // (additional term that comes from the temporal derivative of rho in the rotating frame)
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) -= TwoPi_v * frame(i);
-        
-        // Calculate electric field and system-light interaction
-        for (std::size_t i = 0; i < (~laserFreqs).Size(); i++)
-        {
-            double E0 = this->GetLaserElectricField(i);    
-            for (std::size_t j = 0; j < N; j++)
-            {
-                for (std::size_t k = j + 1; k < N; k++)
-                {
-                    // calculate frequencies of the electric field components
-                    double elFieldFreq = (~laserFreqs)(i);
-                    double frame_kj = frame(k) - frame(j);
-                    double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
-
-                    std::complex<double> electricField = 0.0;
-
-                    // Rotating wave approximation: Ignore counter rotating propagating wave
-                    // if both frequencies are equal (in absolute terms) then keep both
-                    double maxFreq = std::abs(freqs[0]) < std::abs(freqs[1]) ? std::abs(freqs[0]) : std::abs(freqs[1]);
-                    for (double freq: freqs)
-                    {
-                        if (std::abs(freq) <= maxFreq) 
-                            electricField += 0.5* E0 * (freq != 0.0 ? std::exp(std::complex<double>(1.0i * TwoPi_v * freq * t)) : 1.0);
-                    }
-
-                    electricField /= ReducedPlanckConstant_v;
-                    hamiltonian(k, j) += electricField * this->GetDipoleElement(k, j);
-                    hamiltonian(j, k) += std::conj(electricField) * this->GetDipoleElement(j, k);
-                }
-            }
-        }
-
-        return hamiltonian;
     }
 
     template<std::size_t N>
@@ -236,7 +161,7 @@ namespace QSim
     
     template<std::size_t N>
     typename TNLevelSystemSC<N>::HamiltonianType TNLevelSystemSC<N>::GetHamiltonianFast(
-        const HAuxData auxData, double t) const
+        const HAuxData& auxData, double t) const
     {
         // unpack auxilliary data
         HamiltonianType hamiltonian = std::get<0>(auxData);
