@@ -41,38 +41,47 @@ int main(int argc, const char* argv[])
         QSim::ThreadPool pool;
 
         // define parameters
-        constexpr double dip = 4.227 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
-        constexpr double intProbe = QSim::GetIntensityFromRabiFrequency(dip, 3.5e6);
-        constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10.0e6);
-        constexpr double decay = 6.065e6;
-        constexpr double mass = 1.44316060e-25;
+        constexpr double lvl5S = 0;
+        constexpr double lvl5P = lvl5S + QSim::SpeedOfLight_v / 780e-9;
+        constexpr double lvl53D = lvl5P + QSim::SpeedOfLight_v / 480e-9;
+        constexpr double lvl54P = lvl53D - 14.3e9;
+
+        constexpr double dip5S5P = 5.178 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+        constexpr double dip5P53D = 2.394e-2 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+        constexpr double dip54P53D = 3611 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+
+        constexpr double intProbe = QSim::GetIntensityFromRabiFrequency(dip5S5P, 1.5e6);
+        constexpr double intCoupling = QSim::GetIntensityFromRabiFrequency(dip5P53D, 0.25e6);
+        constexpr double intMicrowave = QSim::GetIntensityFromRabiFrequency(dip54P53D, 10e6);
 
         // Create system
-        QSim::TNLevelSystemSC<3> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
-        system.SetDipoleElementByName("S1_2", "P3_2", dip);
-        system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
-        system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
-        system.SetDecayByName("P3_2", "S1_2", decay);
-        system.SetMass(mass);
+        QSim::TNLevelSystemQM<4> system({"5S", "5P", "54P", "53D"}, {lvl5S, lvl5P, lvl54P, lvl53D});
+        system.SetMass(1.44316060e-25);
+        system.SetDipoleElementByName("5S", "5P", dip5S5P);
+        system.SetDipoleElementByName("5P", "53D", dip5P53D);
+        system.SetDipoleElementByName("54P", "53D", dip54P53D);
+        system.AddLaserByName("Probe", "5S", "5P", intProbe, false);
+        system.AddLaserByName("Coupling", "5P", "53D", intCoupling, false);
+        system.AddLaserByName("Microwaves", "54P", "53D", intMicrowave, false);
+        system.SetDecayByName("5P", "5S", 6.065e6);
+        
+        // https://atomcalc.jqc.org.uk
+        system.SetDecayByName("53D", "5P", 6.053e2);
+        system.SetDecayByName("54P", "53D", 7.964e1);
+        system.SetDecayByName("54P", "5S", 3.583e1);
+        
+        system.SetDopplerIntegrationSteps(35000);
 
-        // dt << Rabi^-1, Doppler^-1, detuning^-1
-        double dt = 1.0e-10;
-        constexpr double tint = 5.0 / decay;
-
-        auto rho0 = system.CreateGroundState();
-
-        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 3*64-1);
+        auto laserDetunings = QSim::CreateLinspaceRow(-3e7, 3e7, 201);
         QSim::TDynamicMatrix<double> detunings(system.GetLaserCount(), laserDetunings.Size());
         QSim::SetRow(detunings, laserDetunings, 0);
-        QSim::SetRow(detunings, laserDetunings, 1);
-
+        
         auto start_ts = std::chrono::high_resolution_clock::now();
 
         auto func = [&](auto dets)
         { 
-            auto rho = system.GetDensityMatrixAv(
-                dets, rho0, 0.0, tint, 0.25*tint, dt);
-            return rho.GetPopulation("P3_2");
+            auto rho = system.GetDensityMatrixSS(dets);
+            return rho.GetAbsCoeff("5S", "5P");
         }; 
         auto absCoeffs = pool.Map(func, 
             QSim::GetColIteratorBegin(detunings), 

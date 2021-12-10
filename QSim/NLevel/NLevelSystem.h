@@ -115,6 +115,8 @@ namespace QSim
         double GetTemperature() const { return m_doppler.GetTemperature(); }
         void SetMass(double mass) { m_doppler.SetMass(mass); }
         void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
+        void SetDopplerIntegrationSteps(std::size_t steps) { m_doppler.SetIntegrationSteps(steps); }
+        std::size_t GetDopplerIntegrationSteps() const { return m_doppler.GetIntegrationSteps(); }
 
         const TDopplerIntegrator<double>& GetDopplerIntegrator() const { return m_doppler; }
         double GetDopplerWidth(std::size_t from, std::size_t to) const;

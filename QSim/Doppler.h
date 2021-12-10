@@ -19,7 +19,7 @@ namespace QSim
         TDopplerIntegrator() : TDopplerIntegrator(1.674e-27, 300) { }
         TDopplerIntegrator(Ty mass, Ty temperature) : TDopplerIntegrator(mass, temperature, 1000) { }
         TDopplerIntegrator(Ty mass, Ty temperature, std::size_t steps)
-            : m_mass(mass), m_temperature(temperature), m_steps(steps) { }
+            : m_mass(mass), m_temperature(temperature) { SetIntegrationSteps(steps); }
 
         // copy operators
         TDopplerIntegrator(const TDopplerIntegrator&) = default;
@@ -30,6 +30,8 @@ namespace QSim
         double GetMass() const { return m_mass; }
         void SetTemperature(double temp) { m_temperature = temp; }
         double GetTemperature() const { return m_temperature; }
+        void SetIntegrationSteps(std::size_t steps) { m_steps = (steps % 2 == 0 ? steps + 1 : steps); }
+        std::size_t GetIntegrationSteps() const { return m_steps; }
 
         double GetDopplerWidth(double frequency) const;
 
