@@ -35,6 +35,10 @@ namespace QSim
         TNLevelSystemQM(const TNLevelSystemQM&) = default;
         TNLevelSystemQM& operator=(const TNLevelSystemQM&) = default;
 
+        template<typename VT>
+        TStaticMatrix<std::complex<double>, N, N> GetHamiltonianTI(
+            const TColVector<VT>& detunings, double velocity) const;
+
         // Steady state
         template<typename VT>
         TStaticDensityMatrix<N> GetNaturalDensityMatrixSS(const TColVector<VT>& detunings, double velocity) const;
@@ -64,10 +68,90 @@ namespace QSim
  
     template<std::size_t N>
     template<typename VT>
+    TStaticMatrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianTI(
+        const TColVector<VT>& detunings, double velocity) const
+    {
+        assert((~detunings).Rows() == this->GetLaserCount());
+        auto hamiltonian = m_hamiltonianNoLight;
+
+        // Calculate doppler shifted laser frequencies
+        auto laserFreqs = this->GetLaserFrequencies() + detunings;
+        const auto& propagation = this->GetLasersCounterPropagation();
+        auto doppler = velocity / SpeedOfLight_v;
+        for (std::size_t i = 0; i < laserFreqs.Size(); i++)
+            laserFreqs[i] *= 1 + propagation[i] * doppler;
+
+        // Add light term to the hamiltonian
+        TStaticColVector<double, N> photonTerms;
+        MatrixMul(photonTerms, m_photonBasis, laserFreqs);
+        for (std::size_t i = 0; i < (~hamiltonian).Rows(); i++)
+            hamiltonian(i, i) += TwoPi_v * photonTerms(i, 0); 
+
+        return hamiltonian; 
+    }
+
+    template<std::size_t N>
+    template<typename VT>
     TStaticDensityMatrix<N> TNLevelSystemQM<N>::GetNaturalDensityMatrixSS(
         const TColVector<VT>& detunings, double velocity) const
     {
-        // TODO:
+        const TStaticMatrix<std::complex<double>, N, N>& h = GetHamiltonianTI(detunings, velocity);
+        TStaticMatrix<std::complex<double>, N*N + 1, N*N> A;
+
+        // von Neumann part of the evolution operator
+        for (std::size_t i = 0; i < N; i++)
+        {
+            for (std::size_t j = 0; j < N; j++)
+            {
+                for (std::size_t k = 0; k < N; k++)
+                {
+                    A(i*N+k, j*N+k) -= 1.0i * h(i, j);
+                    A(k*N+i, k*N+j) += 1.0i * h(j, i);
+                }
+            }
+        }
+        
+        // Lindblad part of the evolution operator
+        for(const auto& decay: this->GetDecays())
+        {
+            auto lvls = decay.first;
+            std::size_t i = lvls.first;
+            std::size_t f = lvls.second;
+            auto rate = TwoPi_v * decay.second;
+            A(f*N+f, i*N+i) += rate;
+            for (std::size_t j = 0; j < N; j++)
+            {
+                A(j*N+i, j*N+i) -= 0.5 * rate;
+                A(i*N+j, i*N+j) -= 0.5 * rate;
+            }
+        }
+
+        // find order of magnitude
+        double oom = 0.0;
+        for (std::size_t i = 0; i < A.Rows(); i++)
+        {
+            for (std::size_t j = 0; j < A.Cols(); j++)
+                oom = std::max(oom, std::abs(A(i, j)));
+        }       
+
+        // Normalization condition
+        for (std::size_t i = 0; i < N; i++)
+            A(N*N, i*N+i) += oom;
+        
+        TStaticMatrix<std::complex<double>, N*N + 1, 1> b;
+        b(N*N, 0) = oom;
+        
+        auto A_adj = Adjoint(A);
+        auto x = LinearSolve(A_adj*A, A_adj*b);
+
+        TStaticMatrix<std::complex<double>, N, N> ss;
+        for (std::size_t i = 0; i < N; i++)
+        {
+            for (std::size_t j = 0; j < N; j++)
+                ss(i, j) = x(i*N+j, 0);
+        }
+        
+        return TStaticDensityMatrix<N>(this->GetLevelNames(), ss);
     }
     
     template<std::size_t N>
@@ -179,23 +263,7 @@ namespace QSim
     typename TNLevelSystemQM<N>::HamiltonianType TNLevelSystemQM<N>::GetHamiltonianAux(
         const TColVector<VT>& detunings, double velocity) const
     {
-        assert((~detunings).Rows() == this->GetLaserCount());
-        auto hamiltonian = m_hamiltonianNoLight;
-
-        // Calculate doppler shifted laser frequencies
-        auto laserFreqs = this->GetLaserFrequencies() + detunings;
-        const auto& propagation = this->GetLasersCounterPropagation();
-        auto doppler = velocity / SpeedOfLight_v;
-        for (std::size_t i = 0; i < laserFreqs.Size(); i++)
-            laserFreqs[i] *= 1 + propagation[i] * doppler;
-
-        // Add light term to the hamiltonian
-        TStaticColVector<double, N> photonTerms;
-        MatrixMul(photonTerms, m_photonBasis, laserFreqs);
-        for (std::size_t i = 0; i < (~hamiltonian).Rows(); i++)
-            hamiltonian(i, i) += TwoPi_v * photonTerms(i, 0); 
-
-        return hamiltonian; 
+        return GetHamiltonianTI(detunings, velocity);
     }
 
 }

@@ -77,6 +77,7 @@ namespace QSim
         bool SetLevelByName(const std::string& name, double level);
 
         // decay rates due to spontaneous emission
+        const std::map<IndexPair, double>& GetDecays() const { return m_decays; }
         double GetDecay(std::size_t from, std::size_t to) const;
         double GetDecayByName(const std::string& from, std::string& to) const;
         bool SetDecay(std::size_t from, std::size_t to, double rate);
@@ -115,6 +116,7 @@ namespace QSim
         void SetMass(double mass) { m_doppler.SetMass(mass); }
         void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
 
+        const TDopplerIntegrator<double>& GetDopplerIntegrator() const { return m_doppler; }
         double GetDopplerWidth(std::size_t from, std::size_t to) const;
         double GetDopplerWidthByName(const std::string& from, const std::string& to) const;
 

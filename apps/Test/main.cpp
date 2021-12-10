@@ -9,7 +9,7 @@
 #include <QSim/Python/Plotting.h>
 #include <QSim/Util/Argparse.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystemSC.h>
+#include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/Util/ThreadPool.h>
 
 int main(int argc, const char* argv[])
@@ -43,12 +43,12 @@ int main(int argc, const char* argv[])
         // define parameters
         constexpr double dip = 4.227 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
         constexpr double intProbe = QSim::GetIntensityFromRabiFrequency(dip, 3.5e6);
-        constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10e6);
+        constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10.0e6);
         constexpr double decay = 6.065e6;
         constexpr double mass = 1.44316060e-25;
 
         // Create system
-        QSim::TNLevelSystemSC<2> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
+        QSim::TNLevelSystemSC<3> system({"S1_2", "P3_2"}, {0, QSim::SpeedOfLight_v / 780.241e-9});
         system.SetDipoleElementByName("S1_2", "P3_2", dip);
         system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
         system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
@@ -56,13 +56,13 @@ int main(int argc, const char* argv[])
         system.SetMass(mass);
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
-        double dt = 1e-10;
-        constexpr double tint = 1.5 / decay;
+        double dt = 1.0e-10;
+        constexpr double tint = 5.0 / decay;
 
         auto rho0 = system.CreateGroundState();
 
-        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 61);
-        QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
+        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 3*64-1);
+        QSim::TDynamicMatrix<double> detunings(system.GetLaserCount(), laserDetunings.Size());
         QSim::SetRow(detunings, laserDetunings, 0);
         QSim::SetRow(detunings, laserDetunings, 1);
 
