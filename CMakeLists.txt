@@ -21,7 +21,8 @@ set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
 set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
     "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
-    "${QSIM_SOURCE_DIR}/Util/Argparse.cpp")
+    "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
+    "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp")
 
 # find required libs
 find_package(Threads REQUIRED)
