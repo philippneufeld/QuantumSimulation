@@ -22,7 +22,9 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
     "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
-    "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp")
+    "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp"
+    "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
+    "${QSIM_SOURCE_DIR}/Util/DataFile.cpp")
 
 # find required libs
 find_package(Threads REQUIRED)

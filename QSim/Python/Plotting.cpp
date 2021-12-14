@@ -200,7 +200,7 @@ namespace QSim
         CallAttribute("legend");
     }
     
-    PythonPlotFigure PythonMatplotlib::MakeFigure()
+    PythonPlotFigure PythonMatplotlib::CreateFigure()
     {
         return m_pyplot.CallAttribute("figure");
     }

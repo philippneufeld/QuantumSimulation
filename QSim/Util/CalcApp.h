@@ -9,27 +9,12 @@
 #include <cstdint>
 
 #include "../Math/Matrix.h"
+#include "DataFile.h"
+#include <type_traits>
 
 namespace QSim
 {
     
-    struct CalcAppFigureDesc
-    {
-        std::string caption = "";
-        std::string xLabel = "";
-        std::string yLabel = "";
-    };
-
-    struct CalcAppPlotDesc
-    {
-        std::string figName = "";
-        std::string xDataName = "";
-        std::string yDataName = "";
-        std::size_t xDataRow = 0;
-        std::size_t yDataRow = 0;
-    };
-
-
     class CalcApp
     {
         constexpr static std::uint64_t MajorVersion_v = 1;
@@ -39,33 +24,32 @@ namespace QSim
         ~CalcApp();
 
         virtual void DoCalculation() { };
+        virtual void Plot() { }
         int Run(int argc, const char** argv);
 
         // Data control
-        template<typename MT>
-        void SetData(const std::string& name, const TMatrix<MT>& data) { m_data[name] = data; }
-        void RemoveData(const std::string& name) { m_data.erase(name); }
+        void ClearData() { m_data.Clear(); }
+        void RemoveData(const std::string& name) { m_data.RemoveData(name); }
+        bool ContainsData(const std::string& name) const { return m_data.Contains(name); }
+        std::vector<std::string> GetDataIndex() const { return m_data.GetIndex(); }
 
-        // Plotting control
-        void SetFigureDesc(const std::string& figName, 
-            const CalcAppFigureDesc& desc) { m_figureDescs[figName] = desc; }
-        void AddPlot(const CalcAppPlotDesc& desc) { m_plots.push_back(desc); }
+        template<typename MT, typename=void/*std::enable_if_t<std::is_same<Internal::TMatrixElementType_t<MT>, double>::value>*/>
+        void StoreMatrix(const std::string& name, const TMatrix<MT>& data);
+        TDynamicMatrix<double> LoadMatrix(const std::string& name);
 
     private:
-        bool SaveDataToFile(const std::string& path) const;
-        bool LoadDataFromFile(const std::string& path);
-        
-        std::vector<char> SerializeData() const;
-        std::vector<char> SerializePlots() const;
+        void StoreMatrixHelper(const std::string& name, std::uint64_t rows, 
+            std::uint64_t cols, const double* data);
 
-        std::map<std::string, TDynamicMatrix<double>> DeserializeData(
-            const std::vector<char>& ser) const;
-        
     private:
-        std::vector<CalcAppPlotDesc> m_plots;
-        std::map<std::string, CalcAppFigureDesc> m_figureDescs;
-        std::map<std::string, TDynamicMatrix<double>> m_data;
+        DataFile m_data;
     };
+
+    template<typename MT, typename>
+    void CalcApp::StoreMatrix(const std::string& name, const TMatrix<MT>& data)
+    {
+        StoreMatrixHelper(name, (~data).Rows(), (~data).Cols(), (~data).Data());
+    }
 
 }
 

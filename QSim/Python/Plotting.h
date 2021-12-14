@@ -78,7 +78,7 @@ namespace QSim
     public:
         PythonMatplotlib();
 
-        PythonPlotFigure MakeFigure();
+        PythonPlotFigure CreateFigure();
         void RunGUILoop();
 
     private:

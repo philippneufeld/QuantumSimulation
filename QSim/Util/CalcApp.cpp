@@ -5,6 +5,8 @@
 
 #include "CalcApp.h"
 #include "Argparse.h"
+#include "../Python/Plotting.h"
+
 
 namespace QSim
 {
@@ -23,7 +25,7 @@ namespace QSim
     {
         // parse command line arguents
         QSim::ArgumentParser parser;
-        parser.AddOptionDefault("f,file", "I/O data filename.", "./data.txt");
+        parser.AddOptionDefault("f,file", "I/O data filename.", "./data.dat");
         parser.AddOption("h,help", "Print this help string.");
         parser.AddOption("noplot", "Don't plot the results.");
         parser.AddOption("nocalc", "Just load the data from the specified file and skip the calculation");
@@ -40,19 +42,51 @@ namespace QSim
             return 0;
         }
 
+        // load data file
         std::string filePath = cmdArgs.GetOptionStringValue("file");
-        LoadDataFromFile(filePath);
+        m_data.LoadFromFile(filePath);
 
+        // run calculation
         if (!cmdArgs.IsOptionPresent("nocalc"))
         {
             this->DoCalculation();
-            SaveDataToFile(filePath);
+            m_data.SaveToFile(filePath);
         }
+
+        // plotting
+        if (!cmdArgs.IsOptionPresent("noplot"))
+            this->Plot();
 
         return 0;
     }
 
-    std::vector<char> CalcApp::SerializeData() const
+    TDynamicMatrix<double> CalcApp::LoadMatrix(const std::string& name)
+    {
+        TDynamicMatrix<double> mat;
+        if (m_data.GetDataTypeId(name) == 1)
+        {
+            const Memory& memory = m_data.GetData(name);
+            auto ui64Ptr = static_cast<const std::uint64_t*>(memory.GetData());
+            mat.Resize(ui64Ptr[0], ui64Ptr[1]);
+            std::copy_n(reinterpret_cast<const double*>(ui64Ptr + 2), mat.Size(), &mat[0]);
+        }
+        return mat;
+    }
+
+    void CalcApp::StoreMatrixHelper(const std::string& name, std::uint64_t rows, 
+        std::uint64_t cols, const double* data)
+    {
+        Memory memory;
+        memory.Allocate(2*sizeof(std::uint64_t) + rows*cols*sizeof(double));
+        auto ui64Ptr = static_cast<std::uint64_t*>(memory.GetData());
+        ui64Ptr[0] = rows;
+        ui64Ptr[1] = cols;
+        std::copy_n(data, rows*cols, reinterpret_cast<double*>(ui64Ptr + 2));
+        
+        m_data.SetDataEx(name, memory.GetData(), memory.GetSize(), 1);
+    }
+
+    /*std::vector<char> CalcApp::SerializeData() const
     {
         // check size to allocate
         std::size_t size = 0;
@@ -164,6 +198,6 @@ namespace QSim
         m_data = DeserializeData(ser);
 
         return true;
-    }
+    }*/
 
 }

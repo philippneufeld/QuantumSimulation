@@ -118,7 +118,7 @@ int main(int argc, const char* argv[])
     if (!cmdArgs.IsOptionPresent("noplot"))
     {
         QSim::PythonMatplotlib matplotlib;
-        auto figure = matplotlib.MakeFigure();
+        auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
         ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
         matplotlib.RunGUILoop();

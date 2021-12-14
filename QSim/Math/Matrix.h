@@ -82,6 +82,14 @@ namespace QSim
             : TMatrixColTypeImpl<TMatrixDecay_t<MT>> {};
         template<typename MT>
         using TMatrixColType_t = typename TMatrixColType<MT>::type;
+
+        template<typename MT>
+        struct TMatrixElementType
+        {
+            using type = std::decay_t<decltype((~std::declval<TMatrixDecay_t<MT>>())[0])>;
+        };
+        template<typename MT>
+        using TMatrixElementType_t = typename TMatrixElementType<MT>::type;
     }
 
 
