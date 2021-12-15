@@ -6,7 +6,8 @@
 #include <cstdint>
 #include <functional>
 
-#include "Constants.h"
+#include "../Math/Quadrature.h"
+#include "../Constants.h"
 
 namespace QSim
 {
@@ -19,7 +20,7 @@ namespace QSim
         TDopplerIntegrator() : TDopplerIntegrator(1.674e-27, 300) { }
         TDopplerIntegrator(Ty mass, Ty temperature) : TDopplerIntegrator(mass, temperature, 1000) { }
         TDopplerIntegrator(Ty mass, Ty temperature, std::size_t steps)
-            : m_mass(mass), m_temperature(temperature) { SetIntegrationSteps(steps); }
+            : m_mass(mass), m_temperature(temperature), m_steps(steps) { }
 
         // copy operators
         TDopplerIntegrator(const TDopplerIntegrator&) = default;
@@ -30,7 +31,7 @@ namespace QSim
         double GetMass() const { return m_mass; }
         void SetTemperature(double temp) { m_temperature = temp; }
         double GetTemperature() const { return m_temperature; }
-        void SetIntegrationSteps(std::size_t steps) { m_steps = (steps % 2 == 0 ? steps + 1 : steps); }
+        void SetIntegrationSteps(std::size_t steps) { m_steps = steps; }
         std::size_t GetIntegrationSteps() const { return m_steps; }
 
         double GetDopplerWidth(double frequency) const;
@@ -51,7 +52,16 @@ namespace QSim
         const static Ty pi = std::acos(-1.0);
         if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
         {
-            int steps = static_cast<int>(m_steps / 2);
+
+            Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
+            Ty sigma2SqRec = 1 / (2 * sigma * sigma);
+            Ty norm = 1 / (std::sqrt(2*pi)*sigma);
+            
+            QuadratureMidpoint integrator;
+            auto convFunc = [=](double v){ return norm * std::exp(-v*v*sigma2SqRec) * func(v); };
+            return integrator.Integrate(convFunc, -3.5 * sigma, 3.5 * sigma, m_steps);
+
+            /*int steps = static_cast<int>(m_steps / 2);
             Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
             Ty sigma2SqRec = 1 / (2 * sigma * sigma);
             Ty norm = 1 / (std::sqrt(2*pi)*sigma);
@@ -70,7 +80,9 @@ namespace QSim
                     integrated += thermal * absCoeff;
             }
             integrated *= vel_step;
-            return integrated;
+            return integrated;*/
+
+
         }
         else
             return func(0);

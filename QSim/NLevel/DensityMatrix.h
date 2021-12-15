@@ -7,7 +7,7 @@
 #include <string>
 #include <map>
 
-#include "Math/Matrix.h"
+#include "../Math/Matrix.h"
 
 namespace QSim
 {

@@ -33,7 +33,8 @@ public:
         // Generate detuning axis
         constexpr static std::size_t cnt = 501;
         QSim::TStaticMatrix<double, 2, cnt> detunings;
-        detunings.SetRow(QSim::CreateLinspaceRow(-100.0e6, 100.0e6, cnt), 0); // probe detunings
+        detunings.SetRow(QSim::CreateLinspaceRow(-100.0e6, 100.0e6, cnt), 
+            system.GetLaserIdxByName("Probe"));
 
         auto func = [&](auto dets)
         {

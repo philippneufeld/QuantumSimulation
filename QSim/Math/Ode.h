@@ -1,29 +1,30 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_Math_Integrator_H_
-#define QSim_Math_Integrator_H_
+#ifndef QSim_Math_Ode_H_
+#define QSim_Math_Ode_H_
 
 namespace QSim
 {
 
+    // Euler ode integrator
     template<typename XTy, typename YTy>
-    class EulerIntegrator
+    class ODEEuler
     {
     public:
         template<typename Func>
-        YTy Step(const YTy& y, XTy x, XTy dx, Func func)
+        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
         {
             return func(x, y) * dx;
         }
     };
 
-    
+    // Runge-Kutta 4th order ode integrator
     template<typename XTy, typename YTy>
-    class RK4Integrator
+    class ODERK4
     {
     public:
         template<typename Func>
-        YTy Step(const YTy& y, XTy x, XTy dx, Func func)
+        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
         {
             double dx2 = dx/2;
             auto k1 = func(x, y);
@@ -35,12 +36,13 @@ namespace QSim
     };
 
     
+    // Runge-Kutta 6th order ode integrator
     template<typename XTy, typename YTy>
-    class RK6Integrator
+    class ODERK6
     {
     public:
         template<typename Func>
-        YTy Step(const YTy& y, XTy x, XTy dx, Func func)
+        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
         {
             auto k1 = func(x, y);
             auto k2 = func(x + dx/3, y + (dx/3)*k1);
@@ -53,19 +55,20 @@ namespace QSim
         }
     };
 
+    // Bogacki–Shampine ode integrator
     template<typename XTy, typename YTy>
-    class BS32Integrator
+    class ODEBS32
     {
     public:      
         
         template<typename Func>
-        YTy Step(const YTy& y, XTy x, XTy dx, Func func)
+        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
         {
             return StepWithErrorEst(y, x, dx, func).first;
         }
 
         template<typename Func>
-        std::pair<YTy, YTy> StepWithErrorEst(const YTy& y, XTy x, XTy dx, Func func)
+        std::pair<YTy, YTy> StepWithErrorEst(const Func& func, const YTy& y, XTy x, XTy dx)
         {
             auto k1 = func(x, y);
             auto k2 = func(x + (dx/2), y + (dx/2)*k1);

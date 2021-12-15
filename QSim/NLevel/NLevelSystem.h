@@ -14,10 +14,10 @@
 #include <complex>
 
 #include "../Math/Matrix.h"
-#include "../Math/Integrator.h"
+#include "../Math/Ode.h"
 #include "../Constants.h"
-#include "../Doppler.h"
-#include "../DensityMatrix.h"
+#include "Doppler.h"
+#include "DensityMatrix.h"
 
 namespace QSim
 {
@@ -716,7 +716,7 @@ namespace QSim
         double t0, double dt, std::size_t steps)
     {
         using YType = TStaticMatrix<std::complex<double>, N, N>;
-        RK4Integrator<double, YType> integrator;
+        ODERK4<double, YType> integrator;
         YType rho = initial;
 
         for (std::size_t i = 0; i < steps; i++)
@@ -725,7 +725,7 @@ namespace QSim
             { 
                 return this->GetDensityOpDerivative(auxData, y, x);
             };
-            rho += integrator.Step(rho, t0 + i * dt, dt, func);       
+            rho += integrator.Step(func, rho, t0 + i * dt, dt);       
         }
 
         return TStaticDensityMatrix<N>(this->m_levelNames, rho);

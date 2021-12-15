@@ -37,8 +37,8 @@ public:
 
         auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 1001);
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
-        detunings.SetRow(laserDetunings, 0);
-        detunings.SetRow(laserDetunings, 1);
+        detunings.SetRow(laserDetunings, system.GetLaserIdxByName("Probe"));
+        detunings.SetRow(laserDetunings, system.GetLaserIdxByName("Pump"));
 
         auto start_ts = std::chrono::high_resolution_clock::now();
 
