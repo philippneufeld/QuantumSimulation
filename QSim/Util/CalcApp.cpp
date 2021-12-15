@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cstdio>
+#include <chrono>
 
 #include "CalcApp.h"
 #include "Argparse.h"
@@ -49,7 +50,16 @@ namespace QSim
         // run calculation
         if (!cmdArgs.IsOptionPresent("nocalc"))
         {
+            std::cout << "Starting calculation..." << std::endl;
+            auto start_ts = std::chrono::high_resolution_clock::now();
+
             this->DoCalculation();
+
+            auto end_ts = std::chrono::high_resolution_clock::now();
+            std::cout << "Finnished calculation. (Elapsed time: " 
+                << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 
+                << "s)" << std::endl;
+            
             m_data.SaveToFile(filePath);
         }
 

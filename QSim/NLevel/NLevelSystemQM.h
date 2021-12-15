@@ -141,7 +141,7 @@ namespace QSim
         TStaticMatrix<std::complex<double>, N*N + 1, 1> b;
         b(N*N, 0) = oom;
         
-        auto A_adj = Adjoint(A);
+        auto A_adj = A.Adjoint();
         auto x = LinearSolve(A_adj*A, A_adj*b);
 
         TStaticMatrix<std::complex<double>, N, N> ss;

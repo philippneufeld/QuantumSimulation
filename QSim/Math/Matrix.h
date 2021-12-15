@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <complex>
 #include <cassert>
+#include <vector>
 
 namespace QSim
 {
@@ -92,7 +93,67 @@ namespace QSim
         using TMatrixElementType_t = typename TMatrixElementType<MT>::type;
     }
 
+    // Iterator classes for iterating over rows and columns of a matrix
+    namespace Internal
+    {
+        template<typename MT, typename IT>
+        class TMatrixRCIterator_base
+        {
+        public:
+            TMatrixRCIterator_base(const TMatrix<MT>& mat, std::size_t idx) 
+                : m_mat(mat), m_idx(idx) { }
+            TMatrixRCIterator_base(const TMatrixRCIterator_base&) = default;
+            TMatrixRCIterator_base& operator=(TMatrixRCIterator_base&) = default;
 
+            IT& operator++() { m_idx++; return *this; }
+            IT& operator--() { m_idx--; return *this; }
+            IT operator++(int) { return IT(m_mat, m_idx++); }
+            IT operator--(int) { return IT(m_mat, m_idx--); }
+
+            bool operator==(const IT& rhs) { return (m_idx == rhs.m_idx) && (&m_mat) == (&rhs.m_mat); }
+            bool operator!=(const IT& rhs) { return !((*this) == rhs); }
+            bool operator<(const IT& rhs) { return ((&m_mat) == (&rhs.m_mat) && (m_idx < rhs.m_idx)) || (&m_mat) < (&rhs.m_mat); }
+            bool operator<=(const IT& rhs) { return ((*this) == rhs|| (*this) < rhs); }
+            bool operator>=(const IT& rhs) { return !((*this) < rhs); }
+            bool operator>(const IT& rhs) { return !((*this) <= rhs); }
+
+            std::ptrdiff_t operator-(const IT& rhs) 
+            { 
+                if ((&m_mat) != (&rhs.m_mat)) return -1;
+                return static_cast<std::ptrdiff_t>(m_idx) - static_cast<std::ptrdiff_t>(rhs.m_idx); 
+            }
+            IT operator+(std::ptrdiff_t off) const { return IT(this->m_mat, this->m_idx + off); }
+            IT operator-(std::ptrdiff_t off) const { return IT(this->m_mat, this->m_idx - off); }
+
+        protected:
+            const TMatrix<MT>& m_mat;
+            std::size_t m_idx;
+        };
+    }
+
+    template<typename MT>
+    class TMatrixRowIterator 
+        : public Internal::TMatrixRCIterator_base<MT, TMatrixRowIterator<MT>>
+    {
+        using MyT = TMatrixRowIterator<MT>;
+    public:
+        TMatrixRowIterator(const TMatrix<MT>& mat, std::size_t idx) 
+            : Internal::TMatrixRCIterator_base<MT, MyT>(mat, idx) { }
+        Internal::TMatrixRowType_t<MT> operator*() const { return this->m_mat.GetRow(this->m_idx); }
+    };
+
+    template<typename MT>
+    class TMatrixColIterator
+        : public Internal::TMatrixRCIterator_base<MT, TMatrixColIterator<MT>>
+    {
+        using MyT = TMatrixColIterator<MT>;
+    public:
+        TMatrixColIterator(const TMatrix<MT>& mat, std::size_t idx) 
+            : Internal::TMatrixRCIterator_base<MT, MyT>(mat, idx) { }
+        Internal::TMatrixColType_t<MT> operator*() const { return this->m_mat.GetCol(this->m_idx); }
+    };
+    
+    // Matrix CRTP base class
     template<typename MT>
     class TMatrix
     {
@@ -100,8 +161,26 @@ namespace QSim
         MT& operator~() { return static_cast<MT&>(*this); }
         const MT& operator~() const { return static_cast<const MT&>(*this); }
 
+        // auxilliary function
         void SetZero();
+        auto Transpose() const;
+        auto Adjoint() const;
 
+        // row/col control
+        auto GetRow(std::size_t i) const;
+        auto GetCol(std::size_t i) const;
+        template<typename VT>
+        void SetRow(const TVector<VT>& v, std::size_t i);
+        template<typename VT>
+        void SetCol(const TVector<VT>& v, std::size_t i);
+
+        // row/col iterators
+        auto GetRowIterBegin() const;
+        auto GetRowIterEnd() const;
+        auto GetColIterBegin() const;
+        auto GetColIterEnd() const;
+
+        // operators
         template<typename MT2> 
         MT& operator+=(const TMatrix<MT2>& rhs);
         template<typename MT2> 
@@ -110,6 +189,8 @@ namespace QSim
         MT& operator*=(const TMatrix<MT2>& rhs);
         template<typename Ty, typename=std::enable_if_t<!Internal::TIsMatrix_v<Ty>>> 
         MT& operator*=(Ty s);
+        template<typename Ty, typename=std::enable_if_t<!Internal::TIsMatrix_v<Ty>>> 
+        MT& operator/=(Ty s);
     };
 
     template<typename VT>
@@ -122,7 +203,11 @@ namespace QSim
     // 1x1 matrices are considered column vectors
     template<typename MT>
     class TSingleElementMatrix : public TColVector<MT> {};
-    
+
+    //
+    // TMatrix general purpose function definitions
+    //
+
     template<typename MT>
     void TMatrix<MT>::SetZero()
     {
@@ -132,6 +217,94 @@ namespace QSim
                 (~(*this))(i, j) = 0;
         }
     }
+
+    template<typename MT>
+    auto TMatrix<MT>::Transpose() const
+    {
+        Internal::TMatrixTranspositionResult_t<MT> res((~(*this)).Cols(), (~(*this)).Rows());
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~res).Cols(); j++)
+                (~res)(i, j) = (~(*this))(j, i);
+        }
+        return res;
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::Adjoint() const
+    {
+        Internal::TMatrixTranspositionResult_t<MT> res((~(*this)).Cols(), (~(*this)).Rows());
+        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~res).Cols(); j++)
+                (~res)(i, j) = std::conj((~(*this))(j, i));
+        }
+        return res;
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::GetRow(std::size_t i) const
+    {
+        Internal::TMatrixRowType_t<MT> row((~(*this)).Cols());
+        for (std::size_t j = 0; j < (~(*this)).Cols(); j++)
+            row(j) = (~(*this))(i, j);
+        return row;
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::GetCol(std::size_t i) const
+    {
+        Internal::TMatrixColType_t<MT> col((~(*this)).Rows());
+        for (std::size_t j = 0; j < (~(*this)).Rows(); j++)
+            col(j) = (~(*this))(j, i);
+        return col;
+    }
+
+    template<typename MT>
+    template<typename VT>
+    void TMatrix<MT>::SetRow(const TVector<VT>& v, std::size_t i)
+    {
+        assert((~(*this)).Cols() == (~v).Size());
+        for (std::size_t j = 0; j < (~(*this)).Cols(); j++)
+            (~(*this))(i, j) = (~v)(j);
+    }
+
+    template<typename MT>
+    template<typename VT>
+    void TMatrix<MT>::SetCol(const TVector<VT>& v, std::size_t i)
+    {
+        assert((~(*this)).Rows() == (~v).Size());
+        for (std::size_t j = 0; j < (~(*this)).Rows(); j++)
+            (~(*this))(j, i) = (~v)(j);
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::GetRowIterBegin() const
+    {
+        return TMatrixRowIterator<MT>(*this, 0);
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::GetRowIterEnd() const
+    {
+        return TMatrixRowIterator<MT>(*this, (~(*this)).Rows());
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::GetColIterBegin() const
+    {
+        return TMatrixColIterator<MT>(*this, 0);
+    }
+
+    template<typename MT>
+    auto TMatrix<MT>::GetColIterEnd() const
+    {
+        return TMatrixColIterator<MT>(*this, (~(*this)).Cols());
+    }
+
+    //
+    // TMatrix arithmetic and operators
+    //
 
     template<typename MT1, typename MT2, typename MT3,
         typename=std::enable_if_t<Internal::TIsMatrix_v<MT1> && Internal::TIsMatrix_v<MT2> && Internal::TIsMatrix_v<MT3>>>
@@ -193,65 +366,20 @@ namespace QSim
                 (~c)(i, j) = (~a)(i, j) * static_cast<decltype((~a)(i, j))>(s);                
         }
     }
-    
-    template<typename MT>
-    Internal::TMatrixTranspositionResult_t<MT> Transpose(const TMatrix<MT>& mat)
+
+    template<typename MT1, typename MT2, typename Ty>
+    void MatrixScalarDiv(TMatrix<MT1>& c, const TMatrix<MT2>& a, Ty s)
     {
-        Internal::TMatrixTranspositionResult_t<MT> res((~mat).Cols(), (~mat).Rows());
-        for (std::size_t i = 0; i < (~res).Rows(); i++)
+        assert((~c).Rows() == (~a).Rows());
+        assert((~c).Cols() == (~a).Cols());   
+
+        for (std::size_t i = 0; i < (~c).Rows(); i++)
         {
-            for (std::size_t j = 0; j < (~res).Cols(); j++)
-                (~res)(i, j) = (~mat)(j, i);
+            for (std::size_t j = 0; j < (~c).Cols(); j++)
+                (~c)(i, j) = (~a)(i, j) / static_cast<decltype((~a)(i, j))>(s);                
         }
-        return res;
     }
-
-    template<typename MT>
-    Internal::TMatrixTranspositionResult_t<MT> Adjoint(const TMatrix<MT>& mat)
-    {
-        Internal::TMatrixTranspositionResult_t<MT> res((~mat).Cols(), (~mat).Rows());
-        for (std::size_t i = 0; i < (~res).Rows(); i++)
-        {
-            for (std::size_t j = 0; j < (~res).Cols(); j++)
-                (~res)(i, j) = std::conj((~mat)(j, i));
-        }
-        return res;
-    }
-
-    template<typename MT>
-    Internal::TMatrixRowType_t<MT> GetRow(const TMatrix<MT>& mat, std::size_t i)
-    {
-        Internal::TMatrixRowType_t<MT> row((~mat).Cols());
-        for (std::size_t j = 0; j < (~mat).Cols(); j++)
-            row(j) = (~mat)(i, j);
-        return row;
-    }
-
-    template<typename MT>
-    Internal::TMatrixColType_t<MT> GetCol(const TMatrix<MT>& mat, std::size_t i)
-    {
-        Internal::TMatrixColType_t<MT> col((~mat).Rows());
-        for (std::size_t j = 0; j < (~mat).Rows(); j++)
-            col(j) = (~mat)(j, i);
-        return col;
-    }
-
-    template<typename MT, typename VT>
-    void SetRow(TMatrix<MT>& mat, const TVector<VT>& v, std::size_t i)
-    {
-        assert((~mat).Cols() == (~v).Size());
-        for (std::size_t j = 0; j < (~mat).Cols(); j++)
-            (~mat)(i, j) = (~v)(j);
-    }
-
-    template<typename MT, typename VT>
-    void SetCol(TMatrix<MT>& mat, const TVector<VT>& v, std::size_t i)
-    {
-        assert((~mat).Rows() == (~v).Size());
-        for (std::size_t j = 0; j < (~mat).Rows(); j++)
-            (~mat)(j, i) = (~v)(j);
-    }
-
+   
     template<typename MT1, typename MT2, typename=void>
     Internal::TMatrixAdditionResult_t<MT1, MT2> operator+(const TMatrix<MT1>& lhs, const TMatrix<MT2>& rhs) 
     { 
@@ -322,87 +450,12 @@ namespace QSim
         return ~(*this);
     }
 
-    namespace Internal
-    {
-        template<typename MT, typename IT>
-        class TMatrixRCIterator_base
-        {
-        public:
-            TMatrixRCIterator_base(const TMatrix<MT>& mat, std::size_t idx) 
-                : m_mat(mat), m_idx(idx) { }
-            TMatrixRCIterator_base(const TMatrixRCIterator_base&) = default;
-            TMatrixRCIterator_base& operator=(TMatrixRCIterator_base&) = default;
-
-            IT& operator++() { m_idx++; return *this; }
-            IT& operator--() { m_idx--; return *this; }
-            IT operator++(int) { return IT(m_mat, m_idx++); }
-            IT operator--(int) { return IT(m_mat, m_idx--); }
-
-            bool operator==(const IT& rhs) { return (m_idx == rhs.m_idx) && (&m_mat) == (&rhs.m_mat); }
-            bool operator!=(const IT& rhs) { return !((*this) == rhs); }
-            bool operator<(const IT& rhs) { return ((&m_mat) == (&rhs.m_mat) && (m_idx < rhs.m_idx)) || (&m_mat) < (&rhs.m_mat); }
-            bool operator<=(const IT& rhs) { return ((*this) == rhs|| (*this) < rhs); }
-            bool operator>=(const IT& rhs) { return !((*this) < rhs); }
-            bool operator>(const IT& rhs) { return !((*this) <= rhs); }
-
-            std::ptrdiff_t operator-(const IT& rhs) 
-            { 
-                if ((&m_mat) != (&rhs.m_mat)) return -1;
-                return static_cast<std::ptrdiff_t>(m_idx) - static_cast<std::ptrdiff_t>(rhs.m_idx); 
-            }
-            IT operator+(std::ptrdiff_t off) const { return IT(this->m_mat, this->m_idx + off); }
-            IT operator-(std::ptrdiff_t off) const { return IT(this->m_mat, this->m_idx - off); }
-
-        protected:
-            const TMatrix<MT>& m_mat;
-            std::size_t m_idx;
-        };
-    }
-
     template<typename MT>
-    class TMatrixRowIterator 
-        : public Internal::TMatrixRCIterator_base<MT, TMatrixRowIterator<MT>>
+    template<typename Ty, typename> 
+    MT& TMatrix<MT>::operator/=(Ty s) 
     {
-        using MyT = TMatrixRowIterator<MT>;
-    public:
-        TMatrixRowIterator(const TMatrix<MT>& mat, std::size_t idx) 
-            : Internal::TMatrixRCIterator_base<MT, MyT>(mat, idx) { }
-        Internal::TMatrixRowType_t<MT> operator*() const { return GetRow(this->m_mat, this->m_idx); }
-    };
-
-    template<typename MT>
-    class TMatrixColIterator
-        : public Internal::TMatrixRCIterator_base<MT, TMatrixColIterator<MT>>
-    {
-        using MyT = TMatrixColIterator<MT>;
-    public:
-        TMatrixColIterator(const TMatrix<MT>& mat, std::size_t idx) 
-            : Internal::TMatrixRCIterator_base<MT, MyT>(mat, idx) { }
-        Internal::TMatrixColType_t<MT> operator*() const { return GetCol(this->m_mat, this->m_idx); }
-    };
-
-    template<typename MT>
-    TMatrixRowIterator<MT> GetRowIteratorBegin(const TMatrix<MT>& mat)
-    {
-        return TMatrixRowIterator<MT>(mat, 0);
-    }
-
-    template<typename MT>
-    TMatrixRowIterator<MT> GetRowIteratorEnd(const TMatrix<MT>& mat)
-    {
-        return TMatrixRowIterator<MT>(mat, (~mat).Rows());
-    }
-
-    template<typename MT>
-    TMatrixColIterator<MT> GetColIteratorBegin(const TMatrix<MT>& mat)
-    {
-        return TMatrixColIterator<MT>(mat, 0);
-    }
-
-    template<typename MT>
-    TMatrixColIterator<MT> GetColIteratorEnd(const TMatrix<MT>& mat)
-    {
-        return TMatrixColIterator<MT>(mat, (~mat).Cols());
+        MatrixScalarDiv(*this, *this, s);
+        return ~(*this);
     }
 
     //
@@ -572,13 +625,19 @@ namespace QSim
     {
     public:
         THybridMatrix() : m_dynDim(0), m_data(nullptr) {}
-        template<std::size_t Dummy = 1, typename = std::enable_if_t<Dummy == 1 && (N == 1)>>
-        THybridMatrix(std::size_t size) : THybridMatrix(colDyn ? N : size, colDyn ? size : N) {}
         THybridMatrix(std::size_t rows, std::size_t cols);
         THybridMatrix(std::size_t rows, std::size_t cols, const Ty* data);
         THybridMatrix(std::size_t rows, std::size_t cols, const std::initializer_list<double>& lst)
             : THybridMatrix(rows, cols, lst.begin()) {}
         ~THybridMatrix() { if (m_data) delete[] m_data; m_data = nullptr; }
+
+        // if N==1 this class represents a vector -> special constructors in that case
+        template<std::size_t Dummy = 1, typename = std::enable_if_t<Dummy == 1 && (N == 1)>>
+        THybridMatrix(std::size_t size) 
+            : THybridMatrix(colDyn ? 1 : size, colDyn ? size : 1) {}
+        template<std::size_t Dummy = 1, typename = std::enable_if_t<Dummy == 1 && (N == 1)>>
+        THybridMatrix(const std::vector<Ty>& vec) 
+            : THybridMatrix(colDyn ? 1 : vec.size(), colDyn ? vec.size() : 1, vec.data()) {}
 
         template<typename MT>
         THybridMatrix(const TMatrix<MT>& rhs);
