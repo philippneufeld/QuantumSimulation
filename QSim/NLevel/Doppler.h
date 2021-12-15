@@ -52,37 +52,13 @@ namespace QSim
         const static Ty pi = std::acos(-1.0);
         if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
         {
-
             Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
             Ty sigma2SqRec = 1 / (2 * sigma * sigma);
             Ty norm = 1 / (std::sqrt(2*pi)*sigma);
             
-            QuadratureMidpoint integrator;
+            QuadTrapezoidal integrator;
             auto convFunc = [=](double v){ return norm * std::exp(-v*v*sigma2SqRec) * func(v); };
             return integrator.Integrate(convFunc, -3.5 * sigma, 3.5 * sigma, m_steps);
-
-            /*int steps = static_cast<int>(m_steps / 2);
-            Ty sigma = std::sqrt(BoltzmannConstant_v * m_temperature / m_mass);
-            Ty sigma2SqRec = 1 / (2 * sigma * sigma);
-            Ty norm = 1 / (std::sqrt(2*pi)*sigma);
-            Ty vel_step = 3.5 * sigma / steps;
-  
-            Ret integrated;
-            for (auto i = -steps; i <= steps; i++)
-            {
-                Ty velocity = i * vel_step;
-                Ty thermal = norm * std::exp(-velocity*velocity * sigma2SqRec);
-                Ret absCoeff = func(velocity);
-
-                if (i == -steps) 
-                    integrated = thermal * absCoeff;
-                else
-                    integrated += thermal * absCoeff;
-            }
-            integrated *= vel_step;
-            return integrated;*/
-
-
         }
         else
             return func(0);

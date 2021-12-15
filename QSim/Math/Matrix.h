@@ -418,6 +418,14 @@ namespace QSim
         return rhs * s;
     }
 
+    template<typename MT1, typename Ty, typename=std::enable_if_t<!Internal::TIsMatrix_v<Ty>>>
+    MT1 operator/(const TMatrix<MT1>& lhs, Ty s) 
+    { 
+        MT1 res((~lhs).Rows(), (~lhs).Cols());
+        MatrixScalarDiv(res, lhs, s);
+        return res;
+    }
+
     template<typename MT>
     template<typename MT2> 
     MT& TMatrix<MT>::operator+=(const TMatrix<MT2>& rhs) 
