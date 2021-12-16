@@ -57,6 +57,7 @@ endfunction()
 
 # add apps
 qsim_add_app("Test")
+qsim_add_app("Quadrature")
 qsim_add_app("Rb87_2lvl")
 qsim_add_app("Rb87_EIT")
 qsim_add_app("Rb87_SAS")
