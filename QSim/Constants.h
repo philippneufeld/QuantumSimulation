@@ -3,6 +3,8 @@
 #ifndef QSim_QSim_Constants_H_
 #define QSim_QSim_Constants_H_
 
+#include "Platform.h"
+
 namespace QSim
 {
     // General constants

@@ -3,6 +3,8 @@
 #ifndef QSim_Math_Ode_H_
 #define QSim_Math_Ode_H_
 
+#include "../Platform.h"
+
 namespace QSim
 {
 

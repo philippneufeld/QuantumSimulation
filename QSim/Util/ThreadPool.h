@@ -12,6 +12,8 @@
 #include <atomic>
 #include <iostream>
 
+#include "../Platform.h"
+
 namespace QSim
 {
 

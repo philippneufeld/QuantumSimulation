@@ -56,7 +56,7 @@ namespace QSim
             Ty sigma2SqRec = 1 / (2 * sigma * sigma);
             Ty norm = 1 / (std::sqrt(2*pi)*sigma);
             
-            QuadSimpsonAlt integrator;
+            TQuadSimpsonAlt<double> integrator;
             auto convFunc = [=](double v){ return norm * std::exp(-v*v*sigma2SqRec) * func(v); };
             return integrator.Integrate(convFunc, -3.5 * sigma, 3.5 * sigma, m_steps);
         }

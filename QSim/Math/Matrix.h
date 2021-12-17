@@ -10,6 +10,8 @@
 #include <cassert>
 #include <vector>
 
+#include "../Platform.h"
+
 namespace QSim
 {
     // forward declare CRTP class

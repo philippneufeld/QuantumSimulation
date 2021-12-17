@@ -5,6 +5,8 @@
 
 #include <cstdint>
 
+#include "../Platform.h"
+
 namespace QSim
 {
 

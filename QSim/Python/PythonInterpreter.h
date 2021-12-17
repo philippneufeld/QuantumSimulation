@@ -12,6 +12,8 @@
 #include <map>
 #include <type_traits>
 
+#include "../Platform.h"
+
 namespace QSim
 {
 

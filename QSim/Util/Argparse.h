@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <sstream>
 
+#include "../Platform.h"
+
 namespace QSim
 {
 

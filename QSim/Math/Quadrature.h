@@ -6,17 +6,21 @@
 #include <cstdint>
 #include <random> // for monte carlo
 
+#include "../Util/ConstList.h"
+#include "../Util/ConstexprFor.h"
+
 namespace QSim
 {
-
-    // Rectangle integrator
-    class QuadMidpoint
+    // Midpoint integrator
+    template<typename XTy>
+    class TQuadMidpoint
     {
     public:
-        template<typename XTy, typename Func>
+        template<typename Func>
         auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
         {
-            using YTy = decltype(func(std::declval<XTy>()));
+            using FuncRet = decltype(func(std::declval<XTy>()) * std::declval<XTy>()); 
+            using YTy = std::conditional_t<std::is_integral<FuncRet>::value, double, FuncRet>;
             if (n == 0)
                 return YTy{};
             
@@ -34,77 +38,80 @@ namespace QSim
         }
     };
 
-
-    // Trapezoidal integrator
-    class QuadTrapezoidal
+    template<typename XTy, int Denominator, int W1, int W2, int... Ws>
+    class TQuadNewtonCotes
     {
     public:
-        template<typename XTy, typename Func>
-        auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
+        template<typename Func>
+        auto Integrate(const Func& func, XTy a, XTy b, std::size_t n)
         {
-            // only n >= 3 allowed
-            if (n < 3)
-                return QuadMidpoint{}.Integrate(func, x0, x1, n);
-            
-            using YTy = decltype(func(std::declval<XTy>()));
-            XTy dx = (x1 - x0) / (n - 1);
-            
-            // use first iteration for initialization of the result (no addition needed)
-            YTy result = (func(x0) + func(x1)) / 2;
-            
-            // execute integration
-            for (std::size_t i = 1; i < n - 1; i++)
-                result += func(x0 + i*dx);
-            
-            return result * dx;
+            using YTy = decltype(func(std::declval<XTy>()) * std::declval<XTy>()); 
+            using WeightList = TConstList<int, W1, W2, Ws...>;
+            constexpr std::size_t wcnt = TConstListSizeof_v<WeightList>;
+
+            // adjust n to fit the method used
+            if (n < wcnt)
+                n = wcnt;
+            n -= (n - 1) % (wcnt - 1);
+
+            XTy dist = b - a;
+            XTy dx = dist / (n - 1);
+
+            // handle borders
+            constexpr auto wFirst = TConstListFront_v<WeightList>;
+            constexpr auto wLast = TConstListBack_v<WeightList>;
+            YTy result = wFirst * func(a) +  wLast * func(b);
+
+            using CLHelper = TConstListPopFront_t<TConstListPopBack_t<WeightList>>;
+            using CL = TConstListAppend_t<int, wFirst + wLast, CLHelper>;
+            constexpr std::size_t ccnt = TConstListSizeof_v<CL>;
+
+            auto helper = [=, &result, &func](auto i)
+            {
+                constexpr std::size_t j0 = i + 1;
+                YTy tmp = func(a + j0*dx);
+                for (std::size_t j = j0 + ccnt; j < n - 1; j+=ccnt)
+                    tmp += func(a + j*dx);
+                result += TConstListGet_v<i, CL> * tmp;
+            };
+            ConstexprFor<std::size_t, 0, ccnt, 1>(helper);
+
+            constexpr XTy den = static_cast<XTy>(Denominator) / ccnt;
+            return result * (dx / den);
         }
     };
 
-    // Simpson integrator
-    class QuadSimpson
-    {
-    public:
-        template<typename XTy, typename Func>
-        auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
-        {
-            // only odd n >= 5 allowed
-            if (n < 5)
-                return QuadMidpoint{}.Integrate(func, x0, x1, n);     
-            n -= (1 - n % 2);
-
-            using YTy = decltype(func(std::declval<XTy>()));
-            XTy dx = (x1 - x0) / (n - 1);
-            
-            // use first iteration for initialization of the result (no addition needed)
-            YTy result = (func(x0) + func(x1)) / 2;
-
-            // execute first part of the integration
-            YTy tmp = func(x0 + dx);
-            for (std::size_t i = 3; i < n; i+=2)
-                tmp += func(x0 + i*dx);
-            result += 2*tmp;
-            
-            // execute second part of the integration
-            for (std::size_t i = 2; i < n - 1; i+=2)
-                result += func(x0 + i*dx);
-
-            return result * (2 * dx / 3);
-        }
-    };
+    // see https://de.wikipedia.org/wiki/Newton-Cotes-Formeln#Abgeschlossene_Newton-Cotes-Formeln
+    template<typename XTy>
+    using TQuadTrapezoidal = TQuadNewtonCotes<XTy, 2, 1, 1>;
+    template<typename XTy>
+    using TQuadSimpson = TQuadNewtonCotes<XTy, 6, 1, 4, 1>;
+    template<typename XTy>
+    using TQuadSimpson38 = TQuadNewtonCotes<XTy, 8, 1, 3, 3, 1>;
+    template<typename XTy>
+    using TQuadBoole = TQuadNewtonCotes<XTy, 90, 7, 32, 12, 32, 7>;
+    template<typename XTy>
+    using TQuadNC6Point = TQuadNewtonCotes<XTy, 288, 19, 75, 50, 50, 75, 19>;
+    template<typename XTy>
+    using TQuadWeddle = TQuadNewtonCotes<XTy, 840, 41, 216, 27, 272, 27, 216, 41>;
+    template<typename XTy>
+    using TQuadNC8Point = TQuadNewtonCotes<XTy, 17280, 751, 3577, 1323, 2989, 2989, 1323, 3577, 751>;
 
     // Alternative Simpson integrator that is suitable for Narrow peaks
     // https://en.wikipedia.org/wiki/Simpson%27s_rule#Alternative_extended_Simpson%27s_rule
-    class QuadSimpsonAlt
+    template<typename XTy>
+    class TQuadSimpsonAlt
     {
     public:
-        template<typename XTy, typename Func>
+        template<typename Func>
         auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
         {
             // only n >= 6 allowed
             if (n < 5)
-                return QuadMidpoint{}.Integrate(func, x0, x1, n);     
+                return TQuadMidpoint<XTy>{}.Integrate(func, x0, x1, n);     
 
-            using YTy = decltype(func(std::declval<XTy>()));
+            using FuncRet = decltype(func(std::declval<XTy>()) * std::declval<XTy>()); 
+            using YTy = std::conditional_t<std::is_integral<FuncRet>::value, double, FuncRet>;
             XTy dx = (x1 - x0) / (n - 1);
             
             // use first iteration for initialization of the result (no addition needed)
@@ -120,115 +127,20 @@ namespace QSim
         }
     };
 
-    // Boole integrator
-    class QuadBoole
-    {
-    public:
-        template<typename XTy, typename Func>
-        auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
-        {
-            // only n = {5, 9, 13, 17, ...}
-            if (n < 5)
-               return QuadMidpoint{}.Integrate(func, x0, x1, n);
-            n -= (n - 1) % 4;
-            
-            using YTy = decltype(func(std::declval<XTy>()));
-            XTy dx = (x1 - x0) / (n - 1);
-            
-            // use first iteration for initialization of the result (no addition needed)
-            YTy result = (func(x0) + func(x1)) * 7;
-
-            // execute first part of the integration
-            YTy tmp = func(x0 + dx);
-            for (std::size_t i = 3; i < n; i+= 2)
-                tmp += func(x0 + i*dx);
-            result += 32*tmp;
-
-            tmp = func(x0 + 2*dx);
-            for (std::size_t i = 6; i < n; i+= 4)
-                tmp += func(x0 + i*dx);
-            result += 12*tmp;
-
-            if (n > 5)
-            {
-                YTy tmp = func(x0 + 4*dx);
-                for (std::size_t i = 8; i <= n - 4; i+= 4)
-                    tmp += func(x0 + i*dx);
-                result += 14*tmp;
-            }
-            
-            return result * (2 * dx / 45);
-        }
-    };
-
-    // Weddle integrator
-    class QuadWeddle
-    {
-    public:
-        template<typename XTy, typename Func>
-        auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
-        {
-            // only n = {7, 13, 19, 25, ...}
-            if (n < 7)
-               return QuadMidpoint{}.Integrate(func, x0, x1, n);
-            n -= (n - 1) % 6;
-            
-            using YTy = decltype(func(std::declval<XTy>()));
-            XTy dx = (x1 - x0) / (n - 1);
-            
-            // use first iteration for initialization of the result (no addition needed)
-            YTy result = (func(x0) + func(x1)) * 41;
-
-            YTy tmp = func(x0 + dx);
-            for (std::size_t i = 7; i < n; i+= 6)
-                tmp += func(x0 + i*dx);
-            result += 216*tmp;
-
-            tmp = func(x0 + 2*dx);
-            for (std::size_t i = 8; i < n; i+= 6)
-                tmp += func(x0 + i*dx);
-            result += 27*tmp;
-
-            tmp = func(x0 + 3*dx);
-            for (std::size_t i = 9; i < n; i+= 6)
-                tmp += func(x0 + i*dx);
-            result += 272*tmp;
-
-            tmp = func(x0 + 4*dx);
-            for (std::size_t i = 10; i < n; i+= 6)
-                tmp += func(x0 + i*dx);
-            result += 27*tmp;
-
-            tmp = func(x0 + 5*dx);
-            for (std::size_t i = 11; i < n; i+= 6)
-                tmp += func(x0 + i*dx);
-            result += 216*tmp;
-
-            if (n > 7)
-            {
-                YTy tmp = func(x0 + 6*dx);
-                for (std::size_t i = 12; i <= n - 6; i+= 6)
-                    tmp += func(x0 + i*dx);
-                result += 82*tmp;
-            }
-            
-            return result * (dx / 140);
-        }
-    };
-
-
     // Monte carlo integrator (uniform distribution)
-    class QuadMC
+    template<typename XTy>
+    class TQuadMC
     {
     public:
-        template<typename XTy, typename Func>
+        template<typename Func>
         auto Integrate(const Func& func, XTy x0, XTy x1, std::size_t n)
         {
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_real_distribution<XTy> dist(x0, x1);
             
-            using YTy = decltype(func(std::declval<XTy>()));
+            using FuncRet = decltype(func(std::declval<XTy>()) * std::declval<XTy>()); 
+            using YTy = std::conditional_t<std::is_integral<FuncRet>::value, double, FuncRet>;
             if (n == 0)
                 return YTy{};
             

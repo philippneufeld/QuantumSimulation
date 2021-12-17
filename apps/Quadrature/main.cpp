@@ -8,29 +8,42 @@
 #include <QSim/Util/ThreadPool.h>
 #include <QSim/Python/Plotting.h>
 
+#include <QSim/Util/ConstList.h>
+
 class CQuadratureApp : public QSim::CalcApp
 {
+    using MyParent = QSim::CalcApp;
 public:
 
-    template<typename Quad, typename Func>
-    double GetQuadError(Func f, double exact, double x0, double x1, std::size_t cnt) 
+    CQuadratureApp() : MyParent()
     {
-        return std::abs(exact - Quad{}.Integrate(f, x0, x1, cnt));
+        m_funcs.push_back({"sin(x)*(1-x+x^2)", 
+            [](double x){ return std::sin(x) * (1 - x + x*x); }, 
+            0.0, 5.0, -15.01989999576955});
+        m_funcs.push_back({"1/(pi*(x^2+1))", 
+            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, 
+            -10, 10, 0.9365489651388929});
+        m_funcs.push_back({"1/(pi*(x^2+1))", 
+            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, 
+            -250.0, 250.0, 0.9974535344916211});
+        m_funcs.push_back({"sin(1/x)", 
+            [](double x){ return std::sin(1 / x); }, 
+            0.025, 1.0, 0.5044592407911533});
     }
 
     template<typename Quad, typename VT>
     void StoreQuadErrors(std::string name, const QSim::TVector<VT>& ns, 
-        std::tuple<std::function<double(double)>, double, double, double>& desc)
+        std::tuple<std::string, std::function<double(double)>, double, double, double>& desc)
     {
         auto errors = QSim::CreateZerosLike(ns);
         for (std::size_t i = 0; i < errors.Size(); i++)
         {
-            auto func = std::get<0>(desc);
-            auto x0 = std::get<1>(desc);
-            auto x1 = std::get<2>(desc);
-            auto exact = std::get<3>(desc);
+            auto func = std::get<1>(desc);
+            auto x0 = std::get<2>(desc);
+            auto x1 = std::get<3>(desc);
+            auto exact = std::get<4>(desc);
             auto cnt = (~ns)(i);
-            errors(i) = GetQuadError<Quad>(func, exact, x0, x1, cnt);
+            errors(i) = std::abs(exact - Quad{}.Integrate(func, x0, x1, cnt));
         }
         StoreMatrix(name, errors);
     }
@@ -42,45 +55,36 @@ public:
         auto ns = QSim::CreateLinspaceRow(1.0, static_cast<double>(maxFev), maxFev);
         StoreMatrix("ns", ns);
 
-        std::tuple<std::function<double(double)>, double, double, double> funcs[] = { 
-            {[](double x){ return std::sin(x) * (1 - x + x*x); }, 0.0, 5.0, -15.01989999576955},
-            {[](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, -250.0, 250.0, 0.9974535344916211},
-            {[](double x){ return std::sin(1 / x); }, 0.025, 1.0, 0.5044592407911533},
-            {[](double x){ return abs(x) < 1 ? 1.0 : 0.0; }, -10.0, 10.0, 2.0}
-        };
-
-        for (std::size_t i = 0; i < sizeof(funcs)/sizeof(*funcs); i++)
+        for (std::size_t i = 0; i < m_funcs.size(); i++)
         {
-            StoreQuadErrors<QSim::QuadMidpoint>("midpoint" + std::to_string(i), ns, funcs[i]);
-            StoreQuadErrors<QSim::QuadTrapezoidal>("trapezoid" + std::to_string(i), ns, funcs[i]);
-            StoreQuadErrors<QSim::QuadSimpson>("simpson" + std::to_string(i), ns, funcs[i]);
-            StoreQuadErrors<QSim::QuadSimpsonAlt>("simpsonAlt" + std::to_string(i), ns, funcs[i]);
-            StoreQuadErrors<QSim::QuadBoole>("boole" + std::to_string(i), ns, funcs[i]);        
-            StoreQuadErrors<QSim::QuadWeddle>("weddle" + std::to_string(i), ns, funcs[i]);        
+            StoreQuadErrors<QSim::TQuadMidpoint<double>>("midpoint" + std::to_string(i), ns, m_funcs[i]);
+            StoreQuadErrors<QSim::TQuadTrapezoidal<double>>("trapezoid" + std::to_string(i), ns, m_funcs[i]);
+            StoreQuadErrors<QSim::TQuadSimpson<double>>("simpson" + std::to_string(i), ns, m_funcs[i]);
+            StoreQuadErrors<QSim::TQuadSimpson38<double>>("simpson38" + std::to_string(i), ns, m_funcs[i]);
+            StoreQuadErrors<QSim::TQuadSimpsonAlt<double>>("simpsonAlt" + std::to_string(i), ns, m_funcs[i]);
+            StoreQuadErrors<QSim::TQuadBoole<double>>("boole" + std::to_string(i), ns, m_funcs[i]);        
+            StoreQuadErrors<QSim::TQuadNC6Point<double>>("nc6" + std::to_string(i), ns, m_funcs[i]);        
+            StoreQuadErrors<QSim::TQuadWeddle<double>>("weddle" + std::to_string(i), ns, m_funcs[i]);        
+            StoreQuadErrors<QSim::TQuadNC8Point<double>>("nc8" + std::to_string(i), ns, m_funcs[i]);        
         }
     }
 
     virtual void Plot() override
     {
-        std::cout << QSim::QuadMidpoint{}.Integrate([](double x){ return abs(x) < 1 ? 1.0 : 0.0; }, -1.0, 1.0, 100000) << std::endl;
-
-        std::string titles[] = {
-            "f(x) = sin(x)*(1-x+x^2); [0, 5]",
-            "f(x) = 1/(pi*(x^2+1)); [-250, 250]",
-            "f(x) = sin(1/x); [0.025, 1]",
-            "f(x) = Rechteck; [-250, 250]"
-        };
-
-        std::string cases[] = {
-            "midpoint", "trapezoid", "simpson", "simpsonAlt", "boole", "weddle"};
+        std::string cases[] = { 
+            "midpoint", "trapezoid", "simpson", 
+            "simpsonAlt", "simpson38", "boole", 
+            "nc6", "weddle", "nc8"};
 
         QSim::PythonMatplotlib matplotlib;
         auto ns = LoadMatrix("ns");
-        for (std::size_t i = 0; i < sizeof(titles)/sizeof(*titles); i++)
+        for (std::size_t i = 0; i < m_funcs.size(); i++)
         {
             auto fig = matplotlib.CreateFigure();
             auto ax = fig.AddSubplot(); 
-            ax.SetTitle(titles[i]);
+            ax.SetTitle(
+                std::get<0>(m_funcs[i]) + " [" + std::to_string(std::get<2>(m_funcs[i])) 
+                + "; " + std::to_string(std::get<3>(m_funcs[i])) + "]");
             for (std::size_t j = 0; j < sizeof(cases)/sizeof(*cases); j++)
             {
                 auto name = cases[j] + std::to_string(i);
@@ -93,6 +97,9 @@ public:
         }
         matplotlib.RunGUILoop();
     }
+
+private:
+    std::vector<std::tuple<std::string, std::function<double(double)>, double, double, double>> m_funcs;
 };
 
 

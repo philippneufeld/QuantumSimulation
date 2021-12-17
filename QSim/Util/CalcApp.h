@@ -7,10 +7,10 @@
 #include <map>
 #include <vector>
 #include <cstdint>
+#include <type_traits>
 
 #include "../Math/Matrix.h"
 #include "DataFile.h"
-#include <type_traits>
 
 namespace QSim
 {

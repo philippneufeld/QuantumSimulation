@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021
 
-#ifndef QSim_NLevelSystemQM_H_
-#define QSim_NLevelSystemQM_H_
+#ifndef QSim_NLevelSystemQSim_H_
+#define QSim_NLevelSystemQSim_H_
 
 #include <cstdint>
 #include <set>
