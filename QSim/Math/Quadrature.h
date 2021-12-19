@@ -129,38 +129,8 @@ namespace QSim
     };
 
     // Adaptive step size integrator
-    namespace Internal
-    {
-        template<typename XTy, typename YTy, std::size_t lvl>
-        class TQuadAdSimHelper
-        {
-        public:
-
-            using PrevTy = TQuadAdSimHelper<XTy, YTy, lvl-1>;
-            constexpr static std::size_t Subsections_v = 2 * PrevTy::Subsections_v;
-            constexpr static std::size_t Fevs_v = 1 + 2 * Subsections_v;
-
-            TQuadAdSimHelper(const PrevTy& prev)
-                : m_a(prev.Geta()), m_dx(prev.GetDX())
-            {
-                m_values[0] = prev.GetValue(0);
-                for (std::size_t i = 0; i < PrevTy::Fevs_v; i++)
-                    m_values[0] = prev.GetValue(i);
-            }
-
-            const XTy& Geta() const { return m_a; }
-            const XTy& GetDX() const { return m_dx; }
-            const YTy& GetValue(std::size_t idx) const { return m_values; }
-
-        private:
-            XTy m_a;
-            XTy m_dx;
-            std::array<YTy, Fevs_v> m_values;
-        };
-    }
-
     template<typename XTy>
-    class TQuadAdaptiveSim
+    class TQuadAdaptive
     {
         template<typename Func>
         using YTy = decltype(std::declval<Func>()(std::declval<XTy>()) * std::declval<XTy>());
@@ -179,6 +149,7 @@ namespace QSim
             
             XTy dist = b - a;
             XTy dx = dist / sections;
+            atol /= sections;
 
             // first iteration
             YTy<Func> f0 = func(a);
@@ -197,7 +168,7 @@ namespace QSim
                 res = IntegrateHelper(func, a+i*dx, dx, 0, f0, f1, f2, rtol, atol, depth);
 
                 result += res.first;
-                fevs += res.second;
+                fevs += 2 + res.second;
             }
             
             return std::make_pair(result, fevs);

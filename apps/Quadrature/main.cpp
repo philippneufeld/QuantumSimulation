@@ -7,6 +7,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/Util/ThreadPool.h>
 #include <QSim/Python/Plotting.h>
+#include <QSim/Math/Quadrature.h>
 
 #include <QSim/Util/ConstList.h>
 
@@ -17,8 +18,8 @@ public:
 
     CQuadratureApp() : MyParent()
     {
-        auto res1 = QSim::TQuadAdaptiveSim<double>{}.IntegrateFevs(
-            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, -250, 250, 500, 1e-8, 1e-10, 6);
+        auto res1 = QSim::TQuadAdaptive<double>{}.IntegrateFevs(
+            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, -250, 250, 500, 1e-8, 1e-10, 10);
         std::cout << std::abs(0.9974535344916211 - res1.first) << " (" << res1.second << " fevs)" << std::endl;
 
         m_funcs.push_back({"sin(x)*(1-x+x^2)", 
@@ -49,7 +50,8 @@ public:
             auto cnt = (~ns)(i);
             errors(i) = std::abs(exact - Quad{}.Integrate(func, x0, x1, cnt));
         }
-        StoreMatrix(name, errors);
+        StoreMatrix(name + "_n", ns);
+        StoreMatrix(name + "_err", errors);
     }
 
     virtual void DoCalculation() override
@@ -65,11 +67,29 @@ public:
             StoreQuadErrors<QSim::TQuadTrapezoidal<double>>("trapezoid" + std::to_string(i), ns, m_funcs[i]);
             StoreQuadErrors<QSim::TQuadSimpson<double>>("simpson" + std::to_string(i), ns, m_funcs[i]);
             StoreQuadErrors<QSim::TQuadSimpson38<double>>("simpson38" + std::to_string(i), ns, m_funcs[i]);
-            StoreQuadErrors<QSim::TQuadSimpsonAlt<double>>("simpsonAlt" + std::to_string(i), ns, m_funcs[i]);
             StoreQuadErrors<QSim::TQuadBoole<double>>("boole" + std::to_string(i), ns, m_funcs[i]);        
-            StoreQuadErrors<QSim::TQuadNC6Point<double>>("nc6" + std::to_string(i), ns, m_funcs[i]);        
-            StoreQuadErrors<QSim::TQuadWeddle<double>>("weddle" + std::to_string(i), ns, m_funcs[i]);        
-            StoreQuadErrors<QSim::TQuadNC8Point<double>>("nc8" + std::to_string(i), ns, m_funcs[i]);        
+        }
+
+        // adaptive integrators
+        for (std::size_t i = 0; i < m_funcs.size(); i++)
+        {
+            auto ns_ad1 = QSim::CreateZeros(2500);
+            auto errs_ad1 = QSim::CreateZerosLike(ns_ad1);
+            for (std::size_t j = 0; j < ns_ad1.Size(); j++)
+            {
+                auto func = std::get<1>(m_funcs[i]);
+                auto x0 = std::get<2>(m_funcs[i]);
+                auto x1 = std::get<3>(m_funcs[i]);
+                auto exact = std::get<4>(m_funcs[i]);
+                double expmin = 2;
+                double expmax = 14;
+                double rtol = std::pow(10.0, -(j*(expmax - expmin)/ns_ad1.Size() + expmin));
+                auto res = QSim::TQuadAdaptive<double>{}.IntegrateFevs(func, x0, x1, 250, rtol, std::min(1e-12, rtol), 5);
+                errs_ad1[j] = std::abs(exact - res.first);
+                ns_ad1[j] = res.second;
+            }
+            StoreMatrix("adaptive" + std::to_string(i) + "_n", ns_ad1);
+            StoreMatrix("adaptive" + std::to_string(i) + "_err", errs_ad1);
         }
     }
 
@@ -77,11 +97,10 @@ public:
     {
         std::string cases[] = { 
             "midpoint", "trapezoid", "simpson", 
-            "simpsonAlt", "simpson38", "boole", 
-            "nc6", "weddle", "nc8"};
+            "simpson38", "boole", "adaptive"};
 
         QSim::PythonMatplotlib matplotlib;
-        auto ns = LoadMatrix("ns");
+        
         for (std::size_t i = 0; i < m_funcs.size(); i++)
         {
             auto fig = matplotlib.CreateFigure();
@@ -92,8 +111,11 @@ public:
             for (std::size_t j = 0; j < sizeof(cases)/sizeof(*cases); j++)
             {
                 auto name = cases[j] + std::to_string(i);
-                ax.Plot(ns.Data(), LoadMatrix(name).Data(), ns.Size(), cases[j]); 
+                auto n = LoadMatrix(name + "_n");
+                auto err = LoadMatrix(name + "_err");
+                ax.Plot(n.Data(), err.Data(), n.Size(), cases[j]); 
             }
+
             ax.SetYLog();
             ax.Legend();
             ax.SetXLabel("Function evaluations");

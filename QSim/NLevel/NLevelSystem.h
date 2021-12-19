@@ -16,7 +16,6 @@
 #include "../Math/Matrix.h"
 #include "../Math/Ode.h"
 #include "../Constants.h"
-#include "Doppler.h"
 #include "DensityMatrix.h"
 
 namespace QSim
@@ -110,18 +109,6 @@ namespace QSim
         bool RemoveLaser(const std::string& name);
         bool SetLaserIntensity(const std::string& name, double intensity);
 
-        // thermal environment and properties needed for the doppler integration
-        double GetMass() const { return m_doppler.GetMass(); }
-        double GetTemperature() const { return m_doppler.GetTemperature(); }
-        void SetMass(double mass) { m_doppler.SetMass(mass); }
-        void SetTemperature(double temp) { m_doppler.SetTemperature(temp); }
-        void SetDopplerIntegrationSteps(std::size_t steps) { m_doppler.SetIntegrationSteps(steps); }
-        std::size_t GetDopplerIntegrationSteps() const { return m_doppler.GetIntegrationSteps(); }
-
-        const TDopplerIntegrator<double>& GetDopplerIntegrator() const { return m_doppler; }
-        double GetDopplerWidth(std::size_t from, std::size_t to) const;
-        double GetDopplerWidthByName(const std::string& from, const std::string& to) const;
-
         // hamiltonian
         template<typename VT>
         TStaticMatrix<std::complex<double>, N, N> GetHamiltonian(
@@ -129,42 +116,28 @@ namespace QSim
 
         // time evolution of density matrix
         template<typename VT>
-        TStaticDensityMatrix<N> GetNaturalDensityMatrix(
+        TStaticDensityMatrix<N> GetDensityMatrix(
             const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
             double velocity, double t0, double t, double dt);
 
         template<typename VT>
-        TStaticDensityMatrix<N> GetNaturalDensityMatrixAv(
+        TStaticDensityMatrix<N> GetDensityMatrixAv(
             const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
             double velocity, double t0, double t, double tav, double dt);
 
         template<typename VT> 
         std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> 
-        GetNaturalTrajectory(
+        GetTrajectory(
             const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
             double velocity, double t0, double t, double dt);
         
-        // time evolution of doppler broadened density matrix
-        template<typename VT>
-        TStaticDensityMatrix<N> GetDensityMatrix(
-            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
-            double t0, double t, double dt);
-
-        template<typename VT>
-        TStaticDensityMatrix<N> GetDensityMatrixAv(
-            const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
-            double t0, double t, double tav, double dt);
-
         // create stecific density matrices
         TStaticDensityMatrix<N> CreateGroundState() const;
-        TStaticDensityMatrix<N> CreateThermalState() const;
+        TStaticDensityMatrix<N> CreateThermalState(double temperature) const;
 
     private:
         // auxilliary laser variable update
         void UpdateAuxLaserVars();
-
-        // helper method for thermal state creation
-        TStaticDensityMatrix<N> CreateThermalStateHelper(double temperature) const;
 
         // helper methods for default initialization
         std::array<double, N> GenerateDefaultLevels() const;
@@ -196,9 +169,6 @@ namespace QSim
         // (removes need of dynamic memory allocation in every integration iteration)
         TDynamicColVector<double> m_laserFrequencies;
         TDynamicColVector<double> m_laserPropagationFactor;
-
-        // thermal environment
-        TDopplerIntegrator<double> m_doppler;
     };
 
     template<std::size_t N, typename MyT>
@@ -216,7 +186,7 @@ namespace QSim
     template<std::size_t N, typename MyT>
     TNLevelSystemCRTP<N, MyT>::TNLevelSystemCRTP(const std::array<std::string, N>& lvlNames, 
         const std::array<double, N>& levels)
-        : m_levelNames(lvlNames), m_doppler(AtomicMassUnit_v, 300.0)
+        : m_levelNames(lvlNames)
     {
         for (size_t i = 0; i < N; i++)
             m_levels(i) = levels[i];
@@ -471,19 +441,6 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetDopplerWidth(std::size_t from, std::size_t to) const
-    {
-        double frequency = std::abs(GetLevel(to) - GetLevel(from));
-        return m_doppler.GetDopplerWidth(frequency);
-    }
-
-    template<std::size_t N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetDopplerWidthByName(const std::string& from, const std::string& to) const
-    {
-        return GetDopplerWidth(GetLevelIndexByName(from), GetLevelIndexByName(to));
-    }
-
-    template<std::size_t N, typename MyT>
     template<typename VT>
     TStaticMatrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetHamiltonian(
         const TColVector<VT>& detunings, double velocity, double t) const
@@ -494,7 +451,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrix(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrix(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double velocity,
@@ -510,7 +467,7 @@ namespace QSim
 
     template<std::size_t N, typename MyT>
     template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetNaturalDensityMatrixAv(
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrixAv(
         const TColVector<VT>& detunings,
         const TStaticDensityMatrix<N>& initial, 
         double velocity,
@@ -548,7 +505,7 @@ namespace QSim
     
     template<std::size_t N, typename MyT>
     template<typename VT>
-    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TNLevelSystemCRTP<N, MyT>::GetNaturalTrajectory(
+    std::pair<TDynamicColVector<double>, std::vector<TStaticDensityMatrix<N>>> TNLevelSystemCRTP<N, MyT>::GetTrajectory(
         const TColVector<VT>& detunings, const TStaticDensityMatrix<N>& initial, 
         double velocity, double t0, double t, double dt)
     {
@@ -571,67 +528,13 @@ namespace QSim
     }
 
     template<std::size_t N, typename MyT>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrix(
-        const TColVector<VT>& detunings,
-        const TStaticDensityMatrix<N>& initial, 
-        double t0, double t, double dt)
-    {
-        auto func = [&](double vel)
-        {
-            return this->GetNaturalDensityMatrix(
-                detunings, initial, vel, t0, t, dt).GetMatrix();
-        };
-        auto rho = this->m_doppler.Integrate(func);
-        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
-    }
-
-    template<std::size_t N, typename MyT>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrixAv(
-        const TColVector<VT>& detunings,
-        const TStaticDensityMatrix<N>& initial, 
-        double t0, double t, double tav, double dt)
-    {
-        auto func = [&](double vel)
-        {
-            return this->GetNaturalDensityMatrixAv(
-                detunings, initial, vel, t0, t, tav, dt).GetMatrix();
-        };
-        auto rho = this->m_doppler.Integrate(func);
-        return TStaticDensityMatrix<N>(this->m_levelNames, rho);
-    }
-
-
-    template<std::size_t N, typename MyT>
     TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateGroundState() const
     { 
-        return CreateThermalStateHelper(0.0);
+        return CreateThermalState(0.0);
     }
 
     template<std::size_t N, typename MyT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateThermalState() const
-    { 
-        return CreateThermalStateHelper(GetTemperature()); 
-    }
-
-    template<std::size_t N, typename MyT>
-    void TNLevelSystemCRTP<N, MyT>::UpdateAuxLaserVars()
-    {
-        m_laserFrequencies.Resize(GetLaserCount());
-        for (size_t i = 0; i < m_laserFrequencies.Size(); i++)
-        {
-            auto lvls = GetLaserLevels(i);
-            m_laserFrequencies[i] = abs(GetLevel(lvls.first) - GetLevel(lvls.second));
-        }
-        
-        m_laserPropagationFactor.Resize(GetLaserCount());
-        for (size_t i = 0; i < m_laserPropagationFactor.Size(); i++)
-            m_laserPropagationFactor(i) = GetLaserCounterPropagation(i) ? 1.0 : -1.0;
-    }
-
-    template<std::size_t N, typename MyT>
-    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateThermalStateHelper(double temperature) const
+    TStaticDensityMatrix<N> TNLevelSystemCRTP<N, MyT>::CreateThermalState(double temperature) const
     { 
         TStaticDensityMatrix<N> res(m_levelNames);
 
@@ -665,6 +568,21 @@ namespace QSim
         for (size_t i = 0; i < N; i++)
             res(i, i) = thermalWeights(i);
         return res;
+    }
+
+    template<std::size_t N, typename MyT>
+    void TNLevelSystemCRTP<N, MyT>::UpdateAuxLaserVars()
+    {
+        m_laserFrequencies.Resize(GetLaserCount());
+        for (size_t i = 0; i < m_laserFrequencies.Size(); i++)
+        {
+            auto lvls = GetLaserLevels(i);
+            m_laserFrequencies[i] = abs(GetLevel(lvls.first) - GetLevel(lvls.second));
+        }
+        
+        m_laserPropagationFactor.Resize(GetLaserCount());
+        for (size_t i = 0; i < m_laserPropagationFactor.Size(); i++)
+            m_laserPropagationFactor(i) = GetLaserCounterPropagation(i) ? 1.0 : -1.0;
     }
 
     template<std::size_t N, typename MyT>

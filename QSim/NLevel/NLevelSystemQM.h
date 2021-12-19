@@ -41,10 +41,8 @@ namespace QSim
 
         // Steady state
         template<typename VT>
-        TStaticDensityMatrix<N> GetNaturalDensityMatrixSS(const TColVector<VT>& detunings, double velocity) const;
-        template<typename VT>
-        TStaticDensityMatrix<N> GetDensityMatrixSS(const TColVector<VT>& detunings) const;
-
+        TStaticDensityMatrix<N> GetDensityMatrixSS(const TColVector<VT>& detunings, double velocity) const;
+        
     private:
 
         // Helper methods to prepare the hamiltonian calculation
@@ -92,7 +90,7 @@ namespace QSim
 
     template<std::size_t N>
     template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemQM<N>::GetNaturalDensityMatrixSS(
+    TStaticDensityMatrix<N> TNLevelSystemQM<N>::GetDensityMatrixSS(
         const TColVector<VT>& detunings, double velocity) const
     {
         const TStaticMatrix<std::complex<double>, N, N>& h = GetHamiltonianTI(detunings, velocity);
@@ -154,17 +152,6 @@ namespace QSim
         return TStaticDensityMatrix<N>(this->GetLevelNames(), ss);
     }
     
-    template<std::size_t N>
-    template<typename VT>
-    TStaticDensityMatrix<N> TNLevelSystemQM<N>::GetDensityMatrixSS(
-        const TColVector<VT>& detunings) const
-    {
-        auto& doppler = this->GetDopplerIntegrator();
-        auto ss = doppler.Integrate([&](double vel)
-            { return this->GetNaturalDensityMatrixSS(detunings, vel).GetMatrix(); });
-        return TStaticDensityMatrix<N>(this->GetLevelNames(), ss);
-    }
-
     template<std::size_t N>
     bool TNLevelSystemQM<N>::PrepareCalculation()
     {

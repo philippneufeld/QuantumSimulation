@@ -4,15 +4,15 @@
 #include <QSim/Python/Plotting.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
+#include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/ThreadPool.h>
 
 class CRb87MWApp : public QSim::CalcApp
 {
 public:
-    virtual void DoCalculation() override
+
+    CRb87MWApp()
     {
-        QSim::ThreadPool pool;
-        
         // define parameters
         constexpr double lvl5S = 0;
         constexpr double lvl5P = lvl5S + QSim::SpeedOfLight_v / 780e-9;
@@ -30,32 +30,41 @@ public:
         // Create system (some decay rates from https://atomcalc.jqc.org.uk)
         std::array<std::string, 4> lvlNames = {"5S", "5P", "54P", "53D"};
         std::array<double, 4> levels = {lvl5S, lvl5P, lvl54P, lvl53D};
-        QSim::TNLevelSystemQM<4> system(lvlNames, levels);
-        system.SetMass(1.44316060e-25);
-        system.SetDipoleElementByName("5S", "5P", dip5S5P);
-        system.SetDipoleElementByName("5P", "53D", dip5P53D);
-        system.SetDipoleElementByName("54P", "53D", dip54P53D);
-        system.AddLaserByName("Probe", "5S", "5P", intProbe, false);
-        system.AddLaserByName("Coupling", "5P", "53D", intCoupling, false);
-        system.AddLaserByName("Microwaves", "54P", "53D", intMicrowave, false);
-        system.SetDecayByName("5P", "5S", 6.065e6);
-        system.SetDecayByName("53D", "5P", 6.053e2);
-        system.SetDecayByName("54P", "53D", 7.964e1);
-        system.SetDecayByName("54P", "5S", 3.583e1);
-        
-        system.SetDopplerIntegrationSteps(15000);
+        m_system = QSim::TNLevelSystemQM<4>(lvlNames, levels);
+        m_system.SetDipoleElementByName("5S", "5P", dip5S5P);
+        m_system.SetDipoleElementByName("5P", "53D", dip5P53D);
+        m_system.SetDipoleElementByName("54P", "53D", dip54P53D);
+        m_system.AddLaserByName("Probe", "5S", "5P", intProbe, false);
+        m_system.AddLaserByName("Coupling", "5P", "53D", intCoupling, false);
+        m_system.AddLaserByName("Microwaves", "54P", "53D", intMicrowave, false);
+        m_system.SetDecayByName("5P", "5S", 6.065e6);
+        m_system.SetDecayByName("53D", "5P", 6.053e2);
+        m_system.SetDecayByName("54P", "53D", 7.964e1);
+        m_system.SetDecayByName("54P", "5S", 3.583e1);
 
+        m_doppler.SetMass(1.44316060e-25);
+        // m_doppler.SetIntegrationSteps(35000);
+    }
+
+    virtual void DoCalculation() override
+    {
+        QSim::ThreadPool pool;
+        
         // Generate detuning axis
         constexpr static std::size_t cnt = 501;
-        QSim::TDynamicMatrix<double> detunings(system.GetLaserCount(), cnt);
+        QSim::TDynamicMatrix<double> detunings(m_system.GetLaserCount(), cnt);
         detunings.SetRow(QSim::CreateLinspaceRow(-3e7, 3e7, cnt), 
-            system.GetLaserIdxByName("Probe"));
+            m_system.GetLaserIdxByName("Probe"));
 
         auto func = [&](auto dets)
         {
-            auto rho = system.GetDensityMatrixSS(dets);
-            return rho.GetAbsCoeff("5S", "5P");
-        }; 
+            return m_doppler.Integrate([&](double vel)
+            { 
+                auto rho = m_system.GetDensityMatrixSS(dets, vel);
+                return rho.GetAbsCoeff("5S", "5P"); 
+            });
+        };
+
         QSim::TDynamicRowVector<double> absCoeffs = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
         
@@ -65,7 +74,8 @@ public:
 
     virtual void Plot() override
     {
-        auto x_axis = this->LoadMatrix("Detunings").GetRow(0);
+        auto detunings = this->LoadMatrix("Detunings");
+        auto x_axis = detunings.GetRow(m_system.GetLaserIdxByName("Probe"));
         auto y_axis = this->LoadMatrix("AbsCoeffs 5S->5P");
         
         QSim::PythonMatplotlib matplotlib;
@@ -74,6 +84,10 @@ public:
         ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
         matplotlib.RunGUILoop();
     }
+
+private:
+    QSim::TNLevelSystemQM<4> m_system;
+    QSim::DopplerIntegrator m_doppler;
 };
 
 int main(int argc, const char* argv[])

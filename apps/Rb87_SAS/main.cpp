@@ -4,50 +4,58 @@
 #include <QSim/Python/Plotting.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
+#include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/ThreadPool.h>
 
 class CRb87SASApp : public QSim::CalcApp
 {
+    constexpr static double decay = 6.065e6;
 public:
-    virtual void DoCalculation() override
+    CRb87SASApp()
     {
-        QSim::ThreadPool pool;
-
         // calculate parameters
         constexpr double dip = 4.227 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
         constexpr double intProbe = QSim::GetIntensityFromRabiFrequency(dip, 3.5e6);
-        constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10e6);
-        constexpr double decay = 6.065e6;
+        constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10e6);       
 
         // Create system
         std::array<std::string, 2> lvlNames = {"S1_2", "P3_2"};
         std::array<double, 2> levels = {0, QSim::SpeedOfLight_v / 780.241e-9};
-        QSim::TNLevelSystemSC<2> system(lvlNames, levels);
-        system.SetDipoleElementByName("S1_2", "P3_2", dip);
-        system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
-        system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
-        system.SetDecayByName("P3_2", "S1_2", decay);
-        system.SetMass(1.44316060e-25);
+        m_system = QSim::TNLevelSystemSC<2>(lvlNames, levels);
+        m_system.SetDipoleElementByName("S1_2", "P3_2", dip);
+        m_system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
+        m_system.AddLaserByName("Pump", "S1_2", "P3_2", intPump, true);
+        m_system.SetDecayByName("P3_2", "S1_2", decay);
+        
+        m_doppler.SetMass(1.44316060e-25);
+    }
+
+    virtual void DoCalculation() override
+    {
+        QSim::ThreadPool pool;
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;
         constexpr double tint = 15 / decay;
 
-        auto rho0 = system.CreateGroundState();
-
         auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 1001);
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
-        detunings.SetRow(laserDetunings, system.GetLaserIdxByName("Probe"));
-        detunings.SetRow(laserDetunings, system.GetLaserIdxByName("Pump"));
+        detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Probe"));
+        detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Pump"));
 
         auto start_ts = std::chrono::high_resolution_clock::now();
 
+        auto rho0 = m_system.CreateGroundState();
         auto func = [&](auto dets)
-        { 
-            auto rho = system.GetDensityMatrixAv(
-                dets, rho0, 0.0, tint, 0.25*tint, dt);
-            return rho.GetPopulation("P3_2");
-        }; 
+        {
+            return m_doppler.Integrate([&](double vel)
+            { 
+                auto rho = m_system.GetDensityMatrixAv(
+                    dets, rho0, vel, 0.0, tint, 0.25*tint, dt);
+                return rho.GetPopulation("P3_2");
+            });
+        };
+
         QSim::TDynamicRowVector<double> populations = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
 
@@ -57,7 +65,8 @@ public:
 
     virtual void Plot() override
     {
-        auto x_axis = this->LoadMatrix("Detunings").GetRow(0);
+        auto detunings = this->LoadMatrix("Detunings");
+        auto x_axis = detunings.GetRow(m_system.GetLaserIdxByName("Probe"));
         auto y_axis = this->LoadMatrix("Population P3/2");
         
         QSim::PythonMatplotlib matplotlib;
@@ -66,6 +75,10 @@ public:
         ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
         matplotlib.RunGUILoop();
     }
+
+private:
+    QSim::TNLevelSystemSC<2> m_system;
+    QSim::DopplerIntegrator m_doppler;
 };
 
 int main(int argc, const char* argv[])
