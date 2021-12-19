@@ -17,12 +17,16 @@ public:
 
     CQuadratureApp() : MyParent()
     {
+        auto res1 = QSim::TQuadAdaptiveSim<double>{}.IntegrateFevs(
+            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, -250, 250, 500, 1e-8, 1e-10, 6);
+        std::cout << std::abs(0.9974535344916211 - res1.first) << " (" << res1.second << " fevs)" << std::endl;
+
         m_funcs.push_back({"sin(x)*(1-x+x^2)", 
             [](double x){ return std::sin(x) * (1 - x + x*x); }, 
             0.0, 5.0, -15.01989999576955});
         m_funcs.push_back({"1/(pi*(x^2+1))", 
             [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, 
-            -10, 10, 0.9365489651388929});
+            -2, 2, 0.7048327646991335});
         m_funcs.push_back({"1/(pi*(x^2+1))", 
             [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, 
             -250.0, 250.0, 0.9974535344916211});
