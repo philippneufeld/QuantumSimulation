@@ -17,10 +17,10 @@ namespace QSim
     public:
         // constructors
         DopplerIntegrator() : DopplerIntegrator(1.674e-27, 300) { }
-        DopplerIntegrator(double mass, double temperature) : DopplerIntegrator(mass, temperature, 200) { }
+        DopplerIntegrator(double mass, double temperature) : DopplerIntegrator(mass, temperature, 250) { }
         DopplerIntegrator(double mass, double temperature, std::size_t steps)
             : m_mass(mass), m_temperature(temperature), m_steps(steps), 
-            m_rtol(1e-7), m_atol(1e-9), m_maxDepth(10) { }
+            m_rtol(1e-7), m_atol(1e-9), m_maxDepth(10), m_sigmas(3.5) { }
 
         // copy operators
         DopplerIntegrator(const DopplerIntegrator&) = default;
@@ -41,6 +41,8 @@ namespace QSim
         double GetATol() const { return m_atol; }
         void SetMaxRecursionDepth(double depth) { m_maxDepth = depth; }
         double GetMaxRecursionDepth() const { return m_maxDepth; }
+        void SetIntegrationWidth(double sigmas) { m_sigmas = sigmas; }
+        double GetIntegrationWidth(double sigmas) const { return m_sigmas; }
 
         double GetDopplerWidth(double frequency) const;
 
@@ -53,6 +55,7 @@ namespace QSim
         double m_rtol;
         double m_atol;
         double m_maxDepth;
+        double m_sigmas;
         std::size_t m_steps;
     };
 
@@ -66,8 +69,8 @@ namespace QSim
             double sigma2SqRec = 1 / (2 * sigma * sigma);
             double norm = 1 / (std::sqrt(2*pi)*sigma);
 
-            double vmin = -3.5 * sigma;
-            double vmax = 3.5 * sigma;
+            double vmin = -m_sigmas * sigma;
+            double vmax = m_sigmas * sigma;
 
             TQuadAdaptive<double> integrator;
             auto convFunc = [=](double v){ return norm * std::exp(-v*v*sigma2SqRec) * func(v); };
