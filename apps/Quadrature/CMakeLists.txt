@@ -1,4 +1,4 @@
 # Philipp Neufeld, 2021
 
-add_executable("Quadrature" "main.cpp" ${QSIM_SOURCES})
+add_executable("Quadrature" "main.cpp" )
 

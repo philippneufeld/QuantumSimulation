@@ -43,6 +43,7 @@ namespace QSim
         m_stopThread = false;
         m_thread = std::thread([this]() { this->ThreadFunc(); });
         m_startTs = std::chrono::high_resolution_clock::now();
+        m_prevTs = m_startTs;
     }
 
     void CLIProgBar::WaitUntilFinished()
@@ -95,7 +96,64 @@ namespace QSim
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         m_progress = prog;
+        m_prevTs = std::chrono::high_resolution_clock::now();
         m_wakeUp.notify_all();
+    }
+
+    std::string CLIProgBar::GetDescription() const
+    {
+        return m_title;
+    }
+
+    std::string CLIProgBar::GetProgressText() const
+    {
+        std::string strPerc = std::to_string(static_cast<std::size_t>(m_progress * 100));
+        
+        std::string str;
+        str.reserve(5);
+
+        str.append(4 - strPerc.size(), ' ');
+        str.append(strPerc);
+        str.push_back('%');
+        return str;
+    }
+
+    std::string CLIProgBar::GetTimeText() const
+    {
+        auto dt = std::chrono::high_resolution_clock::now() - m_startTs;
+        double secs = dt.count() / 1e9;
+        double projSecs = m_progress > 0 ? (m_prevTs - m_startTs).count() / m_progress / 1e9 : 0.0;
+
+        std::string curr = SecondsToString(static_cast<std::size_t>(secs));
+        std::string tot = SecondsToString(static_cast<std::size_t>(projSecs));
+
+        std::string str;
+        str.reserve(3 + curr.size() + tot.size());
+        str.append(" [");
+        str.append(curr);
+        str.push_back('<');
+        str.append(tot);
+        str.push_back(']');
+
+        return str;
+    }
+
+    std::string CLIProgBar::SecondsToString(std::size_t secs)
+    {
+        std::string str;
+        str.reserve(10);
+
+        std::string strMins = std::to_string(secs / 60);
+        std::string strSecs = std::to_string(secs % 60);
+        if (strMins.size() < 2)
+            str.append(2 - strMins.size(), '0');
+        str.append(strMins);
+        str.push_back(':');
+        if (strSecs.size() < 2)
+            str.append(2 - strSecs.size(), '0');
+        str.append(strSecs);
+
+        return str;
     }
 
     void CLIProgBar::ThreadFunc()
@@ -146,61 +204,6 @@ namespace QSim
         std::cout << std::endl;
     }
 
-    std::string CLIProgBar::GetDescription() const
-    {
-        return m_title;
-    }
-
-    std::string CLIProgBar::GetProgressText() const
-    {
-        std::string strPerc = std::to_string(static_cast<std::size_t>(m_progress * 100));
-        
-        std::string str;
-        str.reserve(5);
-
-        str.append(4 - strPerc.size(), ' ');
-        str.append(strPerc);
-        str.push_back('%');
-        return str;
-    }
-
-    std::string CLIProgBar::GetTimeText() const
-    {
-        auto dt = std::chrono::high_resolution_clock::now() - m_startTs;
-        double secs = dt.count() / 1.0e9;
-        double projSecs = m_progress > 0 ? secs / m_progress : 0.0;
-
-        std::string curr = SecondsToString(static_cast<std::size_t>(secs));
-        std::string tot = SecondsToString(static_cast<std::size_t>(projSecs));
-
-        std::string str;
-        str.reserve(3 + curr.size() + tot.size());
-        str.append(" [");
-        str.append(curr);
-        str.push_back('<');
-        str.append(tot);
-        str.push_back(']');
-
-        return str;
-    }
-
-    std::string CLIProgBar::SecondsToString(std::size_t secs)
-    {
-        std::string str;
-        str.reserve(10);
-
-        std::string strMins = std::to_string(secs / 60);
-        std::string strSecs = std::to_string(secs % 60);
-        if (strMins.size() < 2)
-            str.append(2 - strMins.size(), '0');
-        str.append(strMins);
-        str.push_back(':');
-        if (strSecs.size() < 2)
-            str.append(2 - strSecs.size(), '0');
-        str.append(strSecs);
-
-        return str;
-    }
 
 
     CLIProgBarInt::CLIProgBarInt()

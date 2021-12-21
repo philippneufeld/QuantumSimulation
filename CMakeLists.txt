@@ -44,11 +44,34 @@ else()
     set(QSIM_PUBLIC_COMPILER_OPTIONS "")
 endif()
 
+# add static library
+set(QSIM_LIB_TARGET "${CMAKE_PROJECT_NAME}")
+add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
+target_include_directories("${QSIM_LIB_TARGET}" PUBLIC ${QSIM_PUBLIC_INCLUDE_DIRS})
+target_compile_options("${QSIM_LIB_TARGET}" PUBLIC ${QSIM_PUBLIC_COMPILER_OPTIONS})
+target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC ${QSIM_PUBLIC_COMPILER_DEFINITIONS})
+target_link_libraries("${QSIM_LIB_TARGET}" ${QSIM_PUBLIC_LINK_LIBRARIES})
+
+# put the built library file into the .../lib/ folder
+set(BUILD_LIB_DIR "${CMAKE_BINARY_DIR}/lib")
+set_target_properties("${QSIM_LIB_TARGET}" 
+    PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${BUILD_LIB_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${BUILD_LIB_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${BUILD_LIB_DIR}"
+)
+
+set(QSIM_LIB_NAME "${CMAKE_STATIC_LIBRARY_PREFIX}${QSIM_LIB_TARGET}${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(QSIM_LIB_PATH "${BUILD_LIB_DIR}/${QSIM_LIB_NAME}")
+set(QSIM_PUBLIC_LINK_LIBRARIES ${QSIM_LIB_PATH} ${QSIM_PUBLIC_LINK_LIBRARIES})
+
 # executable suffix
 set(QSIM_EXE_SUFFIX ".out")
 
+# function that adds a target for a qsim app
 function(qsim_add_app APP_TARGET)
     add_subdirectory("apps/${APP_TARGET}")
+    add_dependencies("${APP_TARGET}" "${QSIM_LIB_TARGET}")
     target_include_directories("${APP_TARGET}" PUBLIC ${QSIM_PUBLIC_INCLUDE_DIRS})
     target_compile_options("${APP_TARGET}" PUBLIC ${QSIM_PUBLIC_COMPILER_OPTIONS})
     target_compile_definitions("${APP_TARGET}" PUBLIC ${QSIM_PUBLIC_COMPILER_DEFINITIONS})

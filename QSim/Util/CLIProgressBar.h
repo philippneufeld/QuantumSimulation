@@ -51,6 +51,7 @@ namespace QSim
         std::condition_variable m_wakeUp;
         bool m_stopThread;
         std::chrono::high_resolution_clock::time_point m_startTs;
+        std::chrono::high_resolution_clock::time_point m_prevTs;
 
         std::string m_title = "";
         
