@@ -63,7 +63,6 @@ set_target_properties("${QSIM_LIB_TARGET}"
 
 set(QSIM_LIB_NAME "${CMAKE_STATIC_LIBRARY_PREFIX}${QSIM_LIB_TARGET}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 set(QSIM_LIB_PATH "${BUILD_LIB_DIR}/${QSIM_LIB_NAME}")
-set(QSIM_PUBLIC_LINK_LIBRARIES ${QSIM_LIB_PATH} ${QSIM_PUBLIC_LINK_LIBRARIES})
 
 # executable suffix
 set(QSIM_EXE_SUFFIX ".out")
@@ -75,7 +74,7 @@ function(qsim_add_app APP_TARGET)
     target_include_directories("${APP_TARGET}" PUBLIC ${QSIM_PUBLIC_INCLUDE_DIRS})
     target_compile_options("${APP_TARGET}" PUBLIC ${QSIM_PUBLIC_COMPILER_OPTIONS})
     target_compile_definitions("${APP_TARGET}" PUBLIC ${QSIM_PUBLIC_COMPILER_DEFINITIONS})
-    target_link_libraries("${APP_TARGET}" ${QSIM_PUBLIC_LINK_LIBRARIES})
+    target_link_libraries("${APP_TARGET}" ${QSIM_LIB_PATH} ${QSIM_PUBLIC_LINK_LIBRARIES})
     set_target_properties("${APP_TARGET}" PROPERTIES SUFFIX ${QSIM_EXE_SUFFIX})
 endfunction()
 
