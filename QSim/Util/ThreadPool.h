@@ -17,7 +17,6 @@
 namespace QSim
 {
 
-
     class ThreadPool
     {
     public:
@@ -31,7 +30,6 @@ namespace QSim
         template<typename Lambda, typename InputIt>
         std::vector<decltype(std::declval<Lambda>()(*std::declval<InputIt>()))> 
             Map(Lambda func, InputIt param_begin, InputIt param_end);
-
 
     private:
         void ThreadFunc();

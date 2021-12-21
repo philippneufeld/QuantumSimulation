@@ -6,6 +6,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/ThreadPool.h>
+#include <QSim/Util/CLIProgressBar.h>
 
 class CNORydEx : public QSim::CalcApp
 {
@@ -15,7 +16,7 @@ public:
     CNORydEx()
     {
         m_scanLaser = "Red";
-        m_desiredLevel = "Ion";
+        m_desiredLevel = "R";
 
         // define parameters
         constexpr double lvlX = 0;
@@ -23,10 +24,10 @@ public:
         constexpr double lvlA = lvlX + QSim::SpeedOfLight_v / 226.97e-9;
         constexpr double lvlH = lvlA + QSim::SpeedOfLight_v / 540e-9;
         constexpr double lvlR = lvlH + QSim::SpeedOfLight_v / 834.92e-9;
-        constexpr double lvlI = 0; // 9.27 * QSim::ElementaryCharge_v / QSim::PlanckConstant_v;
+        constexpr double lvlI = 9.27 * QSim::ElementaryCharge_v / QSim::PlanckConstant_v;
 
         // dipole matrix elements
-        constexpr double dipXA = 2e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+        constexpr double dipXA = 5e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
         constexpr double dipAH = 1e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
         constexpr double dipHR = 5e-4 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
 
@@ -62,7 +63,7 @@ public:
         m_system.SetDecayByName("Ion", "X", decayTransit);
 
         m_doppler.SetMass(30.0061 * QSim::AtomicMassUnit_v);
-        // m_doppler.SetATol(1e-10);
+        m_doppler.SetATol(1e-10);
         // m_doppler.SetRTol(1e-8);
         m_doppler.SetIntegrationWidth(m_scanLaser != "UV" ? 0.35 : 3.5); // peak is narrow
     }
@@ -77,15 +78,21 @@ public:
         detunings.SetRow(QSim::CreateLinspaceRow(-3e7, 3e7, cnt), 
             m_system.GetLaserIdxByName(m_scanLaser));
 
+        QSim::CLIProgBarInt progress;
         auto func = [&](auto dets)
         {
-            return m_doppler.Integrate([&](double vel)
+            auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
                 return rho.GetPopulation(m_desiredLevel); 
             });
+            progress.IncrementCount();
+            return res;
         };
 
+        progress.SetTotal(detunings.Cols());
+        progress.Start();
+        
         QSim::TDynamicRowVector<double> absCoeffs = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
         

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <set>
 #include <vector>
+#include <iostream> // TODO: Remove
 
 #include "../Math/Matrix.h"
 #include "NLevelSystem.h"
@@ -124,20 +125,24 @@ namespace QSim
             }
         }
 
-        // find order of magnitude
-        double oom = 0.0;
+        // bring all columns to the same order of magnitude
         for (std::size_t i = 0; i < A.Rows(); i++)
         {
+            double maxEl = 0;
             for (std::size_t j = 0; j < A.Cols(); j++)
-                oom = std::max(oom, std::abs(A(i, j)));
-        }       
-
+                maxEl = std::max(maxEl, std::abs(A(i, j)));
+            if (maxEl == 0)
+                continue;
+            for (std::size_t j = 0; j < A.Cols(); j++)
+                A(i, j) /= maxEl;
+        }
+        
         // Normalization condition
         for (std::size_t i = 0; i < N; i++)
-            A(N*N, i*N+i) += oom;
+            A(N*N, i*N+i) += 1.0;
         
         TStaticMatrix<std::complex<double>, N*N + 1, 1> b;
-        b(N*N, 0) = oom;
+        b(N*N, 0) = 1.0;
         
         auto A_adj = A.Adjoint();
         auto x = LinearSolve(A_adj*A, A_adj*b);

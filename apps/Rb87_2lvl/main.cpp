@@ -6,6 +6,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/ThreadPool.h>
+#include <QSim/Util/CLIProgressBar.h>
 
 class CRb87TwoLvlApp : public QSim::CalcApp
 {
@@ -33,19 +34,29 @@ public:
     {
         QSim::ThreadPool pool;
         
+        QSim::CLIProgBarInt progress;
         auto func = [&](auto dets)
         {
-            return m_doppler.Integrate([&](double vel)
+            auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
                 return rho.GetAbsCoeff("S1_2", "P3_2"); 
             });
+            progress.IncrementCount();
+            return res;
         };
 
+        // Generate detuning axis
         auto detunings = QSim::CreateLinspaceRow(-1e9, 1e9, 501);
+        
+        // start progress bar
+        progress.SetTotal(detunings.Cols());
+        progress.Start();
+        
+        // start calculation
         QSim::TDynamicRowVector<double> absCoeffs = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
-
+        
         this->StoreMatrix("Detunings", detunings);
         this->StoreMatrix("AbsCoeffs S1/2->P3/2", absCoeffs);
     }

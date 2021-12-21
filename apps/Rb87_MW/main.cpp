@@ -6,6 +6,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/ThreadPool.h>
+#include <QSim/Util/CLIProgressBar.h>
 
 class CRb87MWApp : public QSim::CalcApp
 {
@@ -43,7 +44,6 @@ public:
         m_system.SetDecayByName("54P", "5S", 3.583e1);
 
         m_doppler.SetMass(1.44316060e-25);
-        // m_doppler.SetIntegrationSteps(35000);
     }
 
     virtual void DoCalculation() override
@@ -56,15 +56,23 @@ public:
         detunings.SetRow(QSim::CreateLinspaceRow(-3e7, 3e7, cnt), 
             m_system.GetLaserIdxByName("Probe"));
 
+        QSim::CLIProgBarInt progress;
         auto func = [&](auto dets)
         {
-            return m_doppler.Integrate([&](double vel)
+            auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
                 return rho.GetAbsCoeff("5S", "5P"); 
             });
+            progress.IncrementCount();
+            return res;
         };
 
+        // start progress bar
+        progress.SetTotal(detunings.Cols());
+        progress.Start();
+        
+        // start calculation
         QSim::TDynamicRowVector<double> absCoeffs = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
         

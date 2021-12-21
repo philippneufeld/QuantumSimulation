@@ -6,6 +6,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/ThreadPool.h>
+#include <QSim/Util/CLIProgressBar.h>
 
 class CRb87SASApp : public QSim::CalcApp
 {
@@ -43,22 +44,28 @@ public:
         detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Probe"));
         detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Pump"));
 
-        auto start_ts = std::chrono::high_resolution_clock::now();
-
+        QSim::CLIProgBarInt progress;
         auto rho0 = m_system.CreateGroundState();
         auto func = [&](auto dets)
         {
-            return m_doppler.Integrate([&](double vel)
+            auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixAv(
                     dets, rho0, vel, 0.0, tint, 0.25*tint, dt);
                 return rho.GetPopulation("P3_2");
             });
+            progress.IncrementCount();
+            return res;
         };
 
+        // start progress bar
+        progress.SetTotal(detunings.Cols());
+        progress.Start();
+        
+        // start calculation
         QSim::TDynamicRowVector<double> populations = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
-
+        
         this->StoreMatrix("Detunings", detunings);
         this->StoreMatrix("Population P3/2", populations);
     }

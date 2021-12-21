@@ -24,7 +24,8 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
-    "${QSIM_SOURCE_DIR}/Util/DataFile.cpp")
+    "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
+    "${QSIM_SOURCE_DIR}/Util/CLIProgressBar.cpp")
 
 # find required libs
 find_package(Threads REQUIRED)
