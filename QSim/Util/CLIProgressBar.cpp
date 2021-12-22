@@ -55,7 +55,8 @@ namespace QSim
 
     void CLIProgBar::Stop()
     {
-        m_stopThread = true;
+        if (m_progress < 1.0)
+            m_stopThread = true;
         Update();
         WaitUntilFinished();
     }

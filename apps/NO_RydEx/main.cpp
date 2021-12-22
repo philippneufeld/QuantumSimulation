@@ -16,7 +16,7 @@ public:
     CNORydEx()
     {
         m_scanLaser = "Red";
-        m_desiredLevel = "R";
+        m_desiredLevel = "Ion";
 
         // define parameters
         constexpr double lvlX = 0;
@@ -27,19 +27,19 @@ public:
         constexpr double lvlI = 9.27 * QSim::ElementaryCharge_v / QSim::PlanckConstant_v;
 
         // dipole matrix elements
-        constexpr double dipXA = 5e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
-        constexpr double dipAH = 1e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
-        constexpr double dipHR = 5e-4 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+        constexpr double dipXA = 0.1595 * QSim::Debye_v; // https://doi.org/10.1093/mnras/stx1211
+        constexpr double dipAH = 2e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
+        constexpr double dipHR = 1e-3 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
 
         // decay rates
-        constexpr double decayAX = 10.0e6;
+        constexpr double decayAX = 13.8e6; // https://doi.org/10.1063/1.454958
         constexpr double decayHA = 1.0e6;
         constexpr double decayRH = 1.0e5;
         constexpr double decayIonizaion = 1e4;
         constexpr double decayTransit = 1e4;
 
         // laser intensities
-        constexpr double uvInt = QSim::GetIntensityFromPower(0.03, 1e-3); // 30mW
+        constexpr double uvInt = QSim::GetIntensityFromPower(0.02, 1e-3); // 20mW
         constexpr double greenInt = QSim::GetIntensityFromPower(1.0, 1e-3); // 1W
         constexpr double redInt = QSim::GetIntensityFromPower(1.0, 1e-3); // 1W
 
@@ -65,7 +65,7 @@ public:
         m_doppler.SetMass(30.0061 * QSim::AtomicMassUnit_v);
         m_doppler.SetATol(1e-10);
         // m_doppler.SetRTol(1e-8);
-        m_doppler.SetIntegrationWidth(m_scanLaser != "UV" ? 0.35 : 3.5); // peak is narrow
+        // m_doppler.SetIntegrationWidth(m_scanLaser != "UV" ? 0.35 : 3.5); // peak is narrow
     }
 
     virtual void DoCalculation() override
@@ -75,7 +75,7 @@ public:
         // Generate detuning axis
         constexpr static std::size_t cnt = 501;
         QSim::TDynamicMatrix<double> detunings(m_system.GetLaserCount(), cnt);
-        detunings.SetRow(QSim::CreateLinspaceRow(-3e7, 3e7, cnt), 
+        detunings.SetRow(QSim::CreateLinspaceRow(-5e7, 5e7, cnt), 
             m_system.GetLaserIdxByName(m_scanLaser));
 
         QSim::CLIProgBarInt progress;
@@ -95,7 +95,7 @@ public:
         
         QSim::TDynamicRowVector<double> absCoeffs = pool.Map(
             func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
-        
+
         this->StoreMatrix("Detunings", detunings);
         this->StoreMatrix("Population " + m_desiredLevel, absCoeffs);
     }

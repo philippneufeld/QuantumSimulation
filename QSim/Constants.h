@@ -21,6 +21,7 @@ namespace QSim
     constexpr static double AtomicMassUnit_v = 1.66053906660e-27;
     constexpr static double ElementaryCharge_v = 1.602176462e-19;
     constexpr static double BohrRadius_v = 0.5291772083e-10;
+    constexpr static double Debye_v = 0.39343 * ElementaryCharge_v * BohrRadius_v;
 }
 
 #endif

@@ -28,15 +28,15 @@ int main(int argc, const char* argv[])
 {
     QSim::CLIProgBar progress;
     progress.Start();
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    
-    for (std::size_t i = 0; i <= 100; i++)
+        
+    for (std::size_t i = 0; i <= 1000; i++)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        progress.SetProgress(i * 0.01);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        progress.SetProgress(i * 0.001);
     }
     
+    progress.WaitUntilFinished();
+
     // CTestApp app;
     // return app.Run(argc, argv);
 }
