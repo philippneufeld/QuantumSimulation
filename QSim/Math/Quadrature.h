@@ -1,4 +1,4 @@
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #ifndef QSim_Math_Quadrature_H
 #define QSim_Math_Quadrature_H

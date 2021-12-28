@@ -1,4 +1,4 @@
-# Philipp Neufeld, 2021
+# Philipp Neufeld, 2021-2022
 
 cmake_minimum_required (VERSION 3.17)
 

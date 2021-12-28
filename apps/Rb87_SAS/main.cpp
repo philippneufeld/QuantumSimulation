@@ -1,4 +1,4 @@
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #include <QSim/Util/CalcApp.h>
 #include <QSim/Python/Plotting.h>
@@ -104,7 +104,7 @@ int main(int argc, const char* argv[])
 
 
 
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #include <iostream>
 #include <string>

@@ -1,4 +1,4 @@
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #ifndef QSim_NLevel_Laser_H_
 #define QSim_NLevel_Laser_H_

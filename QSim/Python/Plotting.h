@@ -1,4 +1,4 @@
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #ifndef QSim_Python_Plotting_H_
 #define QSim_Python_Plotting_H_

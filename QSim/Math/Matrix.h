@@ -1,4 +1,4 @@
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #ifndef QSim_Math_Matrix_H_
 #define QSim_Math_Matrix_H_
@@ -183,6 +183,7 @@ namespace QSim
         auto GetColIterEnd() const;
 
         // operators
+        MT operator-() const;
         template<typename MT2> 
         MT& operator+=(const TMatrix<MT2>& rhs);
         template<typename MT2> 
@@ -308,6 +309,19 @@ namespace QSim
     // TMatrix arithmetic and operators
     //
 
+    template<typename MT1, typename MT2>
+    void MatrixNeg(TMatrix<MT1>& c, const TMatrix<MT2>& a)
+    {
+        assert((~a).Rows() == (~c).Rows());
+        assert((~a).Cols() == (~c).Cols());
+
+        for (std::size_t i = 0; i < (~c).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~c).Cols(); j++)
+                (~c)(i, j) = -(~a)(i, j);            
+        }   
+    }
+
     template<typename MT1, typename MT2, typename MT3,
         typename=std::enable_if_t<Internal::TIsMatrix_v<MT1> && Internal::TIsMatrix_v<MT2> && Internal::TIsMatrix_v<MT3>>>
     void MatrixAdd(TMatrix<MT1>& c, const TMatrix<MT2>& a, const TMatrix<MT3>& b)
@@ -429,6 +443,14 @@ namespace QSim
     }
 
     template<typename MT>
+    MT TMatrix<MT>::operator-() const
+    {
+        MT res((~(*this)).Rows(), (~(*this)).Cols());
+        MatrixNeg(res, *this);
+        return res;
+    }
+
+    template<typename MT>
     template<typename MT2> 
     MT& TMatrix<MT>::operator+=(const TMatrix<MT2>& rhs) 
     {
@@ -466,6 +488,64 @@ namespace QSim
     {
         MatrixScalarDiv(*this, *this, s);
         return ~(*this);
+    }
+
+    //
+    // Matrix and Vector operations
+    //
+
+    template<typename VT1, typename VT2>
+    auto VectorDot(const TVector<VT1>& v1, const TVector<VT2>& v2)
+    {
+        assert((~v1).Size() == (~v2).Size());
+
+        using E1 = Internal::TMatrixElementType_t<VT1>;
+        using E2 = Internal::TMatrixElementType_t<VT2>;
+        using Ty = std::common_type_t<E1, E2>;
+
+        auto res = Ty{};
+        for (std::size_t i = 0; i < (~v1).Size(); i++)
+            res += (~v1)[i]*(~v2)[i];
+
+        return res;
+    }
+
+    template<typename VT>
+    auto VectorLen2(const TVector<VT>& v)
+    {
+        return VectorDot(v, v);
+    }
+
+    template<typename VT>
+    auto VectorLen(const TVector<VT>& v)
+    {
+        return std::sqrt(VectorLen2(v));
+    }
+
+    template<typename MT1, typename MT2>
+    void MatrixAbs(TMatrix<MT1>& c, const TMatrix<MT2>& a)
+    {
+        assert((~a).Rows() == (~c).Rows());
+        assert((~a).Cols() == (~c).Cols());
+
+        for (std::size_t i = 0; i < (~c).Rows(); i++)
+        {
+            for (std::size_t j = 0; j < (~c).Cols(); j++)
+                (~c)(i, j) = std::abs((~a)(i, j));            
+        }   
+    }
+
+    template<typename MT>
+    auto MatrixDiagMax(const TMatrix<MT>& mat)
+    {
+        std::size_t minDim = std::min((~mat).Rows(), (~mat).Cols());
+        assert(minDim > 0);
+        
+        auto res = (~mat)(0, 0);
+        for (std::size_t i = 0; i < minDim; i++)
+            res = std::max((~mat)(i, i), res);
+        
+        return res;
     }
 
     //
@@ -1190,6 +1270,24 @@ namespace QSim
     auto CreateLinspaceCol(Ty start, Ty stop, std::size_t steps)
     {
         return CreateLinspace<Ty, true>(start, stop, steps);
+    }
+
+    template<typename Ty, std::size_t N>
+    TStaticMatrix<Ty, N, N> CreateIdentityStatic()
+    {
+        TStaticMatrix<Ty, N, N> id;
+        for (std::size_t i = 0; i < N; i++)
+            id(i, i) = Ty{1};
+        return id;
+    }
+
+    template<typename Ty>
+    TDynamicMatrix<Ty> CreateIdentity(std::size_t N)
+    {
+        TDynamicMatrix<Ty> id(N, N);
+        for (std::size_t i = 0; i < N; i++)
+            id(i, i) = Ty{1};
+        return id;
     }
 
     template<typename MT, typename VT>

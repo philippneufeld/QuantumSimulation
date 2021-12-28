@@ -1,4 +1,4 @@
-// Philipp Neufeld, 2021
+// Philipp Neufeld, 2021-2022
 
 #ifndef QSim_CLIProgressBar_H_
 #define QSim_CLIProgressBar_H_
