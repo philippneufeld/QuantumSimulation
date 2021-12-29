@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Util_ThreadPool_H_
-#define QSim_Util_ThreadPool_H_
+#ifndef QSim_Executor_ThreadPoolExecutor_H_
+#define QSim_Executor_ThreadPoolExecutor_H_
 
 #include <vector>
 #include <thread>
@@ -10,26 +10,23 @@
 #include <functional>
 #include <condition_variable>
 #include <atomic>
-#include <iostream>
 
 #include "../Platform.h"
 
 namespace QSim
 {
 
-    class ThreadPool
+    using namespace std::chrono_literals;
+
+    class ThreadPoolExecutor : public TExecutor<ThreadPoolExecutor>
     {
     public:
-        ThreadPool();
-        ThreadPool(std::size_t threadCnt);
-        ~ThreadPool();
+        ThreadPoolExecutor();
+        ThreadPoolExecutor(std::size_t threadCnt);
+        ~ThreadPoolExecutor();
 
         void AddTask(const std::function<void(void)>& task);
         void WaitUntilFinnished();
-
-        template<typename Lambda, typename InputIt>
-        std::vector<decltype(std::declval<Lambda>()(*std::declval<InputIt>()))> 
-            Map(Lambda func, InputIt param_begin, InputIt param_end);
 
     private:
         void ThreadFunc();
@@ -45,10 +42,10 @@ namespace QSim
         bool m_stopThreads;
     };
 
-    ThreadPool::ThreadPool()
-        : ThreadPool(std::thread::hardware_concurrency()) { }
+    ThreadPoolExecutor::ThreadPoolExecutor()
+        : ThreadPoolExecutor(std::thread::hardware_concurrency()) { }
     
-    ThreadPool::ThreadPool(std::size_t threadCnt)
+    ThreadPoolExecutor::ThreadPoolExecutor(std::size_t threadCnt)
         : m_stopThreads(false), m_ongoingTasks(0)
     {
         threadCnt = threadCnt > 0 ? threadCnt : 1;
@@ -56,7 +53,7 @@ namespace QSim
             m_threads.push_back(std::thread([this](){ ThreadFunc(); }));
     }
 
-    ThreadPool::~ThreadPool()
+    ThreadPoolExecutor::~ThreadPoolExecutor()
     {
         WaitUntilFinnished();
         m_stopThreads = true;
@@ -65,21 +62,21 @@ namespace QSim
             t.join();
     }
 
-    void ThreadPool::AddTask(const std::function<void(void)>& task)
+    void ThreadPoolExecutor::AddTask(const std::function<void(void)>& task)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         m_queue.push(task);
         m_taskAdded.notify_one();
     }
 
-    void ThreadPool::WaitUntilFinnished()
+    void ThreadPoolExecutor::WaitUntilFinnished()
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         while (m_ongoingTasks > 0 || !m_queue.empty())
-            m_taskFinnished.wait(lock);
+            m_taskFinnished.wait_for(lock, 10ms); // wake up every 10ms if nothing happened
     }
 
-    void ThreadPool::ThreadFunc()
+    void ThreadPoolExecutor::ThreadFunc()
     {
         while (true)
         {
@@ -87,7 +84,7 @@ namespace QSim
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
                 while (!m_stopThreads && m_queue.empty())
-                    m_taskAdded.wait(lock);
+                    m_taskAdded.wait_for(lock, 10ms); // wake up every 10ms if nothing happened
                 
                 if (m_stopThreads)
                     break;
@@ -102,27 +99,6 @@ namespace QSim
             m_ongoingTasks--;
             m_taskFinnished.notify_all();
         }
-    }
-
-    template<typename Lambda, typename InputIt>
-    std::vector<decltype(std::declval<Lambda>()(*std::declval<InputIt>()))> 
-        ThreadPool::Map(Lambda func, InputIt param_begin, InputIt param_end)
-    {
-        using Ty = decltype(std::declval<Lambda>()(*std::declval<InputIt>()));
-        auto diff = param_end - param_begin;
-        if (diff <= 0)
-            return std::vector<Ty>();
-        
-        std::vector<Ty> results(diff);
-        auto it = param_begin;
-        for (std::size_t i = 0; it < param_end; i++, it++)
-        {
-            auto param = *it;
-            AddTask([&, i, param]() { results[i] = func(param); });
-        }
-        WaitUntilFinnished();
-
-        return results;
     }
 
 }

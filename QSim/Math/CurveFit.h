@@ -4,7 +4,7 @@
 #define QSim_Math_CurveFit_H_
 
 #include "Matrix.h"
-#include "../Util/ThreadPool.h"
+#include "../Executor/Executor.h"
 
 #include <vector>
 #include <utility>
@@ -14,8 +14,6 @@ namespace QSim
 
     namespace Internal
     {
-
-
 		// invoke a function by expanding a array to a parameter pack
 		template<std::size_t argCnt>
 		struct TFunctionInvoker
@@ -43,46 +41,50 @@ namespace QSim
 		};
 
 
-        template<typename Func, std::size_t N, typename VT>
+        template<typename Func, std::size_t N, typename VT, typename Ex>
         void CurveFitCalcJacobian(
             Func func, const TVector<VT>& x,
             THybridMatrix<double, N, false>& J,
             const TStaticColVector<double, N>& beta, 
             const TStaticColVector<double, N>& step,
-            ThreadPool& pool)
-        {
-            auto betaCpy = (~beta);
+            TExecutor<Ex>& executor)
+        {  
+            std::size_t n = (~x).Size();
             const double* beg = (~x).Data();
-            const double* end = (~x).Data() + (~x).Size();
+            const double* end = beg + n;
+            TDynamicColVector<double> ly(n);
+            TDynamicColVector<double> ry(n);
 
-            for (std::size_t i = 0; i < (~beta).Size(); i++)
+            auto betaCpy = (~beta);
+            for (std::size_t i = 0; i < N; i++)
             {
                 betaCpy[i] = (~beta)[i] - (~step)[i];
                 auto lfunc = [=](double t) { return func(t, betaCpy); };
                 betaCpy[i] = (~beta)[i] + (~step)[i];
                 auto rfunc = [=](double t) { return func(t, betaCpy); };
 
-                std::vector<double> ly = pool.Map(lfunc, beg, end);
-                std::vector<double> ry = pool.Map(rfunc, beg, end);
+                (~executor).MapNonBlocking(lfunc, ly, beg, end);
+                (~executor).MapNonBlocking(rfunc, ry, beg, end);
+                (~executor).WaitUntilFinnished();
 
-                for (std::size_t j = 0; j < (~x).Size(); j++)
+                for (std::size_t j = 0; j < n; j++)
                     J(j, i) = (ry[j] - ly[j]) / (2 * (~step)[i]);                
             }
         }
     }
 
-    template<typename Func, std::size_t N, typename VT>
+    template<typename Func, std::size_t N, typename VT, typename Ex>
     TStaticColVector<double, N> CurveFitV(
         Func func, const TVector<VT>& x, const TVector<VT>& y, 
         const TStaticColVector<double, N>& beta, 
         const TStaticColVector<double, N>& step,
-        ThreadPool& pool)
+        TExecutor<Ex>& executor)
     {
         std::size_t n = (~x).Size();
         assert((~x).Size() == (~y).Size());
 
         auto IdN = CreateIdentityStatic<double, N>();
-        std::size_t kmax = 150;
+        std::size_t kmax = 250;
 
         double v = 2;
         double tau = 1e-6;
@@ -98,8 +100,8 @@ namespace QSim
         // calculate f vector
         TDynamicColVector<double> f(n);
         for (std::size_t i = 0; i < n; i++)
-            pool.AddTask([&, i](){ f[i] = func((~x)[i], ~currBeta) - (~y)[i]; });
-        pool.WaitUntilFinnished();
+            (~executor).AddTask([&, i](){ f[i] = func((~x)[i], ~currBeta) - (~y)[i]; });
+        (~executor).WaitUntilFinnished();
         double currFerr = VectorLen2(f);
 
         TDynamicColVector<double> newF = f;
@@ -107,7 +109,7 @@ namespace QSim
 
         // calculate jacobian
         THybridMatrix<double, N, false> J(n, N);
-        Internal::CurveFitCalcJacobian(func, x, J, ~currBeta, ~step, pool); 
+        Internal::CurveFitCalcJacobian(func, x, J, ~currBeta, ~step, ~executor); 
         auto JT = J.Transpose();
         
         TStaticMatrix<double, N, N> A = JT * J;
@@ -126,8 +128,8 @@ namespace QSim
 
             // calculate new f vector
             for (std::size_t i = 0; i < n; i++)
-                pool.AddTask([&, i](){ newF[i] = func((~x)[i], ~newBeta) - (~y)[i]; });
-            pool.WaitUntilFinnished();
+                (~executor).AddTask([&, i](){ newF[i] = func((~x)[i], ~newBeta) - (~y)[i]; });
+            (~executor).WaitUntilFinnished();
             newFerr = VectorLen2(newF);
 
             double dF = currFerr - newFerr;
@@ -141,7 +143,7 @@ namespace QSim
                 newFerr = currFerr;
                 currBeta = newBeta;
 
-                Internal::CurveFitCalcJacobian(func, x, J, ~currBeta, ~step, pool); 
+                Internal::CurveFitCalcJacobian(func, x, J, ~currBeta, ~step, ~executor); 
                 auto JT = J.Transpose();
                 A = JT * J;
                 g = JT * f;
@@ -199,9 +201,9 @@ namespace QSim
         };
     }
 
-    template<typename Func, typename VT, typename... Args>
+    template<typename Func, typename VT, typename Ex, typename... Args>
     void CurveFit(
-        ThreadPool& pool, Func func, 
+        TExecutor<Ex>& executor, Func func, 
         const TVector<VT>& x, const TVector<VT>& y, 
         Args&... args)
     {
@@ -220,7 +222,7 @@ namespace QSim
         VType steps(N);
         MatrixAbs(steps, beta / 1e3);
 
-        beta = CurveFitV(funcV, x, y, beta, steps, pool);
+        beta = CurveFitV(funcV, x, y, beta, steps, ~executor);
         Internal::CurveFitAssignToPack(beta.Data(), args...);
     }
 

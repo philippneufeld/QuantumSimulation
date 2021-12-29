@@ -5,7 +5,7 @@
 #include <QSim/Util/CalcApp.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
-#include <QSim/Util/ThreadPool.h>
+#include <QSim/Executor/Executor.h>
 #include <QSim/Python/Plotting.h>
 #include <QSim/Math/Quadrature.h>
 

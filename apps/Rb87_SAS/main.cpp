@@ -5,7 +5,7 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Util/ThreadPool.h>
+#include <QSim/Executor/Executor.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 class CRb87SASApp : public QSim::CalcApp
@@ -33,13 +33,14 @@ public:
 
     virtual void DoCalculation() override
     {
-        QSim::ThreadPool pool;
+        QSim::ThreadPoolExecutor pool;
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;
-        constexpr double tint = 15 / decay;
+        constexpr double tint = 10 / decay;
 
-        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, 1001);
+        constexpr std::size_t cnt = 1001;
+        auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, cnt);
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
         detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Probe"));
         detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Pump"));
@@ -63,8 +64,8 @@ public:
         progress.Start();
         
         // start calculation
-        QSim::TDynamicRowVector<double> populations = pool.Map(
-            func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
+        auto populations = QSim::CreateZeros(cnt);
+        pool.Map(func, populations, detunings.GetColIterBegin(), detunings.GetColIterEnd());
         
         this->StoreMatrix("Detunings", detunings);
         this->StoreMatrix("Population P3/2", populations);
@@ -115,7 +116,7 @@ int main(int argc, const char* argv[])
 #include <QSim/Python/Plotting.h>
 #include <QSim/Util/Argparse.h>
 #include <QSim/StaticQSys.h>
-#include <QSim/Util/ThreadPool.h>
+#include <QSim/Executor/Executor.h>
 
 int main(int argc, const char* argv[])
 {
@@ -143,7 +144,7 @@ int main(int argc, const char* argv[])
 
     if (!cmdArgs.IsOptionPresent("nocalc"))
     {
-        QSim::ThreadPool pool;
+        QSim::ThreadPoolExecutor pool;
 
         // define parameters
         constexpr double dip = 4.227 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;

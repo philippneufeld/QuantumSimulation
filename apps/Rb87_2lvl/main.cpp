@@ -5,7 +5,7 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Util/ThreadPool.h>
+#include <QSim/Executor/Executor.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 class CRb87TwoLvlApp : public QSim::CalcApp
@@ -32,7 +32,7 @@ public:
 
     virtual void DoCalculation() override
     {
-        QSim::ThreadPool pool;
+        QSim::ThreadPoolExecutor pool;
         
         QSim::CLIProgBarInt progress;
         auto func = [&](auto dets)
@@ -47,15 +47,16 @@ public:
         };
 
         // Generate detuning axis
-        auto detunings = QSim::CreateLinspaceRow(-1e9, 1e9, 501);
+        constexpr std::size_t cnt = 501;
+        auto detunings = QSim::CreateLinspaceRow(-1e9, 1e9, cnt);
         
         // start progress bar
         progress.SetTotal(detunings.Cols());
         progress.Start();
         
         // start calculation
-        QSim::TDynamicRowVector<double> absCoeffs = pool.Map(
-            func, detunings.GetColIterBegin(), detunings.GetColIterEnd());
+        auto absCoeffs = QSim::CreateZeros(cnt);
+        pool.Map(func, absCoeffs, detunings.GetColIterBegin(), detunings.GetColIterEnd());
         
         this->StoreMatrix("Detunings", detunings);
         this->StoreMatrix("AbsCoeffs S1/2->P3/2", absCoeffs);

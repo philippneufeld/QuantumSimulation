@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../Platform.h"
+#include "../Util/CRTP.h"
 
 namespace QSim
 {
@@ -22,19 +23,14 @@ namespace QSim
 
     namespace Internal
     {
-        template<typename MT, typename = void>
-        struct TIsMatrix : std::integral_constant<bool, false> {};
+
         template<typename MT>
-        struct TIsMatrix<MT, std::enable_if_t<std::is_base_of<TMatrix<std::decay_t<decltype(~(std::declval<MT>()))>>, std::decay_t<MT>>::value>> 
-            : std::integral_constant<bool, true> {};
+        struct TIsMatrix : TIsCRTP<MT, TMatrix> {};
         template<typename MT>
         constexpr bool TIsMatrix_v = TIsMatrix<MT>::value;
 
         template<typename MT, typename=std::enable_if_t<TIsMatrix_v<MT>>>
-        struct TMatrixDecay
-        {
-            using type = std::decay_t<decltype(~(std::declval<MT>()))>;
-        };
+        struct TMatrixDecay : TDecayCRTP<MT> {};
         template<typename MT>
         using TMatrixDecay_t = typename TMatrixDecay<MT>::type;
 
@@ -157,12 +153,9 @@ namespace QSim
     
     // Matrix CRTP base class
     template<typename MT>
-    class TMatrix
+    class TMatrix : public TCRTP<MT>
     {
-    public:  
-        MT& operator~() { return static_cast<MT&>(*this); }
-        const MT& operator~() const { return static_cast<const MT&>(*this); }
-
+    public:
         // auxilliary function
         void SetZero();
         auto Transpose() const;
