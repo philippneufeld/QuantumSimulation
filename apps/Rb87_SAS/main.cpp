@@ -39,11 +39,20 @@ public:
         double dt = 1e-10;
         constexpr double tint = 10 / decay;
 
+        // suppress weird warning about string operation overflow
+#ifdef QSim_COMPILER_GNUC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
         constexpr std::size_t cnt = 1001;
         auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, cnt);
+        auto laserDetunings2 = QSim::CreateLinspaceRow(-2e9, 1e9, cnt);;
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
         detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Probe"));
-        detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Pump"));
+        detunings.SetRow(laserDetunings2, m_system.GetLaserIdxByName("Pump"));
+#ifdef QSim_COMPILER_GNUC
+#pragma GCC diagnostic pop
+#endif
 
         QSim::CLIProgBarInt progress;
         auto rho0 = m_system.CreateGroundState();

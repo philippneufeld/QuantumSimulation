@@ -260,6 +260,7 @@ namespace QSim
     template<typename VT>
     void TMatrix<MT>::SetRow(const TVector<VT>& v, std::size_t i)
     {
+        assert(i < (~(*this)).Rows());
         assert((~(*this)).Cols() == (~v).Size());
         for (std::size_t j = 0; j < (~(*this)).Cols(); j++)
             (~(*this))(i, j) = (~v)(j);
@@ -269,6 +270,7 @@ namespace QSim
     template<typename VT>
     void TMatrix<MT>::SetCol(const TVector<VT>& v, std::size_t i)
     {
+        assert(i < (~(*this)).Cols());
         assert((~(*this)).Rows() == (~v).Size());
         for (std::size_t j = 0; j < (~(*this)).Rows(); j++)
             (~(*this))(j, i) = (~v)(j);

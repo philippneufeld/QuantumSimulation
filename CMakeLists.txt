@@ -25,6 +25,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
+    "${QSIM_SOURCE_DIR}/Util/DataFile2.cpp"
     "${QSIM_SOURCE_DIR}/Util/CLIProgressBar.cpp")
 
 # find required libs
@@ -81,6 +82,7 @@ endfunction()
 # add apps
 qsim_add_app("Test")
 qsim_add_app("Quadrature")
+qsim_add_app("CurveFit")
 qsim_add_app("Rb87_2lvl")
 qsim_add_app("Rb87_EIT")
 qsim_add_app("Rb87_SAS")
