@@ -10,7 +10,7 @@ First navigate into the project directory and initialize the build directory by 
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE="Release" -DCMAKE_C_COMPILER="$(which clang)" -DCMAKE_CXX_COMPILER="$(which clang++)"
 
-Here, clang/clang++ can be replaced by another compiler (e.g. gcc/g++). <br/>
+Here, clang/clang++ can be replaced by another compiler (e.g. gcc/g++).
 Next, navigate into the build directory and compile all apps by using
 
     make
