@@ -33,13 +33,23 @@ target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")
 
 # threading
 find_package(Threads REQUIRED)
-target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC ${CMAKE_THREAD_LIBS_INIT})
+if (Threads_FOUND)
+    target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${CMAKE_THREAD_LIBS_INIT}")
+endif()
 
-# python
+# hdf5
+find_package(HDF5 REQUIRED COMPONENTS CXX)
+if (HDF5_FOUND)
+    target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_INCLUDE_DIRS}")
+    target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_LIBRARIES}")
+    # target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_DEFINITIONS}")
+endif()
+
+# python (optional)
 find_package(Python3 COMPONENTS Interpreter Development NumPy)
 if (Python3_FOUND)
-    target_include_directories("${QSIM_LIB_TARGET}" PUBLIC ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
-    target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC ${Python3_LIBRARIES})
+    target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${Python3_INCLUDE_DIRS}" "${Python3_NumPy_INCLUDE_DIRS}")
+    target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${Python3_LIBRARIES}")
     target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "-DQSIM_PYTHON3")
 endif()
 
