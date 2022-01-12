@@ -6,8 +6,6 @@
 
 #include "CalcApp.h"
 #include "Argparse.h"
-#include "../Python/Plotting.h"
-
 
 namespace QSim
 {

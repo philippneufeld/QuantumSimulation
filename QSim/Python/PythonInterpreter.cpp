@@ -1,5 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
+#if defined(QSIM_PYTHON3)
+
 #include <unistd.h> // readlink, getpid
 #include <cstring>
 
@@ -211,3 +213,5 @@ namespace QSim
     }
 
 }
+
+#endif

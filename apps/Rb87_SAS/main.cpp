@@ -1,12 +1,15 @@
 // Philipp Neufeld, 2021-2022
 
 #include <QSim/Util/CalcApp.h>
-#include <QSim/Python/Plotting.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/Executor.h>
 #include <QSim/Util/CLIProgressBar.h>
+
+#ifdef QSIM_PYTHON3
+#include <QSim/Python/Plotting.h>
+#endif
 
 class CRb87SASApp : public QSim::CalcApp
 {
@@ -80,6 +83,7 @@ public:
         this->StoreMatrix("Population P3/2", populations);
     }
 
+#ifdef QSIM_PYTHON3
     virtual void Plot() override
     {
         auto detunings = this->LoadMatrix("Detunings");
@@ -92,6 +96,7 @@ public:
         ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
         matplotlib.RunGUILoop();
     }
+#endif
 
 private:
     QSim::TNLevelSystemSC<2> m_system;

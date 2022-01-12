@@ -1,5 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
+#if defined(QSIM_PYTHON3)
+
 #include "Plotting.h"
 
 namespace QSim
@@ -222,3 +224,5 @@ namespace QSim
     }
 
 }
+
+#endif

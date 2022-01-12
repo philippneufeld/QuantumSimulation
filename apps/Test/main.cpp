@@ -9,6 +9,10 @@ int main(int argc, const char* argv[])
 
     std::cout << (driver.OpenFile("test.dat") ? "success" : "failure") << std::endl;
 
+#ifdef QSIM_PYTHON3
+    std::cout << "QSIM_PYTHON3" << std::endl;
+#endif
+
     /*auto file = driver.GetOSHandle().lock();
 
     std::cout << file->GetCursorPos() << std::endl;

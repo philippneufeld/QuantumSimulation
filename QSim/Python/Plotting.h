@@ -1,5 +1,9 @@
 // Philipp Neufeld, 2021-2022
 
+#if !defined(QSIM_PYTHON3)
+#error "Python3 is not present on the system"
+#else
+
 #ifndef QSim_Python_Plotting_H_
 #define QSim_Python_Plotting_H_
 
@@ -89,4 +93,5 @@ namespace QSim
 
 }
 
+#endif
 #endif

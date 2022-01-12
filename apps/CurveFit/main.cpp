@@ -1,15 +1,14 @@
 // Philipp Neufeld, 2021-2022
 
-#include <QSim/Util/CalcApp.h>
-#include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem.h>
-#include <QSim/Executor/Executor.h>
-#include <QSim/Python/Plotting.h>
-#include <QSim/Util/CLIProgressBar.h>
-
 #include <chrono>
 
 #include <QSim/Math/CurveFit.h>
+#include <QSim/Executor/Executor.h>
+#include <QSim/Util/CLIProgressBar.h>
+
+#ifdef QSIM_PYTHON3
+#include <QSim/Python/Plotting.h>
+#endif
 
 using namespace std::chrono_literals;
 
@@ -43,12 +42,16 @@ int main(int argc, const char* argv[])
     executor.Map([=](double x) { return func(x, a, g, x0); }, 
         yfit, xfit.Data(), xfit.Data() + xfit.Size());
 
+#ifdef QSIM_PYTHON3
     QSim::PythonMatplotlib matplotlib;
     auto figure = matplotlib.CreateFigure();
     auto ax = figure.AddSubplot();
     ax.Plot(x.Data(), y.Data(), x.Size(), "Data", ".");
     ax.Plot(xfit.Data(), yfit.Data(), xfit.Size(), "Fit", "-");
     matplotlib.RunGUILoop();
+#else
+    std::cout << "Plotting disabled" << std::endl;
+#endif
 
     return 0;
 }

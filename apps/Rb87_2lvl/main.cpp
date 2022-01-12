@@ -1,12 +1,15 @@
 // Philipp Neufeld, 2021-2022
 
 #include <QSim/Util/CalcApp.h>
-#include <QSim/Python/Plotting.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/Executor.h>
 #include <QSim/Util/CLIProgressBar.h>
+
+#ifdef QSIM_PYTHON3
+#include <QSim/Python/Plotting.h>
+#endif
 
 class CRb87TwoLvlApp : public QSim::CalcApp
 {
@@ -62,6 +65,7 @@ public:
         this->StoreMatrix("AbsCoeffs S1/2->P3/2", absCoeffs);
     }
 
+#ifdef QSIM_PYTHON3
     virtual void Plot() override
     {
         auto x_axis = this->LoadMatrix("Detunings");
@@ -73,6 +77,8 @@ public:
         ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
         matplotlib.RunGUILoop();
     }
+#endif
+
 private:
     QSim::TNLevelSystemQM<2> m_system;
     QSim::DopplerIntegrator m_doppler;

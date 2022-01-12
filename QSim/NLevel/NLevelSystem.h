@@ -577,7 +577,7 @@ namespace QSim
         for (size_t i = 0; i < m_laserFrequencies.Size(); i++)
         {
             auto lvls = GetLaserLevels(i);
-            m_laserFrequencies[i] = abs(GetLevel(lvls.first) - GetLevel(lvls.second));
+            m_laserFrequencies[i] = std::abs(GetLevel(lvls.first) - GetLevel(lvls.second));
         }
         
         m_laserPropagationFactor.Resize(GetLaserCount());

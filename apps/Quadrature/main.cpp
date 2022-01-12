@@ -6,10 +6,11 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/Executor/Executor.h>
-#include <QSim/Python/Plotting.h>
 #include <QSim/Math/Quadrature.h>
 
-#include <QSim/Util/ConstList.h>
+#ifdef QSIM_PYTHON3
+#include <QSim/Python/Plotting.h>
+#endif
 
 class CQuadratureApp : public QSim::CalcApp
 {
@@ -93,6 +94,7 @@ public:
         }
     }
 
+#ifdef QSIM_PYTHON3
     virtual void Plot() override
     {
         std::string cases[] = { 
@@ -123,6 +125,7 @@ public:
         }
         matplotlib.RunGUILoop();
     }
+#endif
 
 private:
     std::vector<std::tuple<std::string, std::function<double(double)>, double, double, double>> m_funcs;
