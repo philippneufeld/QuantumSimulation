@@ -27,6 +27,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile2.cpp"
+    "${QSIM_SOURCE_DIR}/Util/DataFile3.cpp"
     "${QSIM_SOURCE_DIR}/Util/CLIProgressBar.cpp")
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
 target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")
@@ -38,7 +39,7 @@ if (Threads_FOUND)
 endif()
 
 # hdf5
-find_package(HDF5 REQUIRED COMPONENTS CXX)
+find_package(HDF5 REQUIRED)
 if (HDF5_FOUND)
     target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_INCLUDE_DIRS}")
     target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_LIBRARIES}")

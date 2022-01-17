@@ -1,35 +1,46 @@
 // Philipp Neufeld, 2021-2022
 
 #include <iostream>
-#include <QSim/Util/DataFile2.h>
+#include <QSim/Util/ScopeGuard.h>
+#include <QSim/Util/DataFile3.h>
+#include <QSim/Math/Matrix.h>
 
-#include <H5Cpp.h>
-
-#define TEST_WRITE
+using namespace QSim;
 
 int main(int argc, const char* argv[])
 {
-    float data[4][4]; // buffer for data to write
+    DataFile3 file("test.h5", DataFile3_DEFAULT);
+    DataFileGroup root = file.OpenRootGroup();
+
+    auto test = CreateIdentity<double>(5);
+    DataFileDataset testDataset;
+    if (!root.DoesDatasetExist("test")) 
+        testDataset = root.CreateDataset("test", {test.Rows(), test.Cols()});
+    else
+        testDataset = root.GetDataset("test");
+    testDataset.Store(test.Data());
+
+    DataFileGroup group1;
+    if (!root.DoesSubgroupExist("group1")) 
+        group1 = root.CreateSubgroup("group1");
+    else
+        group1 = root.GetSubgroup("group1");
+
+    auto test2 = test * 2;
+    DataFileDataset test2Dataset;
+    if (!group1.DoesDatasetExist("test2")) 
+        test2Dataset = group1.CreateDataset("test2", {test.Rows(), test.Cols()});
+    else
+        test2Dataset = group1.GetDataset("test2");
+    test2Dataset.Store(test2.Data());
     
-#ifdef TEST_WRITE
-    H5::H5File file("test.h5", H5F_ACC_TRUNC);
-    
-    // Create the data space for the dataset.
-    hsize_t dims[2]; // dataset dimensions
-    dims[0] = 4;
-    dims[1] = 4;
-    H5::DataSpace dataspace(2, dims);
-    H5::DataSet dataset = file.createDataSet("test", H5::PredType::NATIVE_FLOAT, dataspace);
-    
-    for (int j = 0; j < 4; j++)
-        for (int i = 0; i < 4; i++)
-            data[j][i] = i == j ? 1 : 0;// i * 6 + j + 1;
-    dataset.write(data, H5::PredType::NATIVE_FLOAT);
-#else
-    H5::H5File file("test.h5", H5F_ACC_RDWR );
-    H5::DataSet dataset = file.openDataSet("test");    
-    dataset.read(data, H5::PredType::NATIVE_FLOAT);
-#endif
+    double myattr[1] = { 127.0 };
+    if (!group1.DoesAttributeExist("myattr"))
+        group1.CreateAttribute("myattr", {1});
+    group1.StoreAttribute("myattr", myattr);
+
+    auto e1 = root.EnumerateSubgroups();
+    auto e2 = root.EnumerateDatasets();
 
     return 0;
 }
