@@ -96,13 +96,16 @@ namespace QSim
     class DataFile3
     {
     public:
-        DataFile3(const std::string& name, DataFile3OpenFlag flag);
+        DataFile3();
         ~DataFile3();
 
         DataFile3(const DataFile3&) = delete;
         DataFile3(DataFile3&& rhs);
         DataFile3& operator=(const DataFile3&) = delete;
         DataFile3& operator=(DataFile3&& rhs);
+
+        bool Open(const std::string& name, DataFile3OpenFlag flag);
+        void Close();
 
         bool IsOpen() const;
         operator bool() const { return IsOpen(); }

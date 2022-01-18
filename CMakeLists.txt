@@ -11,7 +11,7 @@ endif()
 project ("QuantumSimulation" VERSION 1.0)
 
 # use C++14
-set (CMAKE_CXX_STANDARD 14)
+set (CMAKE_CXX_STANDARD 17)
 
 # include directories
 set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
@@ -24,6 +24,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp"
+    "${QSIM_SOURCE_DIR}/Util/CalcApp2.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile2.cpp"
@@ -31,6 +32,11 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/CLIProgressBar.cpp")
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
 target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")
+
+# Data directory
+set(QSIM_DATA_DIR "${CMAKE_SOURCE_DIR}/Data")
+file(MAKE_DIRECTORY "${QSIM_DATA_DIR}")
+target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "-DQSim_DATA_DIR=\"${QSIM_DATA_DIR}\"")
 
 # threading
 find_package(Threads REQUIRED)

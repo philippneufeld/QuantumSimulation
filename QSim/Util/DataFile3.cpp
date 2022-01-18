@@ -177,7 +177,7 @@ namespace QSim
     DataFileGroup DataFileGroup::CreateSubgroup(const std::string& name)
     {
         if (DoesSubgroupExist(name))
-            return false;
+            return H5I_INVALID_HID;
             
         return H5Gcreate2(GetNative(), name.c_str(), 
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -249,8 +249,31 @@ namespace QSim
 
 
 
-    DataFile3::DataFile3(const std::string& name, DataFile3OpenFlag flag)
+    DataFile3::DataFile3() 
+        : m_file(H5I_INVALID_HID) {}
+
+    DataFile3::DataFile3(DataFile3&& rhs)
+        : m_file(rhs.m_file)
     {
+        m_file = H5I_INVALID_HID;
+    }
+
+    DataFile3& DataFile3::operator=(DataFile3&& rhs)
+    {
+        std::swap(m_file, rhs.m_file);
+        return *this;
+    }
+
+    DataFile3::~DataFile3()
+    {
+        Close();
+    }
+
+    bool DataFile3::Open(const std::string& name, DataFile3OpenFlag flag)
+    {
+        if (IsOpen())
+            return false;
+
         if (flag & (DataFile3_MUST_NOT_EXIST | DataFile3_TRUNCATE))
         {
             // create empty file
@@ -276,21 +299,11 @@ namespace QSim
             if (m_file < 0 && !(flag & DataFile3_MUST_EXIST))
                 m_file = H5Fcreate(name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
         }
+
+        return true;
     }
 
-    DataFile3::DataFile3(DataFile3&& rhs)
-        : m_file(rhs.m_file)
-    {
-        m_file = H5I_INVALID_HID;
-    }
-
-    DataFile3& DataFile3::operator=(DataFile3&& rhs)
-    {
-        std::swap(m_file, rhs.m_file);
-        return *this;
-    }
-
-    DataFile3::~DataFile3()
+    void DataFile3::Close()
     {
         if (m_file >= 0)
             H5Fclose(m_file);

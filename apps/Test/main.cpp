@@ -4,12 +4,14 @@
 #include <QSim/Util/ScopeGuard.h>
 #include <QSim/Util/DataFile3.h>
 #include <QSim/Math/Matrix.h>
+#include <QSim/Util/CalcApp2.h>
 
 using namespace QSim;
 
 int main(int argc, const char* argv[])
 {
-    DataFile3 file("test.h5", DataFile3_DEFAULT);
+    DataFile3 file;
+    file.Open("test.h5", DataFile3_DEFAULT);
     DataFileGroup root = file.OpenRootGroup();
 
     auto test = CreateIdentity<double>(5);

@@ -13,3 +13,7 @@ build*/
 CMakeSettings.json
 CMakeFiles/
 CMakeCache.txt
+
+# Simulation data
+Data/
+*.h5
