@@ -4,6 +4,8 @@
 out*/
 build*/
 
+venv/
+
 # ignore Visual Studio specific files
 .vs/
 .vscode/

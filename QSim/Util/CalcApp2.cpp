@@ -144,7 +144,7 @@ namespace QSim
             this->Init(simData);
         }
 
-        if (!this->IsFinnished(simData))
+        if (!this->IsFinished(simData))
             this->Continue(simData);
 
         if (cmdArgs.IsOptionPresent("plot"))

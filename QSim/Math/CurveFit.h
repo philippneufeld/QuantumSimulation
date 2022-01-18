@@ -65,7 +65,7 @@ namespace QSim
 
                 (~executor).MapNonBlocking(lfunc, ly, beg, end);
                 (~executor).MapNonBlocking(rfunc, ry, beg, end);
-                (~executor).WaitUntilFinnished();
+                (~executor).WaitUntilFinished();
 
                 for (std::size_t j = 0; j < n; j++)
                     J(j, i) = (ry[j] - ly[j]) / (2 * (~step)[i]);                
@@ -101,7 +101,7 @@ namespace QSim
         TDynamicColVector<double> f(n);
         for (std::size_t i = 0; i < n; i++)
             (~executor).AddTask([&, i](){ f[i] = func((~x)[i], ~currBeta) - (~y)[i]; });
-        (~executor).WaitUntilFinnished();
+        (~executor).WaitUntilFinished();
         double currFerr = VectorLen2(f);
 
         TDynamicColVector<double> newF = f;
@@ -129,7 +129,7 @@ namespace QSim
             // calculate new f vector
             for (std::size_t i = 0; i < n; i++)
                 (~executor).AddTask([&, i](){ newF[i] = func((~x)[i], ~newBeta) - (~y)[i]; });
-            (~executor).WaitUntilFinnished();
+            (~executor).WaitUntilFinished();
             newFerr = VectorLen2(newF);
 
             double dF = currFerr - newFerr;

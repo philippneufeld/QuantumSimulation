@@ -24,7 +24,7 @@ namespace QSim
 
         virtual void Init(DataFileGroup& simdata) = 0;
         virtual void Continue(DataFileGroup& simdata)  = 0;
-        virtual bool IsFinnished(DataFileGroup& simdata) = 0;
+        virtual bool IsFinished(DataFileGroup& simdata) = 0;
         virtual void Plot(DataFileGroup& simdata) = 0;
 
         int Run(int argc, const char** argv);

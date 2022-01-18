@@ -26,7 +26,7 @@ namespace QSim
         ~ThreadPoolExecutor();
 
         void AddTask(const std::function<void(void)>& task);
-        void WaitUntilFinnished();
+        void WaitUntilFinished();
 
     private:
         void ThreadFunc();
@@ -37,7 +37,7 @@ namespace QSim
         
         mutable std::mutex m_mutex;
         std::condition_variable m_taskAdded;
-        std::condition_variable m_taskFinnished;
+        std::condition_variable m_taskFinished;
         std::atomic<unsigned int> m_ongoingTasks;
         bool m_stopThreads;
     };
@@ -55,7 +55,7 @@ namespace QSim
 
     ThreadPoolExecutor::~ThreadPoolExecutor()
     {
-        WaitUntilFinnished();
+        WaitUntilFinished();
         m_stopThreads = true;
         m_taskAdded.notify_all(); // wake up all threads
         for (auto& t: m_threads)
@@ -69,11 +69,11 @@ namespace QSim
         m_taskAdded.notify_one();
     }
 
-    void ThreadPoolExecutor::WaitUntilFinnished()
+    void ThreadPoolExecutor::WaitUntilFinished()
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         while (m_ongoingTasks > 0 || !m_queue.empty())
-            m_taskFinnished.wait_for(lock, 10ms); // wake up every 10ms if nothing happened
+            m_taskFinished.wait_for(lock, 10ms); // wake up every 10ms if nothing happened
     }
 
     void ThreadPoolExecutor::ThreadFunc()
@@ -97,7 +97,7 @@ namespace QSim
             func(); // execute function
 
             m_ongoingTasks--;
-            m_taskFinnished.notify_all();
+            m_taskFinished.notify_all();
         }
     }
 

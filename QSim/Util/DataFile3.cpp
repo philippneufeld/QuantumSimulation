@@ -88,7 +88,7 @@ namespace QSim
         int ndims = H5Sget_simple_extent_ndims(dspace);
         if (ndims <= 0) return std::vector<std::size_t>{};
 
-        std::vector<hsize_t> dims;
+        std::vector<hsize_t> dims(ndims);
         if (H5Sget_simple_extent_dims(dspace, &dims[0], nullptr) < 0)
             return std::vector<std::size_t>{};
 
@@ -123,7 +123,7 @@ namespace QSim
     DataFileDataset::DataFileDataset(hid_t dataset)
         : DataFileObject(dataset) { }
 
-    std::vector<std::size_t> DataFileDataset::GetDims(const std::string& name) const
+    std::vector<std::size_t> DataFileDataset::GetDims() const
     {
         hid_t dspace = H5Dget_space(GetNative());
         if (dspace < 0) return std::vector<std::size_t>{};
@@ -132,7 +132,7 @@ namespace QSim
         int ndims = H5Sget_simple_extent_ndims(dspace);
         if (ndims <= 0) return std::vector<std::size_t>{};
 
-        std::vector<hsize_t> dims;
+        std::vector<hsize_t> dims(ndims);
         if (H5Sget_simple_extent_dims(dspace, &dims[0], nullptr) < 0)
             return std::vector<std::size_t>{};
 

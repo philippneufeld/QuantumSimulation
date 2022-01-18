@@ -14,7 +14,7 @@ namespace QSim
     // Implementations (classes deriving from TExecutor)
     // must implement:
     //  1.) void AddTask(const std::function<void(void)>& task);
-    //  2.) void WaitUntilFinnished();
+    //  2.) void WaitUntilFinished();
     template<typename T>
     class TExecutor : public TCRTP<T> 
     {
@@ -46,17 +46,17 @@ namespace QSim
     void TExecutor<T>::Map(const Lambda& func, Container& dest, InputIt paramBegin, InputIt paramEnd)
     {
         MapNonBlocking(func, dest, paramBegin, paramEnd);
-        (~(*this)).WaitUntilFinnished();
+        (~(*this)).WaitUntilFinished();
     }
 
     // Default executor
-    // Just calls task directly and blocks until task is finnished
+    // Just calls task directly and blocks until task is finished
     class DefaultExecutor : public TExecutor<DefaultExecutor>
     {
     public:
         DefaultExecutor() = default;
         void AddTask(const std::function<void(void)>& task) { task(); }
-        void WaitUntilFinnished() {}
+        void WaitUntilFinished() {}
     };
 
 }

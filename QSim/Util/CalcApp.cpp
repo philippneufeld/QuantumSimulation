@@ -54,7 +54,7 @@ namespace QSim
             this->DoCalculation();
 
             auto end_ts = std::chrono::high_resolution_clock::now();
-            std::cout << "Finnished calculation. (Elapsed time: " 
+            std::cout << "Finished calculation. (Elapsed time: " 
                 << (std::chrono::high_resolution_clock::now() - start_ts).count() / 1.0e9 
                 << "s)" << std::endl;
             

@@ -53,7 +53,7 @@ namespace QSim
     public:
         DataFileDataset() = default;
 
-        std::vector<std::size_t> GetDims(const std::string& name) const;
+        std::vector<std::size_t> GetDims() const;
         bool Load(double* data) const;
         bool Store(const double* data);
     };
