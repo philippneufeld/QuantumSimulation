@@ -85,8 +85,8 @@ namespace QSim
         std::vector<std::string> EnumerateDatasets() const;
         
     private:
-        static herr_t EnumGroupsHelper(hid_t group, const char *name, const H5L_info2_t *info, void *data);
-        static herr_t EnumDatasetHelper(hid_t group, const char *name, const H5L_info2_t *info, void *data);
+        static herr_t EnumGroupsHelper(hid_t group, const char *name, const H5L_info_t *info, void *data);
+        static herr_t EnumDatasetHelper(hid_t group, const char *name, const H5L_info_t *info, void *data);
     };
 
 

@@ -228,7 +228,7 @@ namespace QSim
     std::vector<std::string> DataFileGroup::EnumerateSubgroups() const
     {
         std::vector<std::string> subgroups;
-        H5Literate2(GetNative(), H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, &EnumGroupsHelper, &subgroups);
+        H5Literate(GetNative(), H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, &EnumGroupsHelper, &subgroups);
         return subgroups;
     }
 
@@ -264,11 +264,11 @@ namespace QSim
     std::vector<std::string> DataFileGroup::EnumerateDatasets() const
     {
         std::vector<std::string> subgroups;
-        H5Literate2(GetNative(), H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, &EnumDatasetHelper, &subgroups);
+        H5Literate(GetNative(), H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, &EnumDatasetHelper, &subgroups);
         return subgroups;
     }
 
-    herr_t DataFileGroup::EnumGroupsHelper(hid_t group, const char *name, const H5L_info2_t *info, void *data)
+    herr_t DataFileGroup::EnumGroupsHelper(hid_t group, const char *name, const H5L_info_t *info, void *data)
     {
         DataFileGroup child = H5Gopen2(group, name, H5P_DEFAULT);
         if (child.IsValid())
@@ -276,7 +276,7 @@ namespace QSim
         return 0;
     }
 
-    herr_t DataFileGroup::EnumDatasetHelper(hid_t group, const char *name, const H5L_info2_t *info, void *data)
+    herr_t DataFileGroup::EnumDatasetHelper(hid_t group, const char *name, const H5L_info_t *info, void *data)
     {
         DataFileDataset child = H5Dopen2(group, name, H5P_DEFAULT);
         if (child.IsValid())
