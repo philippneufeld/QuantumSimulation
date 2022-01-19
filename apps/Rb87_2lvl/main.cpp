@@ -1,6 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
-#include <QSim/Util/CalcApp2.h>
+#include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
@@ -61,9 +61,7 @@ public:
         };
 
         // Load detuning axis
-        auto detDset = simdata.GetDataset("Detunings");
-        QSim::TDynamicRowVector<double> detunings(detDset.GetDims()[0]);
-        detDset.Load(&detunings[0]);
+        auto detunings = simdata.GetDataset("Detunings").Load1DRowVector();
 
         // start progress bar
         progress.SetTotal(detunings.Cols());
@@ -74,24 +72,14 @@ public:
         pool.Map(func, absCoeffs, detunings.GetColIterBegin(), detunings.GetColIterEnd());
 
         simdata.GetDataset("AbsCoeffs").Store(absCoeffs.Data());
-        simdata.CreateAttribute("Finished", {});
-    }
-
-    virtual bool IsFinished(QSim::DataFileGroup& simdata) override
-    {
-        return simdata.DoesAttributeExist("Finished");
+        SetFinished(simdata);
     }
 
     virtual void Plot(QSim::DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto detDset = simdata.GetDataset("Detunings");
-        QSim::TDynamicColVector<double> x_axis(detDset.GetDims()[0]);
-        detDset.Load(&x_axis[0]);
-
-        auto detDset2 = simdata.GetDataset("AbsCoeffs");
-        QSim::TDynamicColVector<double> y_axis(detDset2.GetDims()[0]);
-        detDset2.Load(&y_axis[0]);
+        auto x_axis = simdata.GetDataset("Detunings").Load1DRowVector();
+        auto y_axis = simdata.GetDataset("AbsCoeffs").Load1DRowVector();
 
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();

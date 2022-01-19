@@ -1,217 +1,363 @@
 // Philipp Neufeld, 2021-2022
 
-#include <iostream>
-#include <cstdio>
-#include <iterator>
-#include <algorithm>
+#include <utility>
 
 #include "DataFile.h"
+#include "ScopeGuard.h"
 
 namespace QSim
 {
 
-    DataFile::DataFile() { }
-    DataFile::~DataFile() { }
+    DataFileObject::DataFileObject()
+        : m_hid(H5I_INVALID_HID) { }
 
-    void DataFile::Clear()
-    {
-        m_data.clear();
-    }
-
-    void DataFile::SetData(const std::string& name, const void* data, std::size_t n)
-    {
-        SetDataEx(name, data, n, 0);
-    }
-
-    void DataFile::SetDataEx(const std::string& name, const void* data, std::size_t n, std::uint64_t typeId)
-    {
-        m_data[name] = std::make_pair(typeId, std::move(Memory(data, n)));
-    }
+    DataFileObject::DataFileObject(hid_t hid) 
+        : m_hid(hid) { }
     
-    const Memory& DataFile::GetData(const std::string& name) const
+    DataFileObject::DataFileObject(const DataFileObject& rhs)
+        : m_hid(rhs.m_hid)
     {
-        static Memory nullMem; // no memory allocated (static because it is returned by reference)
-        auto it = m_data.find(name);
-        return it != m_data.end() ? it->second.second : nullMem;
+        if (m_hid >= 0)
+            H5Iinc_ref(m_hid);
     }
 
-    std::uint64_t DataFile::GetDataTypeId(const std::string& name) const
+    DataFileObject::DataFileObject(DataFileObject&& rhs)
+        : m_hid(rhs.m_hid)
     {
-        auto it = m_data.find(name);
-        return it != m_data.end() ? it->second.first : -1;
+        rhs.m_hid = H5I_INVALID_HID;
     }
 
-    void DataFile::RemoveData(const std::string& name)
+    DataFileObject& DataFileObject::operator=(const DataFileObject& rhs)
     {
-        auto it = m_data.find(name);
-        if (it != m_data.end())
-            m_data.erase(it);
+        return this->operator=(std::move(DataFileObject(rhs)));
     }
 
-    bool DataFile::Contains(const std::string& name) const
+    DataFileObject& DataFileObject::operator=(DataFileObject&& rhs)
     {
-        return (m_data.find(name) != m_data.end());
+        std::swap(m_hid, rhs.m_hid);
+        return *this;
     }
 
-    std::vector<std::string> DataFile::GetIndex() const
+    DataFileObject::~DataFileObject() 
     {
-        std::vector<std::string> keys;
-        keys.reserve(m_data.size());
-        auto it = std::back_inserter(keys);
-        for (auto& el: m_data)
-            *it++ = el.first;
-        return keys;
+        if (m_hid >= 0)
+            H5Idec_ref(m_hid);
+        m_hid = H5I_INVALID_HID;
     }
 
-    bool DataFile::SaveToFile(const std::string& path) const
+    bool DataFileObject::IsValid() const
     {
-        std::FILE* pFile = std::fopen(path.c_str(), "wb");
-        if (!pFile)
+        return !(m_hid < 0);
+    }
+
+    bool DataFileObject::DoesAttributeExist(const std::string& name) const
+    {
+        return (H5Aexists(m_hid, name.c_str()) > 0);
+    }
+
+    bool DataFileObject::CreateAttribute(const std::string& name, const std::vector<std::size_t>& dims)
+    {
+        if (DoesAttributeExist(name))
             return false;
 
-        // write version
-        std::uint64_t version[] = {MajorVersion_v, MinorVersion_v};
-        std::fwrite(version, sizeof(std::uint64_t), 2, pFile);
+        std::vector<hsize_t> hdims(dims.begin(), dims.end());
+        hid_t dspace = H5Screate_simple(hdims.size(), hdims.data(), hdims.data());
+        if (dspace < 0) return false;
+        auto dspaceGuard = CreateScopeGuard([=](){ H5Sclose(dspace); });
         
-        // write number of data blocks
-        std::uint64_t blockCnt = m_data.size();
-        std::fwrite(reinterpret_cast<const void*>(&blockCnt), sizeof(blockCnt), 1, pFile);
-
-        // write data blocks
-        for (const auto& el: m_data)
-        {
-            const auto& name = el.first;
-            std::uint64_t typeId = el.second.first;
-            const auto& data = el.second.second;
-
-            // write name
-            std::uint64_t nameSize = name.size();
-            std::fwrite(reinterpret_cast<const void*>(&nameSize), sizeof(nameSize), 1, pFile);
-            std::fwrite(name.data(), sizeof(char), nameSize, pFile);
-
-            // write type id
-            std::fwrite(reinterpret_cast<const void*>(&typeId), sizeof(typeId), 1, pFile);
-
-            // write data
-            std::uint64_t dataSize = data.GetSize();
-            std::fwrite(reinterpret_cast<const void*>(&dataSize), sizeof(dataSize), 1, pFile);
-            std::fwrite(data.GetData(), 1, dataSize, pFile);
-        }
-
-        std::fclose(pFile);
-        return true;
-    }
-    
-    bool DataFile::LoadFromFile(const std::string& path)
-    {
-        std::FILE* pFile = std::fopen(path.c_str(), "rb");
-        if (!pFile)
-            return false;
-
-        // read version
-        std::uint64_t version[2];
-        std::fread(version, sizeof(std::uint64_t), 2, pFile);
-
-        // read block count
-        std::uint64_t blockCnt = 0;
-        std::fread(reinterpret_cast<void*>(&blockCnt), sizeof(blockCnt), 1, pFile);
-
-        // read data blocks
-        for (std::uint64_t i = 0; i < blockCnt; i++)
-        {
-            // read name
-            std::uint64_t nameSize = 0;
-            std::fread(reinterpret_cast<void*>(&nameSize), sizeof(nameSize), 1, pFile);
-            std::string name(nameSize, 0);
-            std::fread(&(name[0]), sizeof(char), nameSize, pFile);
-
-            // read type id
-            std::uint64_t typeId = 0;
-            std::fread(reinterpret_cast<void*>(&typeId), sizeof(typeId), 1, pFile);
-
-            // read data
-            Memory data;
-            std::uint64_t dataSize = 0;
-            std::fread(reinterpret_cast<void*>(&dataSize), sizeof(dataSize), 1, pFile);
-            data.Allocate(dataSize);
-            std::fread(data.GetData(), 1, dataSize, pFile);
-
-            m_data[name] = std::make_pair(typeId, std::move(data));
-        }
+        hid_t attr = H5Acreate2(m_hid, name.c_str(), H5T_IEEE_F64LE, dspace, 
+            H5P_DEFAULT, H5P_DEFAULT);
+        if (attr < 0) return false;
+        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
 
         return true;
     }
 
-    /*std::vector<char> CalcApp::SerializeMatrices() const
+    std::vector<std::size_t> DataFileObject::GetAttributeDims(const std::string& name) const
     {
-        // check size to allocate
-        std::size_t size = 0;
-        for (const auto& data: m_data)
-        {
-            const auto& name = data.first;
-            const auto& dat = data.second;
-            size += 3 * sizeof(std::uint64_t) + name.length() + sizeof(double) * dat.Rows() * dat.Cols();
-        }
+        using DSetSizeDesc = std::pair<std::size_t, std::size_t>;
 
-        std::vector<char> ser;
-        ser.reserve(size);
-        auto it = std::back_inserter(ser);
-
-        for (const auto& data: m_data)
-        {
-            const auto& name = data.first;
-            const auto& dat = data.second;
-
-            // write data name
-            std::uint64_t nameLen = name.length();
-            std::copy_n(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen), it);
-            std::copy_n(name.data(), nameLen, it);
-
-            // write rows, cols
-            std::uint64_t rows = dat.Rows();
-            std::uint64_t cols = dat.Cols();
-            std::copy_n(reinterpret_cast<const char*>(&rows), sizeof(rows), it);
-            std::copy_n(reinterpret_cast<const char*>(&cols), sizeof(cols), it);
-            
-            // write raw data
-            std::copy_n(reinterpret_cast<const char*>(dat.Data()), sizeof(double)*rows*cols, it);
-        }
+        hid_t attr = H5Aopen(m_hid, name.c_str(), H5P_DEFAULT);
+        if (attr < 0) return std::vector<std::size_t>{};
+        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
         
-        return ser;
+        hid_t dspace = H5Aget_space(attr);
+        if (dspace < 0) return std::vector<std::size_t>{};
+        auto dspaceGuard = CreateScopeGuard([=](){ H5Sclose(dspace); });
+
+        int ndims = H5Sget_simple_extent_ndims(dspace);
+        if (ndims <= 0) return std::vector<std::size_t>{};
+
+        std::vector<hsize_t> dims(ndims);
+        if (H5Sget_simple_extent_dims(dspace, &dims[0], nullptr) < 0)
+            return std::vector<std::size_t>{};
+
+        return std::vector<std::size_t>(dims.begin(), dims.end());
     }
 
-    std::map<std::string, TDynamicMatrix<double>> CalcApp::DeserializeMatrices(
-            const std::vector<char>& ser) const
+    bool DataFileObject::LoadAttribute(const std::string& name, double* data) const
     {
-        std::map<std::string, TDynamicMatrix<double>> dataMap;
-
-        for (auto it = ser.begin(); it < ser.end();)
-        {
-            // read data name
-            std::uint64_t size = 0;
-            std::copy_n(it, sizeof(size), reinterpret_cast<char*>(&size));
-            std::string name(size, 0);
-            it += sizeof(size);
-            std::copy_n(it, size, &name[0]);
-            it += size;
-
-            // read rows, cols
-            std::uint64_t rows = 0;  
-            std::copy_n(it, sizeof(rows), reinterpret_cast<char*>(&rows));
-            it += sizeof(rows);
-            std::uint64_t cols = 0;
-            std::copy_n(it, sizeof(cols), reinterpret_cast<char*>(&cols));
-            it += sizeof(cols);
-            
-            // read raw data
-            TDynamicMatrix<double> data(rows, cols, reinterpret_cast<const double*>(&(*it)));
-            it += sizeof(double) * rows * cols;
-
-            // insert to map
-            dataMap[name] = std::move(data);
-        }
+        hid_t attr = H5Aopen(m_hid, name.c_str(), H5P_DEFAULT);
+        if (attr < 0) return false;
+        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
         
-        return dataMap;
-    }*/
+        herr_t err = H5Aread(attr, H5T_NATIVE_DOUBLE, data);
+        if (err < 0) return false;  
+
+        return true;
+    }
+
+    bool DataFileObject::StoreAttribute(const std::string& name, const double* data)
+    {
+        hid_t attr = H5Aopen(m_hid, name.c_str(), H5P_DEFAULT);
+        if (attr < 0) return false;
+        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
+        
+        if(H5Awrite(attr, H5T_NATIVE_DOUBLE, data) < 0)
+            return false;
+
+        return true;
+    }
+
+
+    DataFileDataset::DataFileDataset(hid_t dataset)
+        : DataFileObject(dataset) { }
+
+    std::vector<std::size_t> DataFileDataset::GetDims() const
+    {
+        hid_t dspace = H5Dget_space(GetNative());
+        if (dspace < 0) return std::vector<std::size_t>{};
+        auto dspaceGuard = CreateScopeGuard([=](){ H5Sclose(dspace); });
+
+        int ndims = H5Sget_simple_extent_ndims(dspace);
+        if (ndims <= 0) return std::vector<std::size_t>{};
+
+        std::vector<hsize_t> dims(ndims);
+        if (H5Sget_simple_extent_dims(dspace, &dims[0], nullptr) < 0)
+            return std::vector<std::size_t>{};
+
+        return std::vector<std::size_t>(dims.begin(), dims.end());
+    }
+
+    bool DataFileDataset::Load(double* data) const
+    {
+        herr_t err = H5Dread(GetNative(), H5T_NATIVE_DOUBLE, 
+            H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+        return !(err < 0);
+    }
+
+    bool DataFileDataset::Store(const double* data)
+    {
+        if(H5Dwrite(GetNative(), H5T_NATIVE_DOUBLE, H5S_ALL, 
+                    H5S_ALL, H5P_DEFAULT, data) < 0)
+            return false;
+
+        if(!H5Dflush(GetNative()))
+            return false;
+ 
+        return true;
+    }
+
+    TDynamicMatrix<double> DataFileDataset::Load2DMatrix() const
+    {
+        auto dims = GetDims();
+        if (dims.size() != 2)
+            return TDynamicMatrix<double>{};
+        
+        TDynamicMatrix<double> ret(dims[0], dims[1]);
+        if (!Load(&ret[0]))
+            return TDynamicMatrix<double>{};
+
+        return ret;
+    }
+
+    TDynamicRowVector<double> DataFileDataset::Load1DRowVector() const
+    {
+        auto dims = GetDims();
+        if (dims.size() != 1)
+            return TDynamicMatrix<double>{};
+        
+        TDynamicRowVector<double> ret(dims[0]);
+        if (!Load(&ret[0]))
+            return TDynamicMatrix<double>{};
+            
+        return ret;
+    }
+
+    TDynamicColVector<double> DataFileDataset::Load1DColVector() const
+    {
+        auto dims = GetDims();
+        if (dims.size() != 1)
+            return TDynamicMatrix<double>{};
+        
+        TDynamicColVector<double> ret(dims[0]);
+        if (!Load(&ret[0]))
+            return TDynamicMatrix<double>{};
+            
+        return ret;
+    }
+
+
+    DataFileGroup::DataFileGroup(hid_t group) 
+        : DataFileObject(group) { }
+    
+    bool DataFileGroup::DoesSubgroupExist(const std::string& name) const
+    {
+        if (H5Lexists(GetNative(), name.c_str(), H5P_DEFAULT) <= 0)
+            return false;
+
+        bool valid = false;    
+        H5E_BEGIN_TRY { valid = GetSubgroup(name).IsValid(); } H5E_END_TRY;
+        return valid;
+    }
+
+    DataFileGroup DataFileGroup::CreateSubgroup(const std::string& name)
+    {
+        if (DoesSubgroupExist(name))
+            return H5I_INVALID_HID;
+            
+        return H5Gcreate2(GetNative(), name.c_str(), 
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    }
+
+    DataFileGroup DataFileGroup::GetSubgroup(const std::string& name) const   
+    {
+        return H5Gopen2(GetNative(), name.c_str(), H5P_DEFAULT);
+    }
+
+    std::vector<std::string> DataFileGroup::EnumerateSubgroups() const
+    {
+        std::vector<std::string> subgroups;
+        H5Literate2(GetNative(), H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, &EnumGroupsHelper, &subgroups);
+        return subgroups;
+    }
+
+    bool DataFileGroup::DoesDatasetExist(const std::string& name) const
+    {
+        if (H5Lexists(GetNative(), name.c_str(), H5P_DEFAULT) <= 0)
+            return false;
+
+        bool valid = false;    
+        H5E_BEGIN_TRY { valid = GetDataset(name).IsValid(); } H5E_END_TRY;
+        return valid;
+    }
+
+    DataFileDataset DataFileGroup::CreateDataset(const std::string& name, const std::vector<std::size_t>& dims)
+    {
+        if (DoesDatasetExist(name))
+            return H5I_INVALID_HID;
+
+        std::vector<hsize_t> hdims(dims.begin(), dims.end());
+        hid_t dspace = H5Screate_simple(hdims.size(), hdims.data(), hdims.data());
+        if (dspace < 0) return H5I_INVALID_HID;
+        auto dspaceGuard = CreateScopeGuard([=](){ H5Sclose(dspace); });
+        
+        return H5Dcreate2(GetNative(), name.c_str(), H5T_IEEE_F64LE, dspace, 
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    }
+
+    DataFileDataset DataFileGroup::GetDataset(const std::string& name) const
+    {
+        return H5Dopen2(GetNative(), name.c_str(), H5P_DEFAULT);
+    }
+
+    std::vector<std::string> DataFileGroup::EnumerateDatasets() const
+    {
+        std::vector<std::string> subgroups;
+        H5Literate2(GetNative(), H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, &EnumDatasetHelper, &subgroups);
+        return subgroups;
+    }
+
+    herr_t DataFileGroup::EnumGroupsHelper(hid_t group, const char *name, const H5L_info2_t *info, void *data)
+    {
+        DataFileGroup child = H5Gopen2(group, name, H5P_DEFAULT);
+        if (child.IsValid())
+            (*static_cast<std::vector<std::string>*>(data)).push_back(name);
+        return 0;
+    }
+
+    herr_t DataFileGroup::EnumDatasetHelper(hid_t group, const char *name, const H5L_info2_t *info, void *data)
+    {
+        DataFileDataset child = H5Dopen2(group, name, H5P_DEFAULT);
+        if (child.IsValid())
+            (*static_cast<std::vector<std::string>*>(data)).push_back(name);
+        return 0;
+    }
+
+
+
+    DataFile::DataFile() 
+        : m_file(H5I_INVALID_HID) {}
+
+    DataFile::DataFile(DataFile&& rhs)
+        : m_file(rhs.m_file)
+    {
+        m_file = H5I_INVALID_HID;
+    }
+
+    DataFile& DataFile::operator=(DataFile&& rhs)
+    {
+        std::swap(m_file, rhs.m_file);
+        return *this;
+    }
+
+    DataFile::~DataFile()
+    {
+        Close();
+    }
+
+    bool DataFile::Open(const std::string& name, DataFileOpenFlag flag)
+    {
+        if (IsOpen())
+            return false;
+
+        if (flag & (DataFile_MUST_NOT_EXIST | DataFile_TRUNCATE))
+        {
+            // create empty file
+            m_file = H5Fcreate(name.c_str(), 
+                (flag & DataFile_MUST_NOT_EXIST) ? H5F_ACC_EXCL : H5F_ACC_TRUNC, 
+                H5P_DEFAULT, H5P_DEFAULT);
+        }
+        else if(flag & DataFile_MUST_EXIST)
+        {
+            // open existing file
+            m_file = H5Fopen(name.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+            if (m_file < 0 && !(flag & DataFile_MUST_EXIST))
+                m_file = H5Fcreate(name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+        }
+        else
+        {
+            // default open mode
+            // open exisiting file -> if it does not exist create new file
+            H5E_BEGIN_TRY {
+                m_file = H5Fopen(name.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+            } H5E_END_TRY;
+
+            if (m_file < 0 && !(flag & DataFile_MUST_EXIST))
+                m_file = H5Fcreate(name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+        }
+
+        return true;
+    }
+
+    void DataFile::Close()
+    {
+        if (m_file >= 0)
+            H5Fclose(m_file);
+        m_file = -1;
+    }
+
+    bool DataFile::IsOpen() const
+    {
+        return !(m_file < 0);
+    }
+
+    DataFileGroup DataFile::OpenRootGroup()
+    {
+        if (m_file < 0)
+            return H5I_INVALID_HID;
+
+        return H5Gopen2(m_file, "/", H5P_DEFAULT);
+    }
 
 }

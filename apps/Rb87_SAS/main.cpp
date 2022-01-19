@@ -1,6 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
-#include <QSim/Util/CalcApp.h>
+#include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
@@ -11,7 +11,7 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-class CRb87SASApp : public QSim::CalcApp
+class CRb87SASApp : public QSim::SimulationApp
 {
     constexpr static double decay = 6.065e6;
 public:
@@ -34,14 +34,9 @@ public:
         m_doppler.SetMass(1.44316060e-25);
     }
 
-    virtual void DoCalculation() override
+    virtual void Init(QSim::DataFileGroup& simdata) override
     {
-        QSim::ThreadPoolExecutor pool;
-
-        // dt << Rabi^-1, Doppler^-1, detuning^-1
-        double dt = 1e-10;
-        constexpr double tint = 10 / decay;
-
+        // Generate detuning axis
         // suppress weird warning about string operation overflow
 #ifdef QSim_COMPILER_GNUC
 #pragma GCC diagnostic push
@@ -49,13 +44,25 @@ public:
 #endif
         constexpr std::size_t cnt = 1001;
         auto laserDetunings = QSim::CreateLinspaceRow(-1e9, 1e9, cnt);
-        auto laserDetunings2 = QSim::CreateLinspaceRow(-2e9, 1e9, cnt);;
         QSim::TDynamicMatrix<double> detunings(2, laserDetunings.Size());
         detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Probe"));
-        detunings.SetRow(laserDetunings2, m_system.GetLaserIdxByName("Pump"));
+        detunings.SetRow(laserDetunings, m_system.GetLaserIdxByName("Pump"));
+        simdata.CreateDataset("Detunings", { 2, cnt }).Store(detunings.Data());
 #ifdef QSim_COMPILER_GNUC
 #pragma GCC diagnostic pop
 #endif
+
+        // Generate result dataset
+        simdata.CreateDataset("Populations", { cnt });
+    }
+
+    virtual void Continue(QSim::DataFileGroup& simdata)  override
+    {
+        QSim::ThreadPoolExecutor pool;
+
+        // dt << Rabi^-1, Doppler^-1, detuning^-1
+        double dt = 1e-10;
+        constexpr double tint = 2.5 / decay;
 
         QSim::CLIProgBarInt progress;
         auto rho0 = m_system.CreateGroundState();
@@ -71,32 +78,35 @@ public:
             return res;
         };
 
+        // Load detuning axis
+        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
+
         // start progress bar
         progress.SetTotal(detunings.Cols());
         progress.Start();
         
         // start calculation
-        auto populations = QSim::CreateZeros(cnt);
+        auto populations = QSim::CreateZeros(detunings.Cols());
         pool.Map(func, populations, detunings.GetColIterBegin(), detunings.GetColIterEnd());
         
-        this->StoreMatrix("Detunings", detunings);
-        this->StoreMatrix("Population P3/2", populations);
+        simdata.GetDataset("Populations").Store(populations.Data());
+        SetFinished(simdata);
     }
 
-#ifdef QSIM_PYTHON3
-    virtual void Plot() override
+    virtual void Plot(QSim::DataFileGroup& simdata) override
     {
-        auto detunings = this->LoadMatrix("Detunings");
+#ifdef QSIM_PYTHON3
+        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
         auto x_axis = detunings.GetRow(m_system.GetLaserIdxByName("Probe"));
-        auto y_axis = this->LoadMatrix("Population P3/2");
-        
+        auto y_axis = simdata.GetDataset("Population").Load1DRowVector();
+
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
         ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
         matplotlib.RunGUILoop();
-    }
 #endif
+    }
 
 private:
     QSim::TNLevelSystemSC<2> m_system;

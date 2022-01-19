@@ -23,12 +23,9 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
     "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
-    "${QSIM_SOURCE_DIR}/Util/CalcApp.cpp"
-    "${QSIM_SOURCE_DIR}/Util/CalcApp2.cpp"
+    "${QSIM_SOURCE_DIR}/Util/SimulationApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
-    "${QSIM_SOURCE_DIR}/Util/DataFile2.cpp"
-    "${QSIM_SOURCE_DIR}/Util/DataFile3.cpp"
     "${QSIM_SOURCE_DIR}/Util/CLIProgressBar.cpp")
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
 target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")

@@ -1,6 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
-#include <QSim/Util/CalcApp.h>
+#include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
@@ -11,7 +11,7 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-class CNORydEx : public QSim::CalcApp
+class CNORydEx : public QSim::SimulationApp
 {
     constexpr static std::size_t DIM = 5;
 public:
@@ -71,16 +71,23 @@ public:
         // m_doppler.SetIntegrationWidth(m_scanLaser != "UV" ? 0.35 : 3.5); // peak is narrow
     }
 
-    virtual void DoCalculation() override
+    virtual void Init(QSim::DataFileGroup& simdata) override
     {
-        QSim::ThreadPoolExecutor pool;
-        
         // Generate detuning axis
-        constexpr std::size_t cnt = 501;
+        constexpr static std::size_t cnt = 501;
         QSim::TDynamicMatrix<double> detunings(m_system.GetLaserCount(), cnt);
         detunings.SetRow(QSim::CreateLinspaceRow(-5e7, 5e7, cnt), 
             m_system.GetLaserIdxByName(m_scanLaser));
+        simdata.CreateDataset("Detunings", { detunings.Rows(), cnt }).Store(detunings.Data());
 
+        // Generate result dataset
+        simdata.CreateDataset("Population", { cnt });
+    }
+
+    virtual void Continue(QSim::DataFileGroup& simdata)  override
+    {
+        QSim::ThreadPoolExecutor pool;
+        
         QSim::CLIProgBarInt progress;
         auto func = [&](auto dets)
         {
@@ -93,32 +100,35 @@ public:
             return res;
         };
 
+        // Load detuning axis
+        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
+
         progress.SetTotal(detunings.Cols());
         progress.Start();
         
-        auto absCoeffs = QSim::CreateZeros(cnt);
+        auto absCoeffs = QSim::CreateZeros(detunings.Cols());
         pool.Map(func, absCoeffs, detunings.GetColIterBegin(), detunings.GetColIterEnd());
 
-        this->StoreMatrix("Detunings", detunings);
-        this->StoreMatrix("Population " + m_desiredLevel, absCoeffs);
+        simdata.GetDataset("Population").Store(absCoeffs.Data());
+        SetFinished(simdata);
     }
 
-#ifdef QSIM_PYTHON3
-    virtual void Plot() override
+    virtual void Plot(QSim::DataFileGroup& simdata) override
     {
-        auto detunings = this->LoadMatrix("Detunings");
+#ifdef QSIM_PYTHON3
+        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
         auto x_axis = detunings.GetRow(m_system.GetLaserIdxByName(m_scanLaser));
-        auto y_axis = this->LoadMatrix("Population " + m_desiredLevel);
+        auto y_axis = simdata.GetDataset("Population").Load1DRowVector();
         
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
         ax.SetXLabel(m_scanLaser + " detuning [MHz]");
         ax.SetYLabel(m_desiredLevel + " population");
-        ax.Plot((x_axis / 1e6).Data(), y_axis.Data(), x_axis.Size());
+        ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
         matplotlib.RunGUILoop();
-    }
 #endif
+    }
 
 private:
     std::string m_scanLaser;

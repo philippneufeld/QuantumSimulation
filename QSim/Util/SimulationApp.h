@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Util_CalcApp2_H_
-#define QSim_Util_CalcApp2_H_
+#ifndef QSim_Util_SimulationApp_H_
+#define QSim_Util_SimulationApp_H_
 
 #include <string>
 #include <map>
@@ -11,11 +11,11 @@
 #include <memory>
 
 #include "../Math/Matrix.h"
-#include "DataFile3.h"
+#include "DataFile.h"
 
 namespace QSim
 {
-    
+
     class SimulationApp
     {
     public:
@@ -24,10 +24,11 @@ namespace QSim
 
         virtual void Init(DataFileGroup& simdata) = 0;
         virtual void Continue(DataFileGroup& simdata)  = 0;
-        virtual bool IsFinished(DataFileGroup& simdata) = 0;
         virtual void Plot(DataFileGroup& simdata) = 0;
 
         int Run(int argc, const char** argv);
+        bool IsFinished(DataFileGroup& simdata);
+        void SetFinished(DataFileGroup& simdata);
 
     private:
         std::string ExtractProgramName(int argc, const char** argv);

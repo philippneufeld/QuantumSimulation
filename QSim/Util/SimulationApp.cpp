@@ -12,7 +12,7 @@
 #include <unistd.h>
 #endif
 
-#include "CalcApp2.h"
+#include "SimulationApp.h"
 #include "Argparse.h"
 
 namespace QSim
@@ -85,11 +85,11 @@ namespace QSim
         }
 
         // create/open datafile
-        DataFile3OpenFlag openFlag = DataFile3_DEFAULT;
+        DataFileOpenFlag openFlag = DataFile_DEFAULT;
         if (cmdArgs.IsOptionPresent("continue"))
-            openFlag = DataFile3_MUST_EXIST;
+            openFlag = DataFile_MUST_EXIST;
 
-        DataFile3 dataFile;
+        DataFile dataFile;
         if (!dataFile.Open(filePath.string(), openFlag))
         {
             std::cout << "Failed to create file " << filePath << std::endl;
@@ -151,6 +151,16 @@ namespace QSim
             this->Plot(simData);
 
         return 0;
+    }
+
+    bool SimulationApp::IsFinished(DataFileGroup& simdata)
+    {
+        return simdata.DoesAttributeExist("Finished");
+    }
+
+    void SimulationApp::SetFinished(DataFileGroup& simdata)
+    {
+        simdata.CreateAttribute("Finished", {});
     }
 
     std::string SimulationApp::ExtractProgramName(int argc, const char** argv)
