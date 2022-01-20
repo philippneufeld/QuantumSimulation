@@ -36,12 +36,19 @@ if (Threads_FOUND)
     target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-# hdf5
+# hdf5 (standardized file format for storing data)
 find_package(HDF5 REQUIRED)
 if (HDF5_FOUND)
     target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_INCLUDE_DIRS}")
     target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_LIBRARIES}")
     # target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "${HDF5_DEFINITIONS}")
+endif()
+
+# eigen3 (linear algebra library)
+find_package(Eigen3 REQUIRED NO_MODULE)
+if (EIGEN3_FOUND)
+message("${EIGEN3_INCLUDE_DIR}")
+    target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${EIGEN3_INCLUDE_DIR}")
 endif()
 
 # python (optional)
