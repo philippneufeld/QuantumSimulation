@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <chrono>
 #include <ctime>
+#include <cstdlib>
 #include <filesystem>
 
 #if defined(QSim_PLATFORM_LINUX)
@@ -41,15 +42,28 @@ namespace QSim
     }
 
     int SimulationApp::Run(int argc, const char** argv)
-    { 
+    {
+        // get home directory
+        std::string homeDir = ".";
+        char* szHomeDir = std::getenv("HOME");
+        if (szHomeDir) homeDir.assign(szHomeDir);
+        if (!homeDir.empty() && (homeDir.back() == '/' || homeDir.back() == '\\'))
+            homeDir.pop_back();
+
+
+        // find remote_home directory and fallback to normal home if it could not be found
+        std::string remoteHome = homeDir + "/remote_home";
+        if (!std::filesystem::is_directory(remoteHome))
+            remoteHome = homeDir;
+
+        // generate defaults
         std::string defaultFileName = GenerateDefaultFilename(argc, argv);
-        std::string defaultDir = QSim_DATA_DIR;
-        defaultDir += "/" + ExtractProgramName(argc, argv);
+        std::string defaultDir = remoteHome + "/SimulationData/" + ExtractProgramName(argc, argv);
 
         // parse command line arguents
         QSim::ArgumentParser parser;
         parser.AddOptionDefault("f,file", "Absolute or relative path (from data directory) to data file.", defaultFileName);
-        parser.AddOptionDefault("d,dir", "Data directoty.", defaultDir);
+        parser.AddOptionDefault("d,dir", "Data directory path.", defaultDir);
         parser.AddOption("c,continue", "Name of the simulation to continue with.");
         parser.AddOption("p,plot", "Enable plotting.");
         parser.AddOption("h,help", "Print this help string.");
@@ -66,15 +80,23 @@ namespace QSim
             return 0;
         }
 
-        // create path for data file and make sure that the parent directory exists
-        std::filesystem::path dirPath = cmdArgs.GetOptionStringValue("dir");
-        std::filesystem::path filePath = cmdArgs.GetOptionStringValue("file");
-        
+        // replace leading tilde by home directory path
+        std::string dirPathStr = cmdArgs.GetOptionStringValue("dir");
+        std::string filePathStr = cmdArgs.GetOptionStringValue("file");
+        if ((dirPathStr.find("~") == 0 && dirPathStr.size() == 1) || dirPathStr.find("~/") == 0)
+            dirPathStr.replace(dirPathStr.begin(), dirPathStr.begin() + 1, homeDir);
+        if ((filePathStr.find("~") == 0 && dirPathStr.size() == 1) || dirPathStr.find("~/") == 0)
+            filePathStr.replace(filePathStr.begin(), filePathStr.begin() + 1, homeDir);
+
+        // create path for data file
+        std::filesystem::path dirPath = dirPathStr;
+        std::filesystem::path filePath = filePathStr;
         if (filePath.is_relative())
             filePath = (dirPath / filePath);
-        filePath.lexically_normal();
+        filePath = filePath.lexically_normal();
         dirPath = filePath.parent_path();
 
+        // make sure that the parent directory exists
         if (!std::filesystem::is_directory(dirPath))
         {
             if (!std::filesystem::create_directories(dirPath))

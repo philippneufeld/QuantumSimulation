@@ -18,4 +18,5 @@ CMakeCache.txt
 
 # Simulation data
 Data/
+SimulationData/
 *.h5

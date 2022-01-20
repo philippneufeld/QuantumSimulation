@@ -30,11 +30,6 @@ set(QSIM_SOURCES
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
 target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")
 
-# Data directory
-set(QSIM_DATA_DIR "${CMAKE_SOURCE_DIR}/Data")
-file(MAKE_DIRECTORY "${QSIM_DATA_DIR}")
-target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "-DQSim_DATA_DIR=\"${QSIM_DATA_DIR}\"")
-
 # threading
 find_package(Threads REQUIRED)
 if (Threads_FOUND)

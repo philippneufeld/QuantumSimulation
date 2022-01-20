@@ -31,8 +31,8 @@ namespace QSim
         void SetFinished(DataFileGroup& simdata);
 
     private:
-        std::string ExtractProgramName(int argc, const char** argv);
-        std::string GenerateDefaultFilename(int argc, const char** argv);
+        static std::string ExtractProgramName(int argc, const char** argv);
+        static std::string GenerateDefaultFilename(int argc, const char** argv);
     };
 
 }
