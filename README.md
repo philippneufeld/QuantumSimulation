@@ -7,11 +7,11 @@ Various apps are included that showcase the capabilities of the library.
 ## Dependancies
 
 This project depends on a bunch of third-party libraries, that should be installed on the system:
-<ul>
-    <li>[Eigen3](http://eigen.tuxfamily.org)</li>
-    <li>[HDF5](https://www.hdfgroup.org/solutions/hdf5/)</li>
-    <li>[Python 3](https://www.python.org/) (optional)</li>
-</ul>
+
+- [Eigen3](http://eigen.tuxfamily.org)
+- [HDF5](https://www.hdfgroup.org/solutions/hdf5/)
+- [Python 3](https://www.python.org/) (optional)
+
 
 ## Compilation
 
