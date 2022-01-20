@@ -4,7 +4,7 @@ This project includes methods of calculating the dynamics as well as the steady-
 
 Various apps are included that showcase the capabilities of the library.
 
-## Dependancies
+## Dependencies
 
 This project depends on a bunch of third-party libraries, that should be installed on the system:
 

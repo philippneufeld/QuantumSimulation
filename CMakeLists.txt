@@ -10,7 +10,7 @@ endif()
 # define project
 project ("QuantumSimulation" VERSION 1.0)
 
-# use C++14
+# use C++17
 set (CMAKE_CXX_STANDARD 17)
 
 # include directories
@@ -47,6 +47,7 @@ endif()
 # eigen3 (linear algebra library)
 find_package(Eigen3 REQUIRED NO_MODULE)
 if (EIGEN3_FOUND)
+    # fixes weird bug in FindEigen3 on the PI5 simulation machines (OpenSUSE)
     string(REGEX REPLACE "^/usr//usr" "/usr" EIGEN3_INCLUDE_DIR "${EIGEN3_INCLUDE_DIR}")
     message("Found Eigen3: ${EIGEN3_INCLUDE_DIR}")
     target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${EIGEN3_INCLUDE_DIR}")
