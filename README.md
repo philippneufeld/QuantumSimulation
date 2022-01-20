@@ -4,6 +4,15 @@ This project includes methods of calculating the dynamics as well as the steady-
 
 Various apps are included that showcase the capabilities of the library.
 
+## Dependancies
+
+This project depends on a bunch of third-party libraries, that should be installed on the system:
+<ul>
+    <li>[Eigen3](http://eigen.tuxfamily.org)</li>
+    <li>[HDF5](https://www.hdfgroup.org/solutions/hdf5/)</li>
+    <li>[Python 3](https://www.python.org/) (optional)</li>
+</ul>
+
 ## Compilation
 
 First navigate into the project directory and initialize the build directory by running

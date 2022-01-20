@@ -46,8 +46,10 @@ endif()
 
 # eigen3 (linear algebra library)
 find_package(Eigen3 REQUIRED NO_MODULE)
+set (EIGEN3_INCLUDE_DIR "/usr//usr/include/eigen3")
 if (EIGEN3_FOUND)
-message("${EIGEN3_INCLUDE_DIR}")
+    string(REGEX REPLACE "^/usr//usr" "/usr" EIGEN3_INCLUDE_DIR "${EIGEN3_INCLUDE_DIR}")
+    message("Found Eigen3: ${EIGEN3_INCLUDE_DIR}")
     target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${EIGEN3_INCLUDE_DIR}")
 endif()
 
