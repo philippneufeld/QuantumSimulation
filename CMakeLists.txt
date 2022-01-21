@@ -10,9 +10,6 @@ endif()
 # define project
 project ("QuantumSimulation" VERSION 1.0)
 
-# use C++17
-set (CMAKE_CXX_STANDARD 17)
-
 # include directories
 set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
 
@@ -28,6 +25,11 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
     "${QSIM_SOURCE_DIR}/Util/CLIProgressBar.cpp")
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
+
+# require C++17 for library and all children using it
+target_compile_features("${QSIM_LIB_TARGET}" PUBLIC cxx_std_17)
+
+# set include directory as interface
 target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")
 
 # threading
