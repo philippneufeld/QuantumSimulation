@@ -126,7 +126,7 @@ namespace QSim
     private:
 
         // Properties of the system
-        Eigen::Vector<double, N> m_levels;
+        Eigen::Matrix<double, N, 1> m_levels;
         Eigen::Matrix<std::complex<double>, N, N> m_dipoleOp;
         std::map<std::pair<unsigned int, unsigned int>, double> m_decays;
 
@@ -378,12 +378,12 @@ namespace QSim
         unsigned int dims = GetDims();
         Eigen::Matrix<std::complex<double>, N, N> res(dims, dims);
 
-        Eigen::Vector<double, N> lvlOffset(dims);
+        Eigen::Matrix<double, N, 1> lvlOffset(dims);
         unsigned int gsIdx = std::min_element(m_levels.Data(), m_levels.Data() + dims) - m_levels.Data();
         for (unsigned int i = 0; i < dims; i++)
             lvlOffset(i) = m_levels(i) - m_levels(gsIdx);
 
-        Eigen::Vector<double, N> thermalWeights(dims);
+        Eigen::Matrix<double, N, 1> thermalWeights(dims);
         if (temperature <= 0.0)
         {
             for (unsigned int i = 0; i < dims; i++)

@@ -80,7 +80,7 @@ namespace QSim
         using ATy = std::conditional_t<TNLevelSystemQM2<N>::IsStaticDim(),
             Eigen::Matrix<std::complex<double>, N*N + 1, N*N>, Eigen::MatrixXcd>;
         using BTy = std::conditional_t<TNLevelSystemQM2<N>::IsStaticDim(),
-            Eigen::Vector<std::complex<double>, N*N + 1>, Eigen::VectorXcd>;
+            Eigen::Matrix<std::complex<double>, N*N + 1, 1>, Eigen::VectorXcd>;
         using SSTy = Eigen::Matrix<std::complex<double>, N, N>;
         
         unsigned int dims = this->GetDims();
