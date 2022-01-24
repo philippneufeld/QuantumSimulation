@@ -3,7 +3,7 @@
 #ifdef QSIM_PYTHON3
 #include <functional>
 #include <QSim/Constants.h>
-#include <QSim/Executor/Executor.h>
+#include <QSim/Executor/ThreadPool.h>
 #include <QSim/Math/Quadrature.h>
 #include <QSim/Python/Plotting.h>
 

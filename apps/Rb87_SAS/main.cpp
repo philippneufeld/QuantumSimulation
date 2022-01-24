@@ -4,7 +4,7 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Executor/Executor.h>
+#include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 #ifdef QSIM_PYTHON3
@@ -140,7 +140,7 @@ int main(int argc, const char* argv[])
 #include <QSim/Python/Plotting.h>
 #include <QSim/Util/Argparse.h>
 #include <QSim/StaticQSys.h>
-#include <QSim/Executor/Executor.h>
+#include <QSim/Executor/ThreadPool.h>
 
 int main(int argc, const char* argv[])
 {

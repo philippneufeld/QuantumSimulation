@@ -3,7 +3,7 @@
 #include <chrono>
 
 #include <QSim/Math/CurveFit.h>
-#include <QSim/Executor/Executor.h>
+#include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 #ifdef QSIM_PYTHON3

@@ -2,9 +2,9 @@
 
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem.h>
+#include <QSim/NLevel/NLevelSystem2.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Executor/Executor.h>
+#include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 #ifdef QSIM_PYTHON3
@@ -23,12 +23,12 @@ public:
         constexpr double freq = QSim::SpeedOfLight_v / 780.241e-9;
 
         // Create system
-        std::array<std::string, 2> lvlNames = {"S1_2", "P3_2"};
         std::array<double, 2> levels = {0, freq};
-        m_system = QSim::TNLevelSystemQM<2>(lvlNames, levels);
-        m_system.SetDipoleElementByName("S1_2", "P3_2", dip);
-        m_system.AddLaserByName("Probe", "S1_2", "P3_2", intProbe, false);
-        m_system.SetDecayByName("P3_2", "S1_2", 6.065e6);
+        m_system.SetLevel(0, 0.0);
+        m_system.SetLevel(1, freq);
+        m_system.SetDipoleElement(0, 1, dip);
+        m_system.AddLaser(0, 1, intProbe, false);
+        m_system.SetDecay(1, 0, 6.065e6);
         
         m_doppler.SetMass(1.44316060e-25);
     }
@@ -37,8 +37,8 @@ public:
     {
         // Generate detuning axis
         constexpr std::size_t cnt = 501;
-        auto detunings = QSim::CreateLinspaceRow(-1e9, 1e9, cnt);
-        simdata.CreateDataset("Detunings", { cnt }).Store(detunings.Data());
+        Eigen::VectorXd detunings = Eigen::VectorXd::LinSpaced(cnt, -1e9, 1e9);
+        simdata.CreateDataset("Detunings", { cnt }).Store(detunings.data());
 
         // Generate result dataset
         simdata.CreateDataset("AbsCoeffs", { cnt });
@@ -54,43 +54,50 @@ public:
             auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
-                return rho.GetAbsCoeff("S1_2", "P3_2"); 
+                return std::imag(rho(0, 1));
             });
             progress.IncrementCount();
             return res;
         };
 
         // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").Load1DRowVector();
+        auto detunings1 = simdata.GetDataset("Detunings").Load1DRowVector();
+        Eigen::RowVectorXd detunings = Eigen::Map<const Eigen::RowVectorXd>(detunings1.Data(), detunings1.Size());
 
         // start progress bar
-        progress.SetTotal(detunings.Cols());
+        progress.SetTotal(detunings.cols());
         progress.Start();
         
         // start calculation
-        auto absCoeffs = QSim::CreateZerosLike(detunings);
-        pool.Map(func, absCoeffs, detunings.GetColIterBegin(), detunings.GetColIterEnd());
+        Eigen::VectorXd absCoeffs(detunings.cols());
+        auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
+        
+        pool.MapNonBlockingG(func, absCoeffs, genDetuning, detunings.cols());
+        progress.WaitUntilFinished();
 
-        simdata.GetDataset("AbsCoeffs").Store(absCoeffs.Data());
+        simdata.GetDataset("AbsCoeffs").Store(absCoeffs.data());
         SetFinished(simdata);
     }
 
     virtual void Plot(QSim::DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto x_axis = simdata.GetDataset("Detunings").Load1DRowVector();
-        auto y_axis = simdata.GetDataset("AbsCoeffs").Load1DRowVector();
+        auto x_axis1 = simdata.GetDataset("Detunings").Load1DRowVector();
+        auto y_axis1 = simdata.GetDataset("AbsCoeffs").Load1DRowVector();
+
+        Eigen::VectorXd x_axis = Eigen::Map<const Eigen::VectorXd>(x_axis1.Data(), x_axis1.Size());
+        Eigen::VectorXd y_axis = Eigen::Map<const Eigen::VectorXd>(y_axis1.Data(), y_axis1.Size());
 
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
-        ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
+        ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
         matplotlib.RunGUILoop();
 #endif
     }
 
 private:
-    QSim::TNLevelSystemQM<2> m_system;
+    QSim::TNLevelSystemQM2<2> m_system;
     QSim::DopplerIntegrator m_doppler;
 };
 

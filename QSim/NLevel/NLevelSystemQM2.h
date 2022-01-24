@@ -128,7 +128,7 @@ namespace QSim
         auto b = BTy::Unit(dims*dims + 1, dims*dims);
         
         // solve and subsequently reshape from vetor to matrix
-        auto x = ((A.adjoint()*A).fullPivLu().solve(A.adjoint()*b)).eval();
+        auto x = ((A.adjoint()*A).householderQr().solve(A.adjoint()*b)).eval();
         return Eigen::Map<SSTy>(x.data(), dims, dims).transpose();
     }
     

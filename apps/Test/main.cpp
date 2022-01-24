@@ -3,6 +3,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 
+#include <QSim/Executor/ThreadPool.h>
 #include <QSim/NLevel/NLevelSystem2.h>
 #include <QSim/NLevel/NLevelSystemQM2.h>
 
@@ -11,11 +12,33 @@
 
 using namespace QSim;
 
+void print(const Eigen::Ref<const Eigen::VectorXd>& v)
+{
+    std::cout << v << std::endl;
+}
+
 int main(int argc, const char* argv[])
 {
     constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 3.5e6);
     
+    Eigen::Vector2d vc;
+    vc << 1, 2;
+
+    Eigen::RowVector2d vr;
+    vr << 3, 4;
+
+    Eigen::Matrix2d m;
+    m.row(0) = vc;
+    m.row(1) = vr;
+
+    auto test = vc.row(0).eval();
+
+    QSim::DefaultExecutor ex;
+    std::vector<int> container(2);
+    ex.MapG([](auto x) { print(x); return 0; }, container, [&](){static int i=0; return m.col(i++).eval(); }, 2);
+
+    std::cout << m << std::endl;
 
     TNLevelSystemQM<2> system1;
     system1.SetLevel(0, 0.0);

@@ -22,14 +22,41 @@ namespace QSim
         TExecutor() = default;
 
     public:
-        template<typename Lambda, typename InputIt, typename Container>
+        template<typename Lambda, typename Container, typename Generator>
+        void MapNonBlockingG(const Lambda& func, Container& dest, Generator gen, std::size_t n);
+        template<typename Lambda, typename Container, typename Generator>
+        void MapG(const Lambda& func, Container& dest, Generator gen, std::size_t n);
+
+        template<typename Lambda, typename Container, typename InputIt>
         void MapNonBlocking(const Lambda& func, Container& dest, InputIt param_begin, InputIt param_end);
-        template<typename Lambda, typename InputIt, typename Container>
+        template<typename Lambda, typename Container, typename InputIt>
         void Map(const Lambda& func, Container& dest, InputIt param_begin, InputIt param_end);
+
     };
+
+
+    template<typename T>
+    template<typename Lambda, typename Container, typename Generator>
+    void TExecutor<T>::MapNonBlockingG(const Lambda& func, Container& dest, Generator gen, std::size_t n)
+    {
+        for (std::size_t i = 0; i < n; i++)
+        {
+            auto param = gen();
+            (~(*this)).AddTask([&, i, param]() { dest[i] = func(param); });
+        }
+    }
+
+    template<typename T>
+    template<typename Lambda, typename Container, typename Generator>
+    void TExecutor<T>::MapG(const Lambda& func, Container& dest, Generator gen, std::size_t n)
+    {
+        MapNonBlockingG(func, dest, gen, n);
+        (~(*this)).WaitUntilFinished();
+    }
+
     
     template<typename T>
-    template<typename Lambda, typename InputIt, typename Container>
+    template<typename Lambda, typename Container, typename InputIt>
     void TExecutor<T>::MapNonBlocking(const Lambda& func, Container& dest, InputIt paramBegin, InputIt paramEnd)
     {
         auto it = paramBegin;
@@ -38,11 +65,10 @@ namespace QSim
             auto param = *it;
             (~(*this)).AddTask([&, i, param]() { dest[i] = func(param); });
         }
-
     }
 
     template<typename T>
-    template<typename Lambda, typename InputIt, typename Container>
+    template<typename Lambda, typename Container, typename InputIt>
     void TExecutor<T>::Map(const Lambda& func, Container& dest, InputIt paramBegin, InputIt paramEnd)
     {
         MapNonBlocking(func, dest, paramBegin, paramEnd);
@@ -60,8 +86,5 @@ namespace QSim
     };
 
 }
-
-// Include specific implementations
-#include "ThreadPool.h"
 
 #endif

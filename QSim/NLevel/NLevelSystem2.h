@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <Eigen/Dense>
 
+#include "../Util/CRTP.h"
 #include "../Constants.h"
 #include "../Math/Ode.h"
 #include "Laser.h"
@@ -22,7 +23,7 @@ namespace QSim
     constexpr int DynamicDim_v = Eigen::Dynamic;
 
     template<int N, typename MyT>
-    class TNLevelSystemCRTP2
+    class TNLevelSystemCRTP2 : public TCRTP<MyT>
     {
         struct CouplingLaser
         {
@@ -46,10 +47,6 @@ namespace QSim
 
         static constexpr bool IsStaticDim() { return (N != DynamicDim_v); }
         unsigned int GetDims() const { return m_levels.size(); }
-
-        // CRTP operators
-        MyT& operator~() { return static_cast<MyT&>(*this); }
-        const MyT& operator~() const { return static_cast<const MyT&>(*this); }
 
         // levels
         const auto& GetLevels() const { return m_levels; }

@@ -43,6 +43,7 @@ namespace QSim
     private:
         static std::string SecondsToString(std::size_t secs);
         void ThreadFunc();
+        void PrintBar();
 
     private:
         mutable std::mutex m_mutex;

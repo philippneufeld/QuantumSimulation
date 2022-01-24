@@ -123,17 +123,39 @@ namespace QSim
     {
         auto dt = std::chrono::high_resolution_clock::now() - m_startTs;
         double secs = dt.count() / 1e9;
-        double projSecs = m_progress > 0 ? (m_prevTs - m_startTs).count() / m_progress / 1e9 : 0.0;
-
         std::string curr = SecondsToString(static_cast<std::size_t>(secs));
-        std::string tot = SecondsToString(static_cast<std::size_t>(projSecs));
 
+        // 14 character string
         std::string str;
-        str.reserve(3 + curr.size() + tot.size());
+        str.reserve(14);
+
+
         str.append(" [");
-        str.append(curr);
-        str.push_back('<');
-        str.append(tot);
+        if (m_progress < 1.0)
+        {
+            double projSecs = m_progress > 0 ? (m_prevTs - m_startTs).count() / m_progress / 1e9 : 0.0;
+            std::string tot = SecondsToString(static_cast<std::size_t>(projSecs));
+
+            str.append(curr);
+            str.push_back('<');
+            str.append(tot);
+            
+        }
+        else
+        {  
+            curr.reserve(11);
+            curr += ':';
+            
+            int ms = static_cast<int>((secs - static_cast<int>(secs)) * 1000);
+            ms = (ms > 999 ? 999 : (ms < 0 ? 0 : ms));
+            std::string strms = std::to_string(ms);
+            strms.insert(0, 3 - strms.size(), '0');
+            curr += strms;
+
+            str.append((11 - curr.size()) / 2, ' ');
+            str += curr;
+            str.append(13-str.size(), ' ');
+        }
         str.push_back(']');
 
         return str;
@@ -141,6 +163,7 @@ namespace QSim
 
     std::string CLIProgBar::SecondsToString(std::size_t secs)
     {
+        // 5 character string "mm:ss"
         std::string str;
         str.reserve(10);
 
@@ -166,43 +189,48 @@ namespace QSim
         {
             if (!firstIteratoin)
             {
-                m_wakeUp.wait_for(lock, 1s);
+                m_wakeUp.wait_for(lock, 0.25s);
                 if (m_stopThread)
                     break;
             }
             firstIteratoin = false;
 
-            std::string str;
-            str.reserve(m_width);
-            
-            auto front = GetDescription();
-            auto back = GetProgressText() + GetTimeText();
-
-            std::size_t minWidth = 5;
-            if (front.size() + back.size() > m_width - minWidth)
-            {
-                std::size_t exess = std::min(back.size(), front.size() + back.size() - m_width + minWidth);
-                back.erase(back.end() - exess, back.end());
-
-                exess = std::min(front.size(), front.size() + back.size() - m_width + minWidth);
-                front.erase(front.end() - exess, front.end());
-            }
-
-            str.append(front);
-            str.append("[");
-            std::size_t barWidth = m_width - std::min(m_width - 2, front.size() + back.size()) - 2;
-            std::size_t iProg = static_cast<std::size_t>(barWidth * m_progress);
-            str.append(iProg, m_progressChar);
-            str.append(barWidth - iProg, ' ');
-            str.append("]");
-            str.append(back);
-
-            std::cout << "\u001b[1000D" << str << std::flush;
+            PrintBar();
 
             if (m_progress == 1.0)
                 m_stopThread = true;
         }
         std::cout << std::endl;
+    }
+
+    void CLIProgBar::PrintBar()
+    {
+        std::string str;
+        str.reserve(m_width);
+        
+        auto front = GetDescription();
+        auto back = GetProgressText() + GetTimeText();
+
+        std::size_t minWidth = 5;
+        if (front.size() + back.size() > m_width - minWidth)
+        {
+            std::size_t exess = std::min(back.size(), front.size() + back.size() - m_width + minWidth);
+            back.erase(back.end() - exess, back.end());
+
+            exess = std::min(front.size(), front.size() + back.size() - m_width + minWidth);
+            front.erase(front.end() - exess, front.end());
+        }
+
+        str.append(front);
+        str.append("[");
+        std::size_t barWidth = m_width - std::min(m_width - 2, front.size() + back.size()) - 2;
+        std::size_t iProg = static_cast<std::size_t>(barWidth * m_progress);
+        str.append(iProg, m_progressChar);
+        str.append(barWidth - iProg, ' ');
+        str.append("]");
+        str.append(back);
+
+        std::cout << "\u001b[1000D" << str << std::flush;
     }
 
 
@@ -227,8 +255,9 @@ namespace QSim
 
     void CLIProgBarInt::IncrementCount()
     {
-        m_cnt = std::min<std::size_t>(m_cnt + 1, m_total);
-        this->SetProgress(static_cast<double>(m_cnt) / m_total);
+        m_cnt++; // atomically increment
+        auto cnt = std::min<std::size_t>(m_cnt, m_total);
+        this->SetProgress(static_cast<double>(cnt) / m_total);
     }
 
     std::string CLIProgBarInt::GetProgressText() const
