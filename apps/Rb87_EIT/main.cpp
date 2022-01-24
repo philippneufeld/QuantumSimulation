@@ -86,7 +86,7 @@ public:
     virtual void Plot(QSim::DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(0);
+        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(0).eval();
         auto y_axis = simdata.GetDataset("AbsCoeffs").LoadMatrix();
         
         QSim::PythonMatplotlib matplotlib;

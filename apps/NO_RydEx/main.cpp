@@ -2,7 +2,7 @@
 
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem.h>
+#include <QSim/NLevel/NLevelSystem2.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
@@ -13,17 +13,15 @@
 
 class CNORydEx : public QSim::SimulationApp
 {
-    constexpr static std::size_t DIM = 5;
 public:
 
     CNORydEx()
     {
-        m_scanLaser = "Red";
-        m_desiredLevel = "Ion";
+        m_scanLaser = 2; // Red laser
+        m_desiredLevel = 4; // Ion level
 
         // define parameters
         constexpr double lvlX = 0;
-        constexpr double lvlX2 = 10e6;
         constexpr double lvlA = lvlX + QSim::SpeedOfLight_v / 226.97e-9;
         constexpr double lvlH = lvlA + QSim::SpeedOfLight_v / 540e-9;
         constexpr double lvlR = lvlH + QSim::SpeedOfLight_v / 834.92e-9;
@@ -46,24 +44,26 @@ public:
         constexpr double greenInt = QSim::GetIntensityFromPower(1.0, 1e-3); // 1W
         constexpr double redInt = QSim::GetIntensityFromPower(1.0, 1e-3); // 1W
 
-        std::array<std::string, DIM> lvlNames = {"X", "A", "H", "R", "Ion"};
-        std::array<double, DIM> levels = {lvlX, lvlA, lvlH, lvlR, lvlI};
-        m_system = QSim::TNLevelSystemQM<DIM>(lvlNames, levels);
-        m_system.SetDipoleElementByName("X", "A", dipXA);
-        m_system.SetDipoleElementByName("X", "A", dipXA);
-        m_system.SetDipoleElementByName("A", "H", dipAH);
-        m_system.SetDipoleElementByName("H", "R", dipHR);
-        m_system.AddLaserByName("UV", "X", "A", uvInt, false);
-        m_system.AddLaserByName("Green", "A", "H", greenInt, true);
-        m_system.AddLaserByName("Red", "H", "R", redInt, true);
+        m_system.SetLevel(0, lvlX);
+        m_system.SetLevel(1, lvlA);
+        m_system.SetLevel(2, lvlH);
+        m_system.SetLevel(3, lvlR);
+        m_system.SetLevel(4, lvlI);
+
+        m_system.SetDipoleElement(0, 1, dipXA);
+        m_system.SetDipoleElement(1, 2, dipAH);
+        m_system.SetDipoleElement(2, 3, dipHR);
+        m_system.AddLaser(0, 1, uvInt, false);
+        m_system.AddLaser(1, 2, greenInt, true);
+        m_system.AddLaser(2, 3, redInt, true);
         
-        m_system.SetDecayByName("A", "X", decayAX + decayTransit);
-        m_system.SetDecayByName("H", "A", decayHA);
-        m_system.SetDecayByName("R", "H", decayRH);
-        m_system.SetDecayByName("R", "Ion", decayIonizaion);
-        m_system.SetDecayByName("H", "X", decayTransit);
-        m_system.SetDecayByName("R", "X", decayTransit);
-        m_system.SetDecayByName("Ion", "X", decayTransit);
+        m_system.SetDecay(1, 0, decayAX + decayTransit);
+        m_system.SetDecay(2, 1, decayHA);
+        m_system.SetDecay(3, 2, decayRH);
+        m_system.SetDecay(3, 4, decayIonizaion);
+        m_system.SetDecay(2, 0, decayTransit);
+        m_system.SetDecay(3, 0, decayTransit);
+        m_system.SetDecay(4, 0, decayTransit);
 
         m_doppler.SetMass(30.0061 * QSim::AtomicMassUnit_v);
         m_doppler.SetATol(1e-10);
@@ -74,13 +74,13 @@ public:
     virtual void Init(QSim::DataFileGroup& simdata) override
     {
         // Generate detuning axis
+        // Generate detuning axis
         constexpr static std::size_t cnt = 501;
-        QSim::TDynamicMatrix<double> detunings(m_system.GetLaserCount(), cnt);
-        detunings.SetRow(QSim::CreateLinspaceRow(-5e7, 5e7, cnt), 
-            m_system.GetLaserIdxByName(m_scanLaser));
-        simdata.CreateDataset("Detunings", { detunings.Rows(), cnt }).Store(detunings.Data());
+        Eigen::Matrix<double, 3, cnt> detunings;
+        detunings.setZero();
+        detunings.row(m_scanLaser) = Eigen::RowVectorXd::LinSpaced(cnt, -50.0e6, 50.0e6);
 
-        // Generate result dataset
+        simdata.CreateDataset("Detunings", { detunings.rows(), cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("Population", { cnt });
     }
 
@@ -94,46 +94,53 @@ public:
             auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
-                return rho.GetPopulation(m_desiredLevel); 
+                return std::real(rho(m_desiredLevel, m_desiredLevel));
             });
             progress.IncrementCount();
             return res;
         };
 
         // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
+        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
 
-        progress.SetTotal(detunings.Cols());
+        // start progress bar
+        progress.SetTotal(detunings.cols());
         progress.Start();
         
-        auto absCoeffs = QSim::CreateZeros(detunings.Cols());
-        pool.Map(func, absCoeffs, detunings.GetColIterBegin(), detunings.GetColIterEnd());
+        // start calculation
+        Eigen::VectorXd population(detunings.cols());
+        auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
+        
+        pool.MapNonBlockingG(func, population, genDetuning, detunings.cols());
+        progress.WaitUntilFinished();
 
-        simdata.GetDataset("Population").Store(absCoeffs.Data());
+        simdata.GetDataset("Population").StoreMatrix(population);
         SetFinished(simdata);
     }
 
     virtual void Plot(QSim::DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
-        auto x_axis = detunings.GetRow(m_system.GetLaserIdxByName(m_scanLaser));
-        auto y_axis = simdata.GetDataset("Population").Load1DRowVector();
+        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(m_scanLaser).eval();
+        auto y_axis = simdata.GetDataset("Population").LoadMatrix();
         
+        std::string laserNames[] = {"UV", "Green", "Red"};
+        std::string levelNames[] = {"X", "A", "H", "R", "Ion"};
+
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
-        ax.SetXLabel(m_scanLaser + " detuning [MHz]");
-        ax.SetYLabel(m_desiredLevel + " population");
-        ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
+        ax.SetXLabel(laserNames[m_scanLaser] + " detuning [MHz]");
+        ax.SetYLabel(levelNames[m_desiredLevel] + " population");
+        ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
         matplotlib.RunGUILoop();
 #endif
     }
 
 private:
-    std::string m_scanLaser;
-    std::string m_desiredLevel;
-    QSim::TNLevelSystemQM<DIM> m_system;
+    unsigned int m_scanLaser;
+    unsigned int m_desiredLevel;
+    QSim::TNLevelSystemQM2<5> m_system;
     QSim::DopplerIntegrator m_doppler;
 };
 

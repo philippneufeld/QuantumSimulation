@@ -83,7 +83,7 @@ namespace QSim
             const Eigen::Ref<const Eigen::VectorXd>& detunings,
             double velocity, double t) const;
 
-        /*// time evolution of density matrix
+        // time evolution of density matrix
         Eigen::Matrix<std::complex<double>, N, N> GetDensityMatrix(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, 
             const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
@@ -102,13 +102,13 @@ namespace QSim
         
         // create stecific density matrices
         Eigen::Matrix<std::complex<double>, N, N> CreateGroundState() const;
-        Eigen::Matrix<std::complex<double>, N, N> CreateThermalState(double temperature) const;*/
+        Eigen::Matrix<std::complex<double>, N, N> CreateThermalState(double temperature) const;
         
     private:
         // auxilliary laser variable update
         void UpdateLaserFrequencies();
 
-        /*// helper methods for time evolution
+        // helper methods for time evolution
         template<typename AuxType>
         Eigen::Matrix<std::complex<double>, N, N> GetDensityOpDerivative(
             const AuxType& auxData, 
@@ -118,7 +118,7 @@ namespace QSim
         template<typename AuxType>
         Eigen::Matrix<std::complex<double>, N, N> EvolveDensityMatrix(
             const AuxType& auxData, const Eigen::Matrix<std::complex<double>, N, N>& rho0, 
-            double t0, double dt, unsigned int steps);*/
+            double t0, double dt, unsigned int steps);
 
     private:
 
@@ -291,7 +291,7 @@ namespace QSim
         return (~(*this)).GetHamiltonianFast(auxData, t);
     }
 
-    /*template<int N, typename MyT>
+    template<int N, typename MyT>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP2<N, MyT>::GetDensityMatrix(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
         const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
@@ -330,8 +330,7 @@ namespace QSim
         auto rhoAv = rho;
         for (unsigned int i = 0; i < steps2; i++)
         {
-            rho = this->EvolveDensityMatrix(
-                auxData, rho, t1 + i*dt2, dt2, 1);
+            rho = this->EvolveDensityMatrix(auxData, rho, t1 + i*dt2, dt2, 1);
             rhoAv += rho;
         }
         rhoAv *= 1.0 / (steps2 + 1);
@@ -355,8 +354,7 @@ namespace QSim
         const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
         for (unsigned int i = 0; i < steps; i++)
         {
-            rho = this->EvolveDensityMatrix(
-                auxData, rho, t0 + i*dt, dt, 1);
+            rho = this->EvolveDensityMatrix(auxData, rho, t0 + i*dt, dt, 1);
             trajectory.push_back(rho);
         }
 
@@ -373,39 +371,22 @@ namespace QSim
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP2<N, MyT>::CreateThermalState(double temperature) const
     { 
         unsigned int dims = GetDims();
-        Eigen::Matrix<std::complex<double>, N, N> res(dims, dims);
+        temperature = temperature > 0 ? temperature : 0;
 
-        Eigen::Matrix<double, N, 1> lvlOffset(dims);
-        unsigned int gsIdx = std::min_element(m_levels.Data(), m_levels.Data() + dims) - m_levels.Data();
-        for (unsigned int i = 0; i < dims; i++)
-            lvlOffset(i) = m_levels(i) - m_levels(gsIdx);
-
-        Eigen::Matrix<double, N, 1> thermalWeights(dims);
+        unsigned int gsIdx;
+        m_levels.minCoeff(&gsIdx);
+        auto lvlOffset = m_levels.array() - m_levels(gsIdx);
+        
+        double tmp = PlanckConstant_v / (BoltzmannConstant_v * temperature);
+        Eigen::Array<double, N, 1> thermalWeights(dims);
         if (temperature <= 0.0)
-        {
-            for (unsigned int i = 0; i < dims; i++)
-            {
-                if (lvlOffset(i) == 0.0)
-                    thermalWeights(i) = 1.0;
-            }
-        }
+            thermalWeights = (lvlOffset > 0.0).select(Eigen::ArrayXd::Zero(dims), 1.0);
         else
-        {
-            double tmp = PlanckConstant_v / (BoltzmannConstant_v * temperature);
-            for (unsigned int i = 0; i < dims; i++)
-                thermalWeights(i) = std::exp(-tmp * lvlOffset(i));
-        }
-
-        double norm = 0.0;
-        for (unsigned int i = 0; i < dims; i++)
-            norm += thermalWeights(i);
-        norm = 1.0 / norm;
-        thermalWeights *= norm;
-
-        for (unsigned int i = 0; i < dims; i++)
-            res(i, i) = thermalWeights(i);
-        return res;
-    }*/
+            thermalWeights = (-tmp * lvlOffset).exp();
+        
+        thermalWeights /= thermalWeights.sum();
+        return thermalWeights.matrix().asDiagonal();
+    }
 
     template<int N, typename MyT>
     void TNLevelSystemCRTP2<N, MyT>::UpdateLaserFrequencies()
@@ -418,27 +399,29 @@ namespace QSim
         }
     }
 
-    /*template<int N, typename MyT>
+    template<int N, typename MyT>
     template<typename AuxType>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP2<N, MyT>::GetDensityOpDerivative(
         const AuxType& auxData, 
-        const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho, 
+        const Eigen::Matrix<std::complex<double>, N, N>& rho, 
         double t) const
     {
         // von Neumann term
         auto h = (~(*this)).GetHamiltonianFast(auxData, t);
-        Eigen::Matrix<std::complex<double>, N, N> rhoPrime = -1.0i * (h * rho - rho * h);
+        auto rhoPrime = (-1.0i * (h * rho - rho * h)).eval();
 
         // add lindblad dissipation term
         for (const auto& decay: this->m_decays)
         {
-            auto idxPair = decay.first; // from, to
-            auto rate = TwoPi_v * decay.second;
-            std::complex<double> popDecayRate = rate * rho(idxPair.first, idxPair.first);
-            rhoPrime(idxPair.first, idxPair.first) -= popDecayRate;
-            rhoPrime(idxPair.second, idxPair.second) += popDecayRate;
-            rhoPrime(idxPair.first, idxPair.second) -= 0.5 * rate * rho(idxPair.first, idxPair.second);
-            rhoPrime(idxPair.second, idxPair.first) -= 0.5 * rate * rho(idxPair.second, idxPair.first);
+            auto [lvls, rate] = decay;
+            auto [i, f] = lvls;
+            rate *= TwoPi_v;
+            
+            std::complex<double> popDecayRate = rate * rho(i, i);
+            rhoPrime(i, i) -= popDecayRate;
+            rhoPrime(f, f) += popDecayRate;
+            rhoPrime(i, f) -= 0.5 * rate * rho(i, f);
+            rhoPrime(f, i) -= 0.5 * rate * rho(f, i);
         }
 
         return rhoPrime;
@@ -447,7 +430,7 @@ namespace QSim
     template<int N, typename MyT>
     template<typename AuxType>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP2<N, MyT>::EvolveDensityMatrix(
-        const AuxType& auxData, const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0, 
+        const AuxType& auxData, const Eigen::Matrix<std::complex<double>, N, N>& rho0, 
         double t0, double dt, unsigned int steps)
     {
         using YType = Eigen::Matrix<std::complex<double>, N, N>;
@@ -464,7 +447,7 @@ namespace QSim
         }
 
         return rho;
-    }*/
+    }
 }
 
 // Include specific implementations

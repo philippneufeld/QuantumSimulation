@@ -54,15 +54,18 @@ int main(int argc, const char* argv[])
     system2.SetDipoleElement(0, 1, dip);
     system2.AddLaser(0, 1, intProbe, false);
 
-    auto ss1 = system1.GetDensityMatrixSS(CreateZeros<double>(1), 0.0);
-    for (std::size_t i = 0; i < ss1.Rows(); i++)
-    {
-        for (std::size_t j = 0; j < ss1.Cols(); j++)
-            std::cout << ss1(i, j) << " ";
-        std::cout << std::endl;
-    }
+    std::cout << system2.CreateGroundState() << std::endl;
+    std::cout << system2.CreateThermalState(1.0e4) << std::endl;
 
-    std::cout << system2.GetDensityMatrixSS(Eigen::VectorXd::Zero(1), 0.0) << std::endl;
+    // auto ss1 = system1.GetDensityMatrixSS(CreateZeros<double>(1), 0.0);
+    // for (std::size_t i = 0; i < ss1.Rows(); i++)
+    // {
+    //     for (std::size_t j = 0; j < ss1.Cols(); j++)
+    //         std::cout << ss1(i, j) << " ";
+    //     std::cout << std::endl;
+    // }
+
+    // std::cout << system2.GetDensityMatrixSS(Eigen::VectorXd::Zero(1), 0.0) << std::endl;
 
     return 0;
 }
