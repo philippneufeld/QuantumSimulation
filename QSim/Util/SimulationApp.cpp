@@ -162,6 +162,8 @@ namespace QSim
                 return 1;
             }
 
+            std::cout << "Created data group \"" + name + "\"" << std::endl;
+
             // Initialize new simulation
             this->Init(simData);
         }
@@ -169,7 +171,7 @@ namespace QSim
         if (!this->IsFinished(simData))
             this->Continue(simData);
 
-        if (cmdArgs.IsOptionPresent("plot"))
+        if (true || cmdArgs.IsOptionPresent("plot"))
             this->Plot(simData);
 
         return 0;

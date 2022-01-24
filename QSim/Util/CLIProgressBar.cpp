@@ -255,9 +255,12 @@ namespace QSim
 
     void CLIProgBarInt::IncrementCount()
     {
-        m_cnt++; // atomically increment
-        auto cnt = std::min<std::size_t>(m_cnt, m_total);
-        this->SetProgress(static_cast<double>(cnt) / m_total);
+        std::size_t cnt = ++m_cnt; // atomically increment
+        std::size_t total = m_total;
+        if (cnt < total)
+            this->SetProgress(static_cast<double>(cnt) / m_total);
+        else
+            this->SetProgress(1.0);
     }
 
     std::string CLIProgBarInt::GetProgressText() const

@@ -197,6 +197,47 @@ namespace QSim
         return ret;
     }
 
+    bool DataFileDataset::StoreMatrix(Eigen::MatrixXd mat)
+    {
+        auto dims = GetDims();
+
+        if (dims.size() == 1)
+        {
+            if (!((mat.rows() == 1 && mat.cols() == dims[0])
+                || (mat.cols() == 1 && mat.rows() == dims[0])))
+                return false;
+        }
+        else if (dims.size() == 2)
+        {
+            if (dims[0] != mat.rows() || dims[1] != mat.cols())
+                return false;
+            mat.transposeInPlace();
+        }
+        else 
+        {
+            return false;
+        }
+
+        return Store(mat.data());
+    }
+
+    Eigen::MatrixXd DataFileDataset::LoadMatrix() const
+    {
+        auto dims = GetDims();
+        if (dims.size() == 1)
+            dims.push_back(1); // make column vector by default
+
+        if (dims.size() != 2)
+            return Eigen::MatrixXd{};
+        
+        Eigen::MatrixXd ret(dims[1], dims[0]);
+        if (!Load(ret.data()))
+            return Eigen::MatrixXd{};
+
+        ret.transposeInPlace();
+
+        return ret;
+    }
 
     DataFileGroup::DataFileGroup(hid_t group) 
         : DataFileObject(group) { }

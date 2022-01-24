@@ -2,7 +2,7 @@
 
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem.h>
+#include <QSim/NLevel/NLevelSystem2.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
@@ -23,15 +23,15 @@ public:
         constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10.0e6);
 
         // Create system
-        std::array<std::string, 3> lvlNames = {"S1_2_F1", "S1_2_F2", "P3_2"};
-        std::array<double, 3> levels = {-4.271e9, 2.563e9, QSim::SpeedOfLight_v / 780.241e-9};
-        m_system = QSim::TNLevelSystemQM<3>(lvlNames, levels);
-        m_system.SetDipoleElementByName("S1_2_F1", "P3_2", dip);
-        m_system.SetDipoleElementByName("S1_2_F2", "P3_2", dip);
-        m_system.AddLaserByName("Probe", "S1_2_F1", "P3_2", intProbe, false);
-        m_system.AddLaserByName("Pump", "S1_2_F2", "P3_2", intPump, false);
-        m_system.SetDecayByName("P3_2", "S1_2_F1", 3.0/8.0 * 6.065e6);
-        m_system.SetDecayByName("P3_2", "S1_2_F2", 5.0/8.0 * 6.065e6);
+        m_system.SetLevel(0, -4.271e9);
+        m_system.SetLevel(1, 2.563e9);
+        m_system.SetLevel(2, QSim::SpeedOfLight_v / 780.241e-9);
+        m_system.SetDipoleElement(0, 2, dip);
+        m_system.SetDipoleElement(1, 2, dip);
+        m_system.AddLaser(0, 2, intProbe, false);
+        m_system.AddLaser(1, 2, intPump, false);
+        m_system.SetDecay(2, 0, 3.0/8.0 * 6.065e6);
+        m_system.SetDecay(2, 1, 5.0/8.0 * 6.065e6);
         
         m_doppler.SetMass(1.44316060e-25);
     }
@@ -40,12 +40,11 @@ public:
     {
         // Generate detuning axis
         constexpr static std::size_t cnt = 501;
-        QSim::TStaticMatrix<double, 2, cnt> detunings;
-        detunings.SetRow(QSim::CreateLinspaceRow(-100.0e6, 100.0e6, cnt), 
-            m_system.GetLaserIdxByName("Probe"));
-        simdata.CreateDataset("Detunings", { 2, cnt }).Store(detunings.Data());
-
-        // Generate result dataset
+        Eigen::Matrix<double, 2, cnt> detunings;
+        detunings.setZero();
+        detunings.row(0) = Eigen::RowVectorXd::LinSpaced(cnt, -100.0e6, 100.0e6);
+        
+        simdata.CreateDataset("Detunings", { 2, cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("AbsCoeffs", { cnt });
     }
 
@@ -59,24 +58,27 @@ public:
             auto res = m_doppler.Integrate([&](double vel)
             { 
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
-                return rho.GetAbsCoeff("S1_2_F1", "P3_2"); 
+                return std::imag(rho(0, 2)); 
             });
             progress.IncrementCount();
             return res;
         };
 
         // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
+        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
 
         // start progress bar
-        progress.SetTotal(detunings.Cols());
+        progress.SetTotal(detunings.cols());
         progress.Start();
         
         // start calculation
-        auto absCoeffs = QSim::CreateZeros(detunings.Cols());
-        pool.Map(func, absCoeffs, detunings.GetColIterBegin(), detunings.GetColIterEnd());
+        Eigen::VectorXd absCoeffs(detunings.cols());
+        auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
         
-        simdata.GetDataset("AbsCoeffs").Store(absCoeffs.Data());
+        pool.MapNonBlockingG(func, absCoeffs, genDetuning, detunings.cols());
+        progress.WaitUntilFinished();
+        
+        simdata.GetDataset("AbsCoeffs").StoreMatrix(absCoeffs);
         SetFinished(simdata);
     }
 
@@ -84,20 +86,19 @@ public:
     virtual void Plot(QSim::DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto detunings = simdata.GetDataset("Detunings").Load2DMatrix();
-        auto x_axis = detunings.GetRow(m_system.GetLaserIdxByName("Probe"));
-        auto y_axis = simdata.GetDataset("AbsCoeffs").Load1DRowVector();
+        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(0);
+        auto y_axis = simdata.GetDataset("AbsCoeffs").LoadMatrix();
         
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
-        ax.Plot(x_axis.Data(), y_axis.Data(), x_axis.Size());
+        ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
         matplotlib.RunGUILoop();
 #endif
     }
 
 private:
-    QSim::TNLevelSystemQM<3> m_system;
+    QSim::TNLevelSystemQM2<3> m_system;
     QSim::DopplerIntegrator m_doppler;
 };
 

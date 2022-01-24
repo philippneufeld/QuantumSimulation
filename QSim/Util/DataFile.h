@@ -7,6 +7,7 @@
 #include <vector>
 #include <hdf5.h>
 
+#include <Eigen/Dense>
 #include "../Math/Matrix.h"
 
 namespace QSim
@@ -61,6 +62,9 @@ namespace QSim
         TDynamicMatrix<double> Load2DMatrix() const;
         TDynamicRowVector<double> Load1DRowVector() const;
         TDynamicColVector<double> Load1DColVector() const;
+
+        bool StoreMatrix(Eigen::MatrixXd mat);
+        Eigen::MatrixXd LoadMatrix() const;
     };
 
     class DataFileGroup : public DataFileObject

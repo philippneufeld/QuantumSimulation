@@ -37,10 +37,9 @@ public:
     {
         // Generate detuning axis
         constexpr std::size_t cnt = 501;
-        Eigen::VectorXd detunings = Eigen::VectorXd::LinSpaced(cnt, -1e9, 1e9);
-        simdata.CreateDataset("Detunings", { cnt }).Store(detunings.data());
-
-        // Generate result dataset
+        auto detunings = Eigen::RowVectorXd::LinSpaced(cnt, -1e9, 1e9);
+        
+        simdata.CreateDataset("Detunings", { 1, cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("AbsCoeffs", { cnt });
     }
 
@@ -61,8 +60,7 @@ public:
         };
 
         // Load detuning axis
-        auto detunings1 = simdata.GetDataset("Detunings").Load1DRowVector();
-        Eigen::RowVectorXd detunings = Eigen::Map<const Eigen::RowVectorXd>(detunings1.Data(), detunings1.Size());
+        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
 
         // start progress bar
         progress.SetTotal(detunings.cols());
@@ -75,18 +73,15 @@ public:
         pool.MapNonBlockingG(func, absCoeffs, genDetuning, detunings.cols());
         progress.WaitUntilFinished();
 
-        simdata.GetDataset("AbsCoeffs").Store(absCoeffs.data());
+        simdata.GetDataset("AbsCoeffs").StoreMatrix(absCoeffs);
         SetFinished(simdata);
     }
 
     virtual void Plot(QSim::DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto x_axis1 = simdata.GetDataset("Detunings").Load1DRowVector();
-        auto y_axis1 = simdata.GetDataset("AbsCoeffs").Load1DRowVector();
-
-        Eigen::VectorXd x_axis = Eigen::Map<const Eigen::VectorXd>(x_axis1.Data(), x_axis1.Size());
-        Eigen::VectorXd y_axis = Eigen::Map<const Eigen::VectorXd>(y_axis1.Data(), y_axis1.Size());
+        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix();
+        auto y_axis = simdata.GetDataset("AbsCoeffs").LoadMatrix();
 
         QSim::PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
