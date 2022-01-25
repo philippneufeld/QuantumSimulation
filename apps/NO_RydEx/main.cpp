@@ -80,7 +80,7 @@ public:
         detunings.setZero();
         detunings.row(m_scanLaser) = Eigen::RowVectorXd::LinSpaced(cnt, -50.0e6, 50.0e6);
 
-        simdata.CreateDataset("Detunings", { detunings.rows(), cnt }).StoreMatrix(detunings);
+        simdata.CreateDataset("Detunings", { 3, cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("Population", { cnt });
     }
 
