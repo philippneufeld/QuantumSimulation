@@ -26,10 +26,10 @@ float randf()
 int main(int argc, const char* argv[])
 {
     QSim::DefaultExecutor executor;
-    auto x = QSim::CreateLinspace(-5.0, 10.0, 100);
-    auto y = QSim::CreateZerosLike(x);
+    Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(100, -5.0, 10.0);
+    Eigen::VectorXd y = Eigen::VectorXd::Zero(x.size());
     executor.Map([](double x){ return func(x, 2, 3, 1.5) + 0.1 * randf(); }, 
-        y, x.Data(), x.Data() + x.Size());
+        y, x.data(), x.data() + x.size());
 
     double a = 1;
     double g = 1;
@@ -37,17 +37,17 @@ int main(int argc, const char* argv[])
     
     QSim::CurveFit(executor, func, x, y, a, g, x0);
 
-    auto xfit = QSim::CreateLinspace(-5.0, 10.0, 500);
-    auto yfit = QSim::CreateZerosLike(xfit);
+    Eigen::VectorXd xfit = Eigen::VectorXd::LinSpaced(1000, -5.0, 10.0);
+    Eigen::VectorXd yfit = Eigen::VectorXd::Zero(xfit.size());
     executor.Map([=](double x) { return func(x, a, g, x0); }, 
-        yfit, xfit.Data(), xfit.Data() + xfit.Size());
+        yfit, xfit.data(), xfit.data() + xfit.size());
 
 #ifdef QSIM_PYTHON3
     QSim::PythonMatplotlib matplotlib;
     auto figure = matplotlib.CreateFigure();
     auto ax = figure.AddSubplot();
-    ax.Plot(x.Data(), y.Data(), x.Size(), "Data", ".");
-    ax.Plot(xfit.Data(), yfit.Data(), xfit.Size(), "Fit", "-");
+    ax.Plot(x.data(), y.data(), x.size(), "Data", ".");
+    ax.Plot(xfit.data(), yfit.data(), xfit.size(), "Fit", "-");
     matplotlib.RunGUILoop();
 #else
     std::cout << "Plotting disabled" << std::endl;

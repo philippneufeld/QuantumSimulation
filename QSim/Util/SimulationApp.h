@@ -10,7 +10,6 @@
 #include <type_traits>
 #include <memory>
 
-#include "../Math/Matrix.h"
 #include "DataFile.h"
 
 namespace QSim

@@ -7,7 +7,7 @@
 #include <set>
 #include <vector>
 
-#include "../Math/Matrix.h"
+#include <Eigen/Dense>
 #include "NLevelSystem.h"
 
 namespace QSim

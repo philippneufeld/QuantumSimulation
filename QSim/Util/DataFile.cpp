@@ -158,45 +158,6 @@ namespace QSim
         return true;
     }
 
-    TDynamicMatrix<double> DataFileDataset::Load2DMatrix() const
-    {
-        auto dims = GetDims();
-        if (dims.size() != 2)
-            return TDynamicMatrix<double>{};
-        
-        TDynamicMatrix<double> ret(dims[0], dims[1]);
-        if (!Load(&ret[0]))
-            return TDynamicMatrix<double>{};
-
-        return ret;
-    }
-
-    TDynamicRowVector<double> DataFileDataset::Load1DRowVector() const
-    {
-        auto dims = GetDims();
-        if (dims.size() != 1)
-            return TDynamicMatrix<double>{};
-        
-        TDynamicRowVector<double> ret(dims[0]);
-        if (!Load(&ret[0]))
-            return TDynamicMatrix<double>{};
-            
-        return ret;
-    }
-
-    TDynamicColVector<double> DataFileDataset::Load1DColVector() const
-    {
-        auto dims = GetDims();
-        if (dims.size() != 1)
-            return TDynamicMatrix<double>{};
-        
-        TDynamicColVector<double> ret(dims[0]);
-        if (!Load(&ret[0]))
-            return TDynamicMatrix<double>{};
-            
-        return ret;
-    }
-
     bool DataFileDataset::StoreMatrix(Eigen::MatrixXd mat)
     {
         auto dims = GetDims();

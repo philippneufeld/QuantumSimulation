@@ -8,7 +8,6 @@
 #include <hdf5.h>
 
 #include <Eigen/Dense>
-#include "../Math/Matrix.h"
 
 namespace QSim
 {
@@ -58,10 +57,6 @@ namespace QSim
         std::vector<std::size_t> GetDims() const;
         bool Load(double* data) const;
         bool Store(const double* data);
-
-        TDynamicMatrix<double> Load2DMatrix() const;
-        TDynamicRowVector<double> Load1DRowVector() const;
-        TDynamicColVector<double> Load1DColVector() const;
 
         bool StoreMatrix(Eigen::MatrixXd mat);
         Eigen::MatrixXd LoadMatrix() const;
