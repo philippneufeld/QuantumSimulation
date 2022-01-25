@@ -86,18 +86,18 @@ namespace QSim
         // time evolution of density matrix
         Eigen::Matrix<std::complex<double>, N, N> GetDensityMatrix(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-            const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
+            const Eigen::Matrix<std::complex<double>, N, N>& rho0,
             double velocity, double t0, double t, double dt);
 
         Eigen::Matrix<std::complex<double>, N, N> GetDensityMatrixAv(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-            const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
+            const Eigen::Matrix<std::complex<double>, N, N>& rho0,
             double velocity, double t0, double t, double tav, double dt);
 
         std::pair<Eigen::VectorXd, std::vector<Eigen::Matrix<std::complex<double>, N, N>>>
         GetTrajectory(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-            const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
+            const Eigen::Matrix<std::complex<double>, N, N>& rho0,
             double velocity, double t0, double t, double dt);
         
         // create stecific density matrices
@@ -294,7 +294,7 @@ namespace QSim
     template<int N, typename MyT>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP2<N, MyT>::GetDensityMatrix(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-        const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
+        const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double dt)
     {
         // calculate appropriate amount of steps to obtain a dt near to the required dt
@@ -307,7 +307,7 @@ namespace QSim
     template<int N, typename MyT>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP2<N, MyT>::GetDensityMatrixAv(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-        const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
+        const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double tav, double dt)
     {
         const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
@@ -341,7 +341,7 @@ namespace QSim
     template<int N, typename MyT>
     std::pair<Eigen::VectorXd, std::vector<Eigen::Matrix<std::complex<double>, N, N>>> TNLevelSystemCRTP2<N, MyT>::GetTrajectory(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-        const Eigen::Ref<const Eigen::Matrix<std::complex<double>, N, N>>& rho0,
+        const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double dt)
     {
         unsigned int steps = static_cast<unsigned int>(std::ceil((t-t0) / dt));
@@ -358,7 +358,7 @@ namespace QSim
             trajectory.push_back(rho);
         }
 
-        return {Eigen::VectorXd::LinSpaced(steps, t0, t0 + steps*dt), trajectory};
+        return {Eigen::VectorXd::LinSpaced(steps + 1, t0, t0 + steps*dt), trajectory};
     }
 
     template<int N, typename MyT>

@@ -52,6 +52,8 @@ public:
         {
             auto res = m_doppler.Integrate([&](double vel)
             { 
+                // auto rho0 = m_system.CreateGroundState();
+                // auto rho = m_system.GetDensityMatrix(dets, rho0, vel, 0.0, 1e-8, 2e-10);
                 auto rho = m_system.GetDensityMatrixSS(dets, vel);
                 return std::imag(rho(0, 1));
             });
