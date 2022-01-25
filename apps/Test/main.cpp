@@ -3,11 +3,14 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-#include <QSim/Python/Plotting.h>
 #include <QSim/Executor/ThreadPool.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/NLevelSystemQM.h>
 #include <QSim/NLevel/NLevelSystemSC.h>
+
+#ifdef QSIM_PYTHON3
+#include <QSim/Python/Plotting.h>
+#endif
 
 using namespace QSim;
 
@@ -30,11 +33,13 @@ int main(int argc, const char* argv[])
     for (std::size_t i = 0; i<rhos.size(); i++)
         pops[i] = std::real(rhos[i](1, 1));
 
+#ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;
     auto fig = matplotlib.CreateFigure();
     auto ax = fig.AddSubplot();
     ax.Plot(ts.data(), pops.data(), pops.size());
     matplotlib.RunGUILoop();
+#endif
 
     return 0;
 }
