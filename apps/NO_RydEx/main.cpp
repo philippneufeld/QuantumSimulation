@@ -2,7 +2,7 @@
 
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem2.h>
+#include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
@@ -140,7 +140,7 @@ public:
 private:
     unsigned int m_scanLaser;
     unsigned int m_desiredLevel;
-    QSim::TNLevelSystemQM2<5> m_system;
+    QSim::TNLevelSystemQM<5> m_system;
     QSim::DopplerIntegrator m_doppler;
 };
 

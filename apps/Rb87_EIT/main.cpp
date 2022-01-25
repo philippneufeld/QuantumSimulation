@@ -2,7 +2,7 @@
 
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem2.h>
+#include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
@@ -98,7 +98,7 @@ public:
     }
 
 private:
-    QSim::TNLevelSystemQM2<3> m_system;
+    QSim::TNLevelSystemQM<3> m_system;
     QSim::DopplerIntegrator m_doppler;
 };
 

@@ -2,7 +2,7 @@
 
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
-#include <QSim/NLevel/NLevelSystem2.h>
+#include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Executor/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
@@ -23,7 +23,6 @@ public:
         constexpr double freq = QSim::SpeedOfLight_v / 780.241e-9;
 
         // Create system
-        std::array<double, 2> levels = {0, freq};
         m_system.SetLevel(0, 0.0);
         m_system.SetLevel(1, freq);
         m_system.SetDipoleElement(0, 1, dip);
@@ -94,7 +93,7 @@ public:
     }
 
 private:
-    QSim::TNLevelSystemQM2<2> m_system;
+    QSim::TNLevelSystemQM<2> m_system;
     QSim::DopplerIntegrator m_doppler;
 };
 

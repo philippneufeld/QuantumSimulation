@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "../Math/Matrix.h"
+#include <Eigen/Dense>
 #include "NLevelSystem.h"
 
 namespace QSim
@@ -15,7 +15,7 @@ namespace QSim
     // Solver for a semi-classical model of a N-level system that is driven by light fields
     //
 
-    template<std::size_t N>
+    template<int N>
     class TNLevelSystemSC : public TNLevelSystemCRTP<N, TNLevelSystemSC<N>>
     {
         friend class TNLevelSystemCRTP<N, TNLevelSystemSC<N>>;
@@ -23,114 +23,91 @@ namespace QSim
     public:
         // constructors
         TNLevelSystemSC() : MyParent() { }
-        TNLevelSystemSC(const std::array<double, N>& levels) : MyParent(levels) { }
-        TNLevelSystemSC(const std::array<std::string, N>& lvlNames) 
-            : MyParent(lvlNames) { }
-        TNLevelSystemSC(const std::array<std::string, N>& lvlNames, 
-            const std::array<double, N>& levels) : MyParent(lvlNames, levels) { }
+        TNLevelSystemSC(unsigned int dims) : MyParent(dims) { }
 
         // copy operations
         TNLevelSystemSC(const TNLevelSystemSC&) = default;
         TNLevelSystemSC& operator=(const TNLevelSystemSC&) = default;  
 
     private:
+        // Allow every possible laser configuration
         bool OnLaserAdded(std::size_t lvl1, std::size_t lvl2, bool counter) { return true; }
         void OnLaserRemoved() { }
 
-        using HamiltonianType = TStaticMatrix<std::complex<double>, N, N>;
-
-        template<typename VT>
-        TStaticColVector<double, N> CalculateRotatingFrame(
-            const TColVector<VT>& laserFreqencies) const;
+        Eigen::Matrix<double, N, 1> CalculateRotatingFrame(
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
 
         // auxilliary data that can be prepared once during a time series and be reused later
         using HAuxData = std::tuple<
             // hamiltonian without time-dependent terms:
-            HamiltonianType, 
+            Eigen::Matrix<std::complex<double>, N, N>, 
             // Time dependent laser fields (lvl1, lvl2, rabi, (angular) freq):
             std::vector<std::tuple<std::size_t, std::size_t, std::complex<double>, double>>
             >;
 
-        template<typename VT>
-        HAuxData GetHamiltonianAux(const TColVector<VT>& detunings, double velocity) const;
-        HamiltonianType GetHamiltonianFast(const HAuxData& auxData, double t) const;   
+        HAuxData GetHamiltonianAux(const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
+        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(const HAuxData& auxData, double t) const;   
     };
 
-    template<std::size_t N>
-    template<typename VT>
-    TStaticColVector<double, N> TNLevelSystemSC<N>::CalculateRotatingFrame(
-        const TColVector<VT>& laserFreqencies) const
+    template<int N>
+    Eigen::Matrix<double, N, 1> TNLevelSystemSC<N>::CalculateRotatingFrame(
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
     {
         auto levels = this->GetLevels();
-        TStaticColVector<double, N> frame;
+        Eigen::Matrix<double, N, 1> frame(this->GetDims());
         
         frame[0] = levels[0];
-        for (std::size_t i = 1; i < N; i++)
+        for (std::size_t i = 1; i < this->GetDims(); i++)
         {
             // find closest matching laser frequency
-            double closest = 0.0;
-            for (std::size_t j = 0; j < (~laserFreqencies).Size(); j++)
-            {
-                if (std::abs(levels[i] - (~laserFreqencies)[j]) < std::abs(levels[i] - closest))
-                    closest = (~laserFreqencies)[j];
-            }
-            frame[i] = frame[i-1] + closest;    
+            int idx = 0;
+            auto freqDiff = (laserFreqs.array() - levels[i]).abs().minCoeff(&idx);
+            double offset = freqDiff < std::abs(levels[i]) ? laserFreqs[idx] : 0.0;
+            frame[i] = frame[i-1] + offset;    
         }
 
         return frame;
     }
 
-    template<std::size_t N>
-    template<typename VT>
+    template<int N>
     typename TNLevelSystemSC<N>::HAuxData TNLevelSystemSC<N>::GetHamiltonianAux(
-        const TColVector<VT>& detunings, double velocity) const
+        const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
     {
-        assert((~detunings).Rows() == this->GetLaserCount());
+        assert(detunings.size() == this->GetLaserCount());
         
-        HamiltonianType hamiltonian(N, N);
+        unsigned int dims = this->GetDims();
+        Eigen::Matrix<std::complex<double>, N, N> h0(dims, dims);
 
         // Atom hamiltonian
-        auto levels = this->GetLevels();
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) = TwoPi_v * levels[i];  
+        h0 = TwoPi_v * this->GetLevels().asDiagonal();
 
-        // Calculate doppler shifted laser frequencies
-        auto laserFreqs = this->GetLaserFrequencies() + detunings;
-        const auto& propagation = this->GetLasersCounterPropagation();
-        auto doppler = velocity / SpeedOfLight_v;
-        for (std::size_t i = 0; i < laserFreqs.Size(); i++)
-            laserFreqs[i] *= 1 + propagation[i] * doppler;
-        
-        // Rotating frame
+        // Calculate doppler shifted laser frequencies and apply 
+        // roatating frame to hamiltonian (additional term that 
+        // comes from the temporal derivative of rho in the rotating frame)
+        auto laserFreqs = this->GetDopplerLaserFreqs(detunings, velocity);
         auto frame = this->CalculateRotatingFrame(laserFreqs);
+        h0 -= TwoPi_v * frame.asDiagonal();
         
-        // apply roatating frame to hamiltonian 
-        // (additional term that comes from the temporal derivative of rho in the rotating frame)
-        for (std::size_t i = 0; i < N; i++)
-            hamiltonian(i, i) -= TwoPi_v * frame(i);
-
         // Calculate electric field and system-light interaction
         // Time dependent laser fields (lvl1, lvl2, rabi, (angular) freq):
         std::vector<std::tuple<std::size_t, std::size_t, std::complex<double>, double>> laserFields;
-        for (std::size_t i = 0; i < (~laserFreqs).Size(); i++)
+        for (std::size_t i = 0; i < laserFreqs.size(); i++)
         {
-            double E0 = this->GetLaserElectricField(i);    
-            for (std::size_t j = 0; j < N; j++)
+            double E0 = this->GetLaserElectricAmplitude(i);    
+            for (std::size_t j = 0; j < dims; j++)
             {
-                for (std::size_t k = j + 1; k < N; k++)
+                for (std::size_t k = j + 1; k < dims; k++)
                 {
                     std::complex<double> rabi = 0.5 * E0 * this->GetDipoleElement(k, j) / ReducedPlanckConstant_v;
                     if (std::abs(rabi) == 0.0)
                         continue;
 
                     // calculate frequencies of the electric field components
-                    double elFieldFreq = (~laserFreqs)(i);
+                    double elFieldFreq = laserFreqs(i);
                     double frame_kj = frame(k) - frame(j);
                     double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
 
-                    std::complex<double> electricField = 0.0;
-
-                    // Rotating wave approximation: Ignore counter rotating propagating wave
+                    // Rotating wave approximation: Ignore counter rotating wave
                     // if both frequencies are equal (in absolute terms) then keep both
                     double maxFreq = std::abs(freqs[0]) < std::abs(freqs[1]) ? std::abs(freqs[0]) : std::abs(freqs[1]);
                     for (double freq: freqs)
@@ -146,8 +123,8 @@ namespace QSim
                         }
                         else
                         {
-                            hamiltonian(k, j) += rabi;
-                            hamiltonian(j, k) += std::conj(rabi);
+                            h0(k, j) += rabi;
+                            h0(j, k) += std::conj(rabi);
                         }
                     }
                 }
@@ -155,31 +132,26 @@ namespace QSim
         }
 
         // return auxilliary data
-        return std::make_tuple(hamiltonian, std::move(laserFields));
+        return std::make_tuple(h0, std::move(laserFields));
     }
     
-    template<std::size_t N>
-    typename TNLevelSystemSC<N>::HamiltonianType TNLevelSystemSC<N>::GetHamiltonianFast(
+    template<int N>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemSC<N>::GetHamiltonianFast(
         const HAuxData& auxData, double t) const
     {
         // unpack auxilliary data
-        HamiltonianType hamiltonian = std::get<0>(auxData);
-        const auto& laserFields = std::get<1>(auxData);
+        const auto& [h0, fields] = auxData;
+        Eigen::Matrix<std::complex<double>, N, N> h = h0;
 
-        for (const auto& laserField: laserFields)
+        for (const auto& field: fields)
         {
-            std::size_t lvl1 = std::get<0>(laserField);
-            std::size_t lvl2 = std::get<1>(laserField);
-            auto rabi = std::get<2>(laserField);
-            double angFreq = std::get<3>(laserField);
-            
+            auto [l1, l2, rabi, angFreq] = field;
             auto coupling = rabi * std::exp(std::complex<double>(1.0i * angFreq * t));
-            
-            hamiltonian(lvl1, lvl2) += coupling;
-            hamiltonian(lvl2, lvl1) += std::conj(coupling);
+            h(l1, l2) += coupling;
+            h(l2, l1) += std::conj(coupling);
         }
 
-        return hamiltonian;
+        return h;
     }
 
 }
