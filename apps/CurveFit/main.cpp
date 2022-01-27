@@ -90,12 +90,12 @@ public:
         return std::make_pair(detunings, absCoeffs);
     }
 
-    double operator()(double x, double x0, double gamma1, double gamma2)
+    double operator()(double x, double x0, double gamma)
     {
         Eigen::Matrix<double, 2, 1> dets;
         dets << (x - x0), 0;
-        system.SetDecay(2, 0, gamma1);
-        system.SetDecay(2, 1, gamma2);
+        system.SetDecay(2, 0, 3.0/8.0 * gamma);
+        system.SetDecay(2, 1, 5.0/8.0 * gamma);
         s_cnt++;
         return m_doppler.Integrate([&](double vel)
         { 
@@ -120,20 +120,18 @@ int main(int argc, const char* argv[])
     ThreadPoolExecutor pool;
     auto [x, y] = Fitter::GenerateTestData(pool, 501, 1e-3);
 
-    double x0 = 0.01e6;
-    double gamma1 = 1e6;
-    double gamma2 = 1e6;
+    double x0 = 5e6;
+    double gamma = 1e6;
     Fitter fitter;
-    CurveFit(pool, fitter, x, y, x0, gamma1, gamma2);
+    CurveFit(pool, fitter, x, y, x0, gamma);
 
-    std::cout << "gamma1: " << gamma1 / 1e6 << " MHz" << std::endl;
-    std::cout << "gamma2: " << gamma1 / 1e6 << " MHz" << std::endl;
+    std::cout << "gamma: " << gamma / 1e6 << " MHz" << std::endl;
     std::cout << "x0: " << x0 / 1e6 << " MHz" << std::endl;
 
     std::cout << "fevs: " << fitter.s_cnt << std::endl;
 
     Eigen::VectorXd yfit = Eigen::VectorXd::Zero(x.size());
-    pool.Map([&](double x) { return fitter(x, x0, gamma1, gamma2); }, 
+    pool.Map([&](double x) { return fitter(x, x0, gamma); }, 
         yfit, x.data(), x.data() + x.size());
 
 #ifdef QSIM_PYTHON3
