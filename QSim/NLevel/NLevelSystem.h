@@ -193,6 +193,9 @@ namespace QSim
             return false;  // index out of bound
         m_dipoleOp(from, to) = dip;
         m_dipoleOp(to, from) = dip;
+
+        (~(*this)).OnDipoleOperatorChanged();
+
         return true;
     }
 

@@ -43,13 +43,15 @@ namespace QSim
     private:
 
         // Helper methods to prepare the hamiltonian calculation
+        void PrepareHamiltonian();
         bool PrepareCalculation();
         bool PreparePhotonBasis(std::vector<unsigned int>& trans_path, 
             std::set<unsigned int>& visitedLevels, unsigned int transFrom);
 
         bool OnLaserAdded(unsigned int lvl1, unsigned int lvl2, bool counter) { return PrepareCalculation(); }
         void OnLaserRemoved() { PrepareCalculation(); }
-
+        void OnDipoleOperatorChanged() { PrepareHamiltonian(); }
+        
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianAux(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(
@@ -128,10 +130,27 @@ namespace QSim
         auto b = BTy::Unit(dims*dims + 1, dims*dims);
         
         // solve and subsequently reshape from vetor to matrix
-        auto x = ((A.adjoint()*A).householderQr().solve(A.adjoint()*b)).eval();
+        auto x = ((A.adjoint()*A).ldlt().solve(A.adjoint()*b)).eval();
         return Eigen::Map<SSTy>(x.data(), dims, dims).transpose();
     }
     
+    template<int N>
+    void TNLevelSystemQM<N>::PrepareHamiltonian()
+    {
+        // Atom hamiltonian
+        m_hamiltonianNoLight = TwoPi_v * this->GetLevels().asDiagonal();
+
+        // Interaction hamiltonian
+        for (unsigned int i = 0; i < this->GetLaserCount(); i++)
+        {
+            auto lvls = this->GetLaserLevels(i);
+            auto rabi = 0.5 * this->GetLaserElectricAmplitude(i) * 
+                this->GetDipoleElement(lvls.first, lvls.second) / ReducedPlanckConstant_v;
+            m_hamiltonianNoLight(lvls.first, lvls.second) += rabi;
+            m_hamiltonianNoLight(lvls.second, lvls.first) += std::conj(rabi);
+        }
+    }
+
     template<int N>
     bool TNLevelSystemQM<N>::PrepareCalculation()
     {
@@ -158,18 +177,7 @@ namespace QSim
             }
         }
 
-        // Atom hamiltonian
-        m_hamiltonianNoLight = TwoPi_v * this->GetLevels().asDiagonal();
-
-        // Interaction hamiltonian
-        for (unsigned int i = 0; i < this->GetLaserCount(); i++)
-        {
-            auto lvls = this->GetLaserLevels(i);
-            auto rabi = 0.5 * this->GetLaserElectricAmplitude(i) * 
-                this->GetDipoleElement(lvls.first, lvls.second) / ReducedPlanckConstant_v;
-            m_hamiltonianNoLight(lvls.first, lvls.second) += rabi;
-            m_hamiltonianNoLight(lvls.second, lvls.first) += std::conj(rabi);
-        }
+        PrepareHamiltonian();
 
         return true;
     }

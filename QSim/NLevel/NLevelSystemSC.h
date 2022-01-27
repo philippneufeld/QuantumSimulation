@@ -33,6 +33,7 @@ namespace QSim
         // Allow every possible laser configuration
         bool OnLaserAdded(std::size_t lvl1, std::size_t lvl2, bool counter) { return true; }
         void OnLaserRemoved() { }
+        void OnDipoleOperatorChanged() { }
 
         Eigen::Matrix<double, N, 1> CalculateRotatingFrame(
             const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;

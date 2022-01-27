@@ -79,6 +79,7 @@ namespace QSim
         const Eigen::Ref<const Eigen::VectorXd>& y, 
         const Eigen::Matrix<double, N, 1>& beta, 
         const Eigen::Matrix<double, N, 1>& step,
+        const Eigen::Matrix<double, N, 1>& order,
         TExecutor<Ex>& executor)
     {
         int n = x.size();
@@ -88,20 +89,26 @@ namespace QSim
         int kmax = 250;
 
         double v = 2;
-        double tau = 1e-6;
-        double eps1 = 1e-12;
-        double eps2 = 1e-12;
+        double tau = 1e-6 * 1e-2;
+        double eps1 = 1e-12 * 1e-3;
+        double eps2 = 1e-12 * 1e-3;
 
         double eps1_sq = eps1*eps1;
         double eps2_sq = eps2*eps2;
 
-        auto currBeta = beta;
-        auto newBeta = currBeta;
+        Eigen::Matrix<double, N, 1> currBeta = beta.array() / order.array();
+        Eigen::Matrix<double, N, 1> newBeta = currBeta;
+
+        // define function with "normalized parameters"
+        auto nfunc = [&](double t, const Eigen::Matrix<double, N, 1>& params)
+        { 
+            return func(t, (params.array() * order.array()).matrix()); 
+        };
 
         // calculate f vector
         Eigen::VectorXd f(n);
         for (int i = 0; i < n; i++)
-            (~executor).AddTask([&, i](){ f[i] = func(x[i], currBeta) - y[i]; });
+            (~executor).AddTask([&, i](){ f[i] = nfunc(x[i], currBeta) - y[i]; });
         (~executor).WaitUntilFinished();
         double currFerr = f.squaredNorm();
 
@@ -110,7 +117,7 @@ namespace QSim
 
         // calculate jacobian
         Eigen::Matrix<double, Eigen::Dynamic, N> J(n, N);
-        Internal::CurveFitCalcJacobian(func, x, J, currBeta, step, executor); 
+        Internal::CurveFitCalcJacobian(nfunc, x, J, currBeta, step, executor); 
         
         Eigen::Matrix<double, N, N> A = J.transpose() * J;
         Eigen::Matrix<double, N, 1> g = J.transpose() * f;    
@@ -124,12 +131,12 @@ namespace QSim
             newBeta = currBeta + delta;
 
             // check termination condition
-			if (delta.norm() <= eps2*(beta.norm() + eps2))
+			if (delta.norm() <= eps2*(currBeta.norm() + eps2))
                 break;
 
             // calculate new f vector
             for (int i = 0; i < n; i++)
-                (~executor).AddTask([&, i](){ newF[i] = func(x[i], newBeta) - y[i]; });
+                (~executor).AddTask([&, i](){ newF[i] = nfunc(x[i], newBeta) - y[i]; });
             (~executor).WaitUntilFinished();
             newFerr = newF.squaredNorm();
 
@@ -144,7 +151,7 @@ namespace QSim
                 newFerr = currFerr;
                 currBeta = newBeta;
 
-                Internal::CurveFitCalcJacobian(func, x, J, currBeta, step, executor); 
+                Internal::CurveFitCalcJacobian(nfunc, x, J, currBeta, step, executor); 
                 A = J.transpose() * J;
                 g = J.transpose() * f;
 
@@ -158,7 +165,8 @@ namespace QSim
             }   
         }
 
-        return currBeta;
+        // reverse the normalization
+        return currBeta.array() * order.array();
     }
 
 
@@ -220,10 +228,13 @@ namespace QSim
         VType beta(N);
         Internal::CurveFitAssignFromPack(&beta[0], std::forward<Args>(args)...);
 
-        VType steps(N);
-        steps = beta.cwiseAbs() / 1e3;
+        VType order(N);
+        order = beta.cwiseAbs();
 
-        beta = CurveFitV(funcV, x, y, beta, steps, executor);
+        VType steps(N);
+        steps.setConstant(N, 1e-3);
+
+        beta = CurveFitV(funcV, x, y, beta, steps, order, executor);
         Internal::CurveFitAssignToPack(beta.data(), args...);
     }
 
