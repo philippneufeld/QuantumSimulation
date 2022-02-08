@@ -28,9 +28,8 @@ struct Generic {};
 
 int main(int argc, const char* argv[])
 {
-    using proto = TFunctionTraits<decltype(test)>::Prototype;
-    auto f1 = proto::CreateFunctor(test);
-    
+    auto f1 = CreateFunctor(test);
+
     f1(1.0);
     return 0;
 

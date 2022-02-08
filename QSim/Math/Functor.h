@@ -87,6 +87,14 @@ namespace QSim
     class TFunctionTraits<R(C::*)(Args...)> : public TFunctionTraits<R(Args...)> {};
     template<typename C, typename R, typename... Args>
     class TFunctionTraits<R(C::*)(Args...) const> : public TFunctionTraits<R(Args...)> {};
+
+
+    template<typename Func>
+    auto CreateFunctor(Func& func)
+    {
+        using Prototype = typename TFunctionTraits<Func>::Prototype;
+        return Prototype::CreateFunctor(func);
+    }
     
 }
 
