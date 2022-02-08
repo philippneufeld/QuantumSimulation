@@ -12,10 +12,31 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
+#include <QSim/Math/Functor.h>
+
 using namespace QSim;
+
+struct Functor1
+{
+    void operator()(double) {}
+    void test(double) {}
+};
+
+struct Generic {};
 
 int main(int argc, const char* argv[])
 {
+
+    constexpr bool b4 = TIsCallable_test_v<Functor1, double>;
+    constexpr bool b5 = TIsCallable_test_v<Generic, double>;
+
+    constexpr bool b6 = TIsCallable_test2_v<Functor1, double>;
+    constexpr bool b7 = TIsCallable_test2_v<Generic, double>;
+
+    constexpr bool b1 = std::is_invocable_v<Functor1, double>;
+    constexpr bool b2 = std::is_invocable_v<Functor1>;
+    constexpr bool b3 = std::is_invocable_v<Generic, double>;
+
     constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
 
