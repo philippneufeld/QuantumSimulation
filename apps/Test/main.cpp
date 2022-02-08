@@ -22,20 +22,17 @@ struct Functor1
     void test(double) {}
 };
 
+void test(double) { std::cout << "Hello world" << std::endl; }
+
 struct Generic {};
 
 int main(int argc, const char* argv[])
 {
-
-    constexpr bool b4 = TIsCallable_test_v<Functor1, double>;
-    constexpr bool b5 = TIsCallable_test_v<Generic, double>;
-
-    constexpr bool b6 = TIsCallable_test2_v<Functor1, double>;
-    constexpr bool b7 = TIsCallable_test2_v<Generic, double>;
-
-    constexpr bool b1 = std::is_invocable_v<Functor1, double>;
-    constexpr bool b2 = std::is_invocable_v<Functor1>;
-    constexpr bool b3 = std::is_invocable_v<Generic, double>;
+    using proto = TFunctionTraits<decltype(test)>::Prototype;
+    auto f1 = proto::CreateFunctor(test);
+    
+    f1(1.0);
+    return 0;
 
     constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);

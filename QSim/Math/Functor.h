@@ -3,17 +3,20 @@
 #ifndef QSim_Math_Functor_H_
 #define QSim_Math_Functor_H_
 
+#include <tuple>
 #include <type_traits>
 
 namespace QSim
 {
 
+    // makro that defines a type trait that can be used to
+    // check the existance of a given member functions
 #ifndef QSIM_DEFINE_HAS_MEMBER_FUNCTION
-#define QSIM_DEFINE_HAS_MEMBER_FUNCTION(funcname)\
+#define QSIM_DEFINE_HAS_MEMBER_FUNCTION(traitname, funcname)\
     namespace Internal\
     {\
         template<typename... Args>\
-        class TIsCallableHelper_##funcname\
+        class traitname##Helper\
         {\
         public:\
             template<typename Func, typename=std::void_t<decltype(std::declval<Func>().funcname (std::declval<Args>()...))>>\
@@ -23,18 +26,68 @@ namespace QSim
         };\
     }\
     template<typename Ty, typename... Args>\
-    class TIsCallable_##funcname : \
-        public decltype(Internal::TIsCallableHelper_##funcname <Args...>::template Test<Ty>(0)) {};\
+    class traitname : \
+        public decltype(Internal:: traitname##Helper <Args...>::template Test<Ty>(0)) {};\
     template<typename Ty, typename... Args> \
-    constexpr bool TIsCallable_##funcname##_v = TIsCallable_##funcname <Ty, Args...>::value;
+    constexpr bool traitname##_v = traitname <Ty, Args...>::value;
 #endif
 
-    template<typename Func, typename... Args>
-    class Functor
+    QSIM_DEFINE_HAS_MEMBER_FUNCTION(TIsFunctor, operator());
+
+    template<typename R, typename... Args>
+    class TFunctionPrototype;
+    
+    template<typename Func, typename R, typename... Args>
+    class TFunctor
+    {
+        static_assert(std::is_invocable_r_v<R, Func, Args...>, "Func must be invokable");
+    public:
+        using Prototype = TFunctionPrototype<R, Args...>;
+        
+        TFunctor(Func& func) : m_func(func) {}
+
+        // copy operations
+        TFunctor(const TFunctor& rhs) = default;
+        TFunctor(TFunctor&& rhs) = default; 
+        TFunctor& operator=(const TFunctor& rhs) = default;
+        TFunctor& operator=(TFunctor&& rhs) = default;
+
+        auto operator()(Args... args) { return static_cast<R>(std::invoke(m_func, std::forward<Args>(args)...)); }
+
+    private:
+        Func& m_func;
+    };
+
+    template<typename R, typename... Args>
+    class TFunctionPrototype
     {
     public:
+        using RType = R;
+        using ArgTypes = std::tuple<Args...>;
 
+        template<typename Func, typename=std::enable_if_t<std::is_invocable_r_v<R, Func, Args...>>>
+        static TFunctor<Func, R, Args...> CreateFunctor(Func& func) { return func; } 
     };
+
+    template<typename Func>
+    class TFunctionTraits : public TFunctionTraits<decltype(&Func::operator())> {};
+    template<typename R, typename... Args>
+    class TFunctionTraits<R(Args...)>
+    {
+    public:
+        using Prototype = TFunctionPrototype<R, Args...>;
+        using RType = typename Prototype::RType;
+        using ArgTypes = typename Prototype::ArgTypes;
+    };
+    template<typename R, typename... Args>
+    class TFunctionTraits<R(*)(Args...)> : public TFunctionTraits<R(Args...)> {};
+    template<typename R, typename... Args>
+    class TFunctionTraits<R(&)(Args...)> : public TFunctionTraits<R(Args...)> {};
+    template<typename C, typename R, typename... Args>
+    class TFunctionTraits<R(C::*)(Args...)> : public TFunctionTraits<R(Args...)> {};
+    template<typename C, typename R, typename... Args>
+    class TFunctionTraits<R(C::*)(Args...) const> : public TFunctionTraits<R(Args...)> {};
+    
 }
 
 #endif

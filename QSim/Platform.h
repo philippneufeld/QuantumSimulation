@@ -3,6 +3,9 @@
 #ifndef QSim_Platform_H_
 #define QSim_Platform_H_
 
+// Includes
+#include <cstdint>
+
 // compiler
 #if defined(_MSC_VER) && !defined(__clang__)
 #	ifndef QSim_COMPILER_MSVC
