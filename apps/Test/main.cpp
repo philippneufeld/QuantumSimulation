@@ -41,7 +41,7 @@ int main(int argc, const char* argv[])
 
     Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
     Eigen::VectorXd y = x;
-    Eigen::VectorXd dy = x;
+    Eigen::VectorXd dy = x.eval();
     
     TDiff1O2<Eigen::Vector2d> diff;
 
