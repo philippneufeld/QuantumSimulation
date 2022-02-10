@@ -32,13 +32,13 @@ namespace QSim
     constexpr bool traitname##_v = traitname <Ty, Args...>::value;
 #endif
 
-    QSIM_DEFINE_HAS_MEMBER_FUNCTION(TIsFunctor, operator());
-
     template<typename R, typename... Args>
     class TFunctionPrototype;
     
+    template<typename Func, typename R, typename ArgTuple>
+    class TFunctor;
     template<typename Func, typename R, typename... Args>
-    class TFunctor
+    class TFunctor<Func, R, std::tuple<Args...>>
     {
         static_assert(std::is_invocable_r_v<R, Func, Args...>, "Func must be invokable");
     public:
@@ -52,9 +52,10 @@ namespace QSim
         TFunctor& operator=(const TFunctor& rhs) = default;
         TFunctor& operator=(TFunctor&& rhs) = default;
 
-        auto operator()(Args... args) { return static_cast<R>(std::invoke(m_func, std::forward<Args>(args)...)); }
+        auto Invoke(Args... args) { return static_cast<R>(std::invoke(m_func, std::forward<Args>(args)...)); }
+        auto operator()(Args... args) { return Invoke(std::forward<Args>(args)...); }
 
-    private:
+    protected:
         Func& m_func;
     };
 
@@ -64,9 +65,6 @@ namespace QSim
     public:
         using RType = R;
         using ArgTypes = std::tuple<Args...>;
-
-        template<typename Func, typename=std::enable_if_t<std::is_invocable_r_v<R, Func, Args...>>>
-        static TFunctor<Func, R, Args...> CreateFunctor(Func& func) { return func; } 
     };
 
     template<typename Func>
@@ -92,8 +90,9 @@ namespace QSim
     template<typename Func>
     auto CreateFunctor(Func& func)
     {
-        using Prototype = typename TFunctionTraits<Func>::Prototype;
-        return Prototype::CreateFunctor(func);
+        using RType = typename TFunctionTraits<Func>::RType;
+        using ArgTypes = typename TFunctionTraits<Func>::ArgTypes;
+        return TFunctor<Func, RType, ArgTypes>(func);
     }
     
 }

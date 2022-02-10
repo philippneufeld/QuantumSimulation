@@ -4,7 +4,6 @@
 #define QSim_Math_Quadrature_H
 
 #include <cstdint>
-#include <array>
 #include <random> // for monte carlo
 
 #include "../Util/ConstList.h"

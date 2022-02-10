@@ -13,27 +13,56 @@
 #endif
 
 #include <QSim/Math/Functor.h>
+#include <QSim/Math/Differentiation.h>
 
 using namespace QSim;
 
-struct Functor1
+struct Test1
 {
-    void operator()(double) {}
-    void test(double) {}
+    double operator()(double x) { return std::sin(x); }
 };
 
-void test(double) { std::cout << "Hello world" << std::endl; }
+struct Test2
+{
+    double operator()(Eigen::Vector2d x) { return std::sin(x[0]) + std::cos(x[1]); }
+};
 
 struct Generic {};
 
+template<typename Func>
+void foo(Func& func) { std::cout << func(1.0) << std::endl; }
+template<typename Func>
+void bar(TFunctor<Func, double, std::tuple<double>>& func) { std::cout << func(1.0) << std::endl; }
+
 int main(int argc, const char* argv[])
 {
+    Test2 test;
     auto f1 = CreateFunctor(test);
 
-    f1(1.0);
+    Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
+    Eigen::VectorXd y = x;
+    Eigen::VectorXd dy = x;
+    
+    TDiff1O2<Eigen::Vector2d> diff;
+
+    for (int i = 0; i < x.size(); i++)
+    {
+        y[i] = f1(Eigen::Vector2d{x[i], 0.0});
+        dy[i] = diff.Differentiate(f1, Eigen::Vector2d{x[i], 0.0}, Eigen::Vector2d::Unit(0) * 1e-3);
+    }
+
+#ifdef QSIM_PYTHON3
+    PythonMatplotlib matplotlib;
+    auto fig = matplotlib.CreateFigure();
+    auto ax = fig.AddSubplot();
+    ax.Plot(x.data(), y.data(), x.size());
+    ax.Plot(x.data(), dy.data(), x.size());
+    matplotlib.RunGUILoop();
+#endif
+
     return 0;
 
-    constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
+    /*constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
 
     TNLevelSystemSC<DynamicDim_v> system2(2);
@@ -58,5 +87,5 @@ int main(int argc, const char* argv[])
     matplotlib.RunGUILoop();
 #endif
 
-    return 0;
+    return 0;*/
 }
