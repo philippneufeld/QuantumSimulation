@@ -48,13 +48,16 @@ public:
 
     virtual void Continue(QSim::DataFileGroup& simdata)  override
     {
-        QSim::ThreadPoolExecutor pool;
+        // Load detuning axis
+        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
+ 
+        QSim::ThreadPoolExecutor pool; 
+        QSim::CLIProgBar progress(detunings.cols());
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;
         constexpr double tint = 1.0 / decay;
 
-        QSim::CLIProgBarInt progress;
         auto rho0 = m_system.CreateGroundState();
         auto func = [&](auto dets)
         {
@@ -67,17 +70,11 @@ public:
             return res;
         };
 
-        // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
-
-        // start progress bar
-        progress.SetTotal(detunings.cols());
-        progress.Start();
-        
         // start calculation
         Eigen::VectorXd populations(detunings.cols());
         auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
         
+        progress.Start();
         pool.MapNonBlockingG(func, populations, genDetuning, detunings.cols());
         progress.WaitUntilFinished();
         

@@ -20,65 +20,49 @@ namespace QSim
 
     class CLIProgBar
     {
+        using Timestamp_t = std::chrono::high_resolution_clock::time_point;
     public:
-        CLIProgBar();
+        CLIProgBar(std::size_t total, const std::string& title="");
         virtual ~CLIProgBar();
 
-        void SetWidth(std::size_t width);
-        void SetProgressCharacter(char progChar);
-        void SetTitle(const std::string& title);
-
-        double GetProgress() const;
-        void SetProgress(double prog);
+        void SetTitle();
+        void SetCount(std::size_t cnt);
+        void IncrementCount();
         
         void Start();
         void WaitUntilFinished();
         void Stop();
         void Update();
 
-        virtual std::string GetDescription() const;
-        virtual std::string GetProgressText() const;
-        virtual std::string GetTimeText() const;
-
     private:
-        static std::string SecondsToString(std::size_t secs);
-        void ThreadFunc();
-        void PrintBar();
+        // Helper function fo the generation of the bar string
+        static std::string TimeToString(double secs, bool millis);
+        std::string GetTimeText(std::size_t cnt, Timestamp_t cntTs) const;
+        std::string GetProgressText(std::size_t cnt, bool percentage) const;
+        std::string GenerateBar() const;
 
-    private:
+        void WorkerThread();
+
+    private:      
+        // Threading
         mutable std::mutex m_mutex;
-
         std::thread m_thread;
         std::condition_variable m_wakeUp;
         bool m_stopThread;
-        std::chrono::high_resolution_clock::time_point m_startTs;
-        std::chrono::high_resolution_clock::time_point m_prevTs;
 
-        std::string m_title = "";
-        
-        char m_progressChar;
+        // Progress bar properties
         bool m_started;
-        double m_progress;
-        std::size_t m_width;
-    };
+        std::size_t m_cnt;
 
+        // Timing
+        Timestamp_t m_startTs;
+        Timestamp_t m_prevTs;
 
-    class CLIProgBarInt : public CLIProgBar
-    {
-    public:
-        CLIProgBarInt();
-        CLIProgBarInt(std::size_t total);
-
-        virtual std::string GetProgressText() const override;
-
-        void SetTotal(std::size_t total);
-        void SetCount(std::size_t cnt);
-
-        void IncrementCount();
-
-    private:
-        std::atomic<std::size_t> m_total;
-        std::atomic<std::size_t> m_cnt;
+        // Constants (no need for mutex)
+        const std::size_t m_total;
+        const std::string m_title;
+        const std::size_t m_width; 
+        const char m_progressChar;   
     };
 
 }

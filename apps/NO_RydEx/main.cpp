@@ -86,9 +86,12 @@ public:
 
     virtual void Continue(QSim::DataFileGroup& simdata)  override
     {
-        QSim::ThreadPoolExecutor pool;
-        
-        QSim::CLIProgBarInt progress;
+        // Load detuning axis
+        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
+ 
+        QSim::ThreadPoolExecutor pool; 
+        QSim::CLIProgBar progress(detunings.cols());
+
         auto func = [&](auto dets)
         {
             auto res = m_doppler.Integrate([&](double vel)
@@ -100,17 +103,11 @@ public:
             return res;
         };
 
-        // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
-
-        // start progress bar
-        progress.SetTotal(detunings.cols());
-        progress.Start();
-        
         // start calculation
         Eigen::VectorXd population(detunings.cols());
         auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
         
+        progress.Start();
         pool.MapNonBlockingG(func, population, genDetuning, detunings.cols());
         progress.WaitUntilFinished();
 

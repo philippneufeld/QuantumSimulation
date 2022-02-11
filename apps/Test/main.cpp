@@ -15,6 +15,8 @@
 #include <QSim/Math/Functor.h>
 #include <QSim/Math/Differentiation.h>
 
+#include <QSim/Executor/ThreadPool2.h>
+
 using namespace QSim;
 
 struct Test1
@@ -34,9 +36,25 @@ void foo(Func& func) { std::cout << func(1.0) << std::endl; }
 template<typename Func>
 void bar(TFunctor<Func, double, std::tuple<double>>& func) { std::cout << func(1.0) << std::endl; }
 
+
+double test() {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    return 1.0;
+}
+
 int main(int argc, const char* argv[])
 {
-    Test2 test;
+
+    ThreadPool pool;
+
+    auto res = pool.Submit(test);
+    std::cout << "Task submitted" << std::endl;
+
+    std::cout << res.get() << std::endl;
+
+    return 0;
+
+    /*Test2 test;
     auto f1 = CreateFunctor(test);
 
     Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
@@ -60,7 +78,7 @@ int main(int argc, const char* argv[])
     matplotlib.RunGUILoop();
 #endif
 
-    return 0;
+    return 0;*/
 
     /*constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
