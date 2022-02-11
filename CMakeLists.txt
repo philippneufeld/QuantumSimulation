@@ -19,6 +19,7 @@ set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
 set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
     "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
+    "${QSIM_SOURCE_DIR}/Executor/ThreadPool.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/SimulationApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
