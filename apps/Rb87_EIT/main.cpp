@@ -66,7 +66,8 @@ public:
                     auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
                     return std::imag(rho(0, 2));
                 });
-            }, progress);
+                progress.IncrementCount();
+            });
         }
         progress.WaitUntilFinished();
         

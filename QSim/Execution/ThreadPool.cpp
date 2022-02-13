@@ -20,16 +20,13 @@ namespace QSim
     ThreadPool::~ThreadPool()
     {   
         // wait until all tasks are done
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_taskFinished.wait(lock, [&](){ return m_ongoingTasks == 0 && m_queue.empty(); }); 
-        }
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_taskFinished.wait(lock, [&](){ return m_ongoingTasks == 0 && m_queue.empty(); }); 
 
         // stop all threads and wait until they are finished
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_stopThreads = true;
-        }
+        m_stopThreads = true;
+        lock.unlock();
+
         m_taskAdded.notify_all(); // wake up all threads
 
         // wait until all threads have terminated
@@ -39,57 +36,50 @@ namespace QSim
 
     void ThreadPool::EnqueueTask(const std::function<void(void)>& func)
     {
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_queue.push(func);
-        }
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_queue.push(func);
+        lock.unlock();
         m_taskAdded.notify_one();
     }
 
     void ThreadPool::EnqueueTask(std::function<void(void)>&& func)
     {
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_queue.push(std::move(func));
-        }
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_queue.push(std::move(func));
+        lock.unlock();
         m_taskAdded.notify_one();
     }
 
     void ThreadPool::WorkerThread()
     {
-        while (true)
+        std::unique_lock<std::mutex> lock(m_mutex);
+        while (!m_stopThreads)
         {
-            // create empty task object
-            std::function<void(void)> task;
-
-            // extract task from queue whenever one is available
-            {
-                // make sure the queue is not accessed by two threads simultaneously
-                std::unique_lock<std::mutex> lock(m_mutex);
-
-                // wait until a new task is added (signalled by the m_taskAdded event)
-                m_taskAdded.wait(lock, [&](){ return m_stopThreads || !m_queue.empty(); });
-                
-                // check thread exit condition
-                if (m_stopThreads)
-                    break;
-
-                // a new task is awailable
-                // pop it from the queue and increment the ongoing task counter
-                m_ongoingTasks++;
-                task = m_queue.front();
-                m_queue.pop();
-            }
+            // wait until a new task is added (signalled by the m_taskAdded event)
+            m_taskAdded.wait(lock, [&](){ return m_stopThreads || !m_queue.empty(); });
             
+            // check thread exit condition
+            if (m_stopThreads)
+                break;
+
+            // a new task is awailable
+            // pop it from the queue and increment the ongoing task counter
+            m_ongoingTasks++;
+            std::function<void(void)> task = m_queue.front();
+            m_queue.pop();
+
+            lock.unlock();
             std::invoke(task); // execute task
+            lock.lock();
 
             // decrement task counter and notify all threads waiting
             // on the m_taskFinished event
-            {
-                std::unique_lock<std::mutex> lock(m_mutex);
-                m_ongoingTasks--;
-            }
+            m_ongoingTasks--;
+            
+            // no need to hold the lock for the signalling of the condition variable
+            lock.unlock();
             m_taskFinished.notify_all();
+            lock.lock();
         }
     }
 

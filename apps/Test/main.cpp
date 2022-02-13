@@ -52,12 +52,12 @@ int main(int argc, const char* argv[])
     CLIProgBar progbar(20);
     
     for (auto i = 0; i < 10; i++)
-        pool.Submit(test, progbar);
+        pool.Submit([&](){ test(); progbar.IncrementCount(); });
     
     for (auto i = 0; i < 10; i++)
-        pool.Submit(test2, progbar);
+        pool.Submit([&](){ test2(); progbar.IncrementCount(); });
 
-    // progbar.WaitUntilFinished();
+    progbar.WaitUntilFinished();
 
     return 0;
 
