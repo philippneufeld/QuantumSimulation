@@ -3,7 +3,6 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-#include <QSim/Executor/ThreadPool.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/NLevelSystemQM.h>
 #include <QSim/NLevel/NLevelSystemSC.h>
@@ -15,7 +14,8 @@
 #include <QSim/Math/Functor.h>
 #include <QSim/Math/Differentiation.h>
 
-#include <QSim/Executor/ThreadPool2.h>
+#include <QSim/Execution/ThreadPool.h>
+#include <QSim/Util/CLIProgressBar.h>
 
 using namespace QSim;
 
@@ -38,19 +38,26 @@ void bar(TFunctor<Func, double, std::tuple<double>>& func) { std::cout << func(1
 
 
 double test() {
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     return 1.0;
+}
+
+void test2() {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 }
 
 int main(int argc, const char* argv[])
 {
-
     ThreadPool pool;
+    CLIProgBar progbar(20);
+    
+    for (auto i = 0; i < 10; i++)
+        pool.Submit(test, progbar);
+    
+    for (auto i = 0; i < 10; i++)
+        pool.Submit(test2, progbar);
 
-    auto res = pool.Submit(test);
-    std::cout << "Task submitted" << std::endl;
-
-    std::cout << res.get() << std::endl;
+    // progbar.WaitUntilFinished();
 
     return 0;
 

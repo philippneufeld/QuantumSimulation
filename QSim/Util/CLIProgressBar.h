@@ -1,17 +1,15 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_CLIProgressBar_H_
-#define QSim_CLIProgressBar_H_
+#ifndef QSim_Util_CLIProgressBar_H_
+#define QSim_Util_CLIProgressBar_H_
 
-#include "../Platform.h"
+#include "../Execution/Progress.h"
 
+#include <cstdint>
 #include <string>
-#include <iostream>
-#include <atomic>
 #include <thread>
-#include <condition_variable>
-#include <mutex>
-#include <chrono>
+#include <atomic>
+#include <memory>
 
 namespace QSim
 {
@@ -23,43 +21,49 @@ namespace QSim
         using Timestamp_t = std::chrono::high_resolution_clock::time_point;
     public:
         CLIProgBar(std::size_t total, const std::string& title="");
-        virtual ~CLIProgBar();
+        CLIProgBar(std::shared_ptr<Progress> pHandle, const std::string& title="");
+        ~CLIProgBar();
+
+        operator std::shared_ptr<Progress>() { return m_pHandle; }
+        operator std::shared_ptr<const Progress>() const { return m_pHandle; } 
+
+        std::shared_ptr<Progress> GetHandle() { return m_pHandle; }
+        std::shared_ptr<const Progress> GetHandle() const { return m_pHandle; } 
+
+        void WaitOnDestruction(bool wait) { m_waitOnDtor = wait; }
+
+        void WaitUntilFinished();
+        void Update();
 
         void SetTitle();
-        void SetCount(std::size_t cnt);
-        void IncrementCount();
+        void IncrementCount(std::size_t inc = 1);
         
-        void Start();
-        void WaitUntilFinished();
-        void Stop();
-        void Update();
+        void Start() {}
+        void Stop() {}
 
     private:
         // Helper function fo the generation of the bar string
         static std::string TimeToString(double secs, bool millis);
-        std::string GetTimeText(std::size_t cnt, Timestamp_t cntTs) const;
-        std::string GetProgressText(std::size_t cnt, bool percentage) const;
-        std::string GenerateBar() const;
+        
+        static std::string GetTimeText(double elapsedTime, double totalTimeEst, bool finished);
+        
+        static std::string GetProgressText(std::size_t cnt, std::size_t tot);
+        static std::string GetProgressTextFrac(std::size_t cnt, std::size_t tot);
+        
+        std::string GenerateBar(std::size_t cnt, std::size_t tot, 
+            double elapsedTime, double totalTimeEst) const;
 
         void WorkerThread();
 
     private:      
         // Threading
-        mutable std::mutex m_mutex;
         std::thread m_thread;
-        std::condition_variable m_wakeUp;
-        bool m_stopThread;
+        std::atomic<bool> m_stopThread;
 
-        // Progress bar properties
-        bool m_started;
-        std::size_t m_cnt;
+        std::atomic<bool> m_waitOnDtor;
+        std::shared_ptr<Progress> m_pHandle;
 
-        // Timing
-        Timestamp_t m_startTs;
-        Timestamp_t m_prevTs;
-
-        // Constants (no need for mutex)
-        const std::size_t m_total;
+        // Constant attributes
         const std::string m_title;
         const std::size_t m_width; 
         const char m_progressChar;   

@@ -3,7 +3,6 @@
 #ifdef QSIM_PYTHON3
 #include <functional>
 #include <QSim/Constants.h>
-#include <QSim/Executor/ThreadPool.h>
 #include <QSim/Math/Quadrature.h>
 #include <QSim/Python/Plotting.h>
 
@@ -22,8 +21,6 @@ auto createErrorFunction(std::function<double(double)> func, double a, double b,
 void testIntegrators(const std::string& title, std::function<double(double)> func, 
     double a, double b, double exact)
 {
-    QSim::DefaultExecutor exec;
-
     std::vector<double> ns(5000);
     for (std::size_t i = 0; i < ns.size(); i++)
         ns[i] = i + 1; 
@@ -38,24 +35,24 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
     ax.SetXLabel("Function evaluations");
     ax.SetYLabel("Absolute error");
 
-    exec.Map(createErrorFunction<TQuadMidpoint<double>>(func, a, b, exact), 
-        errors, ns.begin(), ns.end());
+    for (std::size_t i = 0; i < ns.size(); i++)
+        errors[i] = std::invoke(createErrorFunction<TQuadMidpoint<double>>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "midpoint");
 
-    exec.Map(createErrorFunction<TQuadTrapezoidal<double>>(func, a, b, exact), 
-        errors, ns.begin(), ns.end());
+    for (std::size_t i = 0; i < ns.size(); i++)
+        errors[i] = std::invoke(createErrorFunction<TQuadTrapezoidal<double>>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "trapezoid");
 
-    exec.Map(createErrorFunction<TQuadSimpson<double>>(func, a, b, exact), 
-        errors, ns.begin(), ns.end());
+    for (std::size_t i = 0; i < ns.size(); i++)
+        errors[i] = std::invoke(createErrorFunction<TQuadSimpson<double>>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "simpson");
 
-    exec.Map(createErrorFunction<TQuadSimpson38<double>>(func, a, b, exact), 
-        errors, ns.begin(), ns.end());
+    for (std::size_t i = 0; i < ns.size(); i++)
+        errors[i] = std::invoke(createErrorFunction<TQuadSimpson38<double>>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "simpson38");
 
-    exec.Map(createErrorFunction<TQuadBoole<double>>(func, a, b, exact), 
-        errors, ns.begin(), ns.end());
+    for (std::size_t i = 0; i < ns.size(); i++)
+        errors[i] = std::invoke(createErrorFunction<TQuadBoole<double>>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "boole");
 
     // adaptive integrator
@@ -97,9 +94,6 @@ int main(int argc, const char* argv[])
             0.025, 1.0, 0.5044592407911533);
     
     matplotlib.RunGUILoop();
-
-    // CQuadratureApp app;
-    // return app.Run(argc, argv);
 }
 
 #else

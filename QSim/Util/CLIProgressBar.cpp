@@ -1,5 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
+#include "../Platform.h"
 #include "CLIProgressBar.h"
 
 #ifdef QSim_PLATFORM_LINUX
@@ -7,7 +8,7 @@
 #include <unistd.h> // for STDOUT_FILENO
 #endif
 
-#include <algorithm>
+#include <iostream>
 
 using namespace std::literals::chrono_literals;
 
@@ -29,71 +30,36 @@ namespace QSim
 #endif
 
     CLIProgBar::CLIProgBar(std::size_t total, const std::string& title)
-        : m_stopThread(false), m_started(false), m_total(total), m_title(title),
-        m_width(GetCLIWidth()), m_progressChar('#') { }
+        : CLIProgBar(std::make_shared<Progress>(total), title) { }
+    
+    CLIProgBar::CLIProgBar(std::shared_ptr<Progress> pHandle, const std::string& title)
+        : m_thread([&]() { WorkerThread(); }), m_stopThread(false), m_waitOnDtor(true),
+        m_pHandle(pHandle ? pHandle : std::make_shared<Progress>(0)),
+        m_title(title), m_width(GetCLIWidth()), m_progressChar('#') { }
 
     CLIProgBar::~CLIProgBar()
     {
-        Stop();
-    }
-
-    void CLIProgBar::Start() 
-    {
-        Stop();
-        m_stopThread = false;
-        m_cnt = 0;
-        m_startTs = std::chrono::high_resolution_clock::now();
-        m_prevTs = m_startTs;
-        m_thread = std::thread([this]() { this->WorkerThread(); });
+        if (m_waitOnDtor)
+            m_pHandle->WaitUntilFinished();
+        m_stopThread = true;
+        m_pHandle->SendSignal();
+        WaitUntilFinished();
     }
 
     void CLIProgBar::WaitUntilFinished()
     {
         if (m_thread.joinable())
             m_thread.join();
-        m_thread = std::thread();
-    }
-
-    void CLIProgBar::Stop()
-    {
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_stopThread = true;
-        }
-        
-        m_wakeUp.notify_all();
-        WaitUntilFinished();
     }
 
     void CLIProgBar::Update()
     {
-        m_wakeUp.notify_all();
+        m_pHandle->SendSignal();
     }
 
-    void CLIProgBar::SetCount(std::size_t cnt)
+    void CLIProgBar::IncrementCount(std::size_t inc)
     {
-        auto ts = std::chrono::high_resolution_clock::now();
-
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_cnt = cnt < m_total ? cnt : m_total;
-            m_prevTs = ts;
-        }
-
-        m_wakeUp.notify_all();
-    }
-
-    void CLIProgBar::IncrementCount()
-    {
-        auto ts = std::chrono::high_resolution_clock::now();
-
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_cnt = m_cnt + 1 < m_total ? m_cnt + 1 : m_total;
-            m_prevTs = ts;
-        }
-
-        m_wakeUp.notify_all();
+        m_pHandle->IncrementCount(inc);
     }
 
     std::string CLIProgBar::TimeToString(double secs, bool millis)
@@ -125,74 +91,64 @@ namespace QSim
         return str;
     }
 
-    std::string CLIProgBar::GetProgressText(std::size_t cnt, bool percentage) const
+    std::string CLIProgBar::GetProgressText(std::size_t cnt, std::size_t tot)
+    {
+        std::string str;
+        str.reserve(8);
+        str.push_back(' ');
+
+        std::size_t prog = (100 * cnt) / tot;
+        str.append(std::to_string(prog));
+        str.insert(str.begin() + 1, std::min<std::size_t>(4 - str.size(), 4), ' ');
+        str.push_back('%');
+        
+        return str;
+    }
+    std::string CLIProgBar::GetProgressTextFrac(std::size_t cnt, std::size_t tot)
     {
         std::string str;
         str.reserve(16);
         str.push_back(' ');
 
-        if (percentage)
-        {
-            std::size_t prog = (100 * cnt) / m_total;
-            str.append(std::to_string(prog));
-            str.insert(str.begin() + 1, std::min<std::size_t>(4 - str.size(), 4), ' ');
-            str.push_back('%');
-        }
-        else
-        {
-            std::string tot = std::to_string(m_total);
-            str.append(std::to_string(cnt));
-            str.insert(str.begin() + 1, std::min<std::size_t>(tot.size() + 1 - str.size(), tot.size() + 1), ' ');
-            str.push_back('/');
-            str.append(tot);
-        }
-
+        std::string totStr = std::to_string(tot);
+        str.append(std::to_string(cnt));
+        str.insert(str.begin() + 1, std::min<std::size_t>(totStr.size() + 1 - str.size(), totStr.size() + 1), ' ');
+        str.push_back('/');
+        str.append(totStr);
+        
         return str;
     }
 
-    std::string CLIProgBar::GetTimeText(std::size_t cnt, Timestamp_t cntTs) const
-    {
-        auto ts = std::chrono::high_resolution_clock::now();
-        double elapsedSecs = (ts - m_startTs).count() / 1e9;
-
-        // 14 character string
+    std::string CLIProgBar::GetTimeText(double elapsedTime, double totalTimeEst, bool finished)
+    {  
         std::string str;
         str.reserve(32);
         str.append(" [");
 
-        if (cnt < m_total)
+        if (!finished)
         {
-            // estimate total time
-            double estSecs = 0.0;
-            if (cnt > 0)
-                estSecs = ((cntTs - m_startTs).count() / 1e9) * m_total / cnt;
-
-            str.append(TimeToString(elapsedSecs, false));
+            str.append(TimeToString(elapsedTime, false));
             str.push_back('<');
-            str.append(TimeToString(estSecs, false));
+            str.append(TimeToString(totalTimeEst, false));
         }
         else
         {
-            str.append(TimeToString(elapsedSecs, true));
+            str.append(TimeToString(elapsedTime, true));
         }
         str.push_back(']');
 
         return str;
     }
 
-    std::string CLIProgBar::GenerateBar() const
+    std::string CLIProgBar::GenerateBar(std::size_t cnt, std::size_t tot, 
+            double elapsedTime, double totalTimeEst) const
     {
         std::string str;
         str.reserve(m_width);
         
-        // retrieve state
-        m_mutex.lock();
-        std::size_t cnt = m_cnt < m_total ? m_cnt : m_total;
-        Timestamp_t cntTs = m_prevTs;
-        m_mutex.unlock();
-
+        bool finished = !(cnt < tot);
         std::string front = m_title;
-        std::string back = GetProgressText(cnt, true) + GetTimeText(cnt, cntTs);
+        std::string back = GetProgressText(cnt, tot) + GetTimeText(elapsedTime, totalTimeEst, finished);
 
         // cutoff front and back string if necessary
         std::size_t minWidth = 5;
@@ -208,7 +164,7 @@ namespace QSim
         str.append(front);
         str.append("[");
         std::size_t barWidth = m_width - std::min(m_width - 2, front.size() + back.size()) - 2;
-        std::size_t iProg = barWidth * cnt / m_total;
+        std::size_t iProg = barWidth * cnt / tot;
         str.append(iProg, m_progressChar);
         str.append(barWidth - iProg, ' ');
         str.append("]");
@@ -217,36 +173,23 @@ namespace QSim
         return str;
     }
 
-
     void CLIProgBar::WorkerThread()
     {
-        std::string printedStr;
-
-        while (true)
+        std::string currBar;
+        while (!m_stopThread)
         {
-            std::string currBar;
+            auto [cnt, tot, elT, estTot] = m_pHandle->WaitForSignal(0.1);
+            std::string bar = GenerateBar(cnt, tot, elT, estTot);
 
-            {
-                std::unique_lock<std::mutex> lock(m_mutex);
-                if(m_cnt >= m_total)
-                    m_stopThread = true; // Print one more time then quit
-            }
-
-            std::string bar = GenerateBar();
             if (bar != currBar)
             {
                 std::cout << "\u001b[1000D" << bar << std::flush;
                 currBar = bar;
             }
 
-            {
-                std::unique_lock<std::mutex> lock(m_mutex);
-                if (m_stopThread) break;
-                m_wakeUp.wait_for(lock, 0.25s);
-                if (m_stopThread) break;
-            }
+            if (cnt >= tot)
+                m_stopThread = true;
         }
-
         std::cout << std::endl;
     }
 

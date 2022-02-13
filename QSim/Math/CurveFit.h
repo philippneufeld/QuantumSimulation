@@ -3,11 +3,12 @@
 #ifndef QSim_Math_CurveFit_H_
 #define QSim_Math_CurveFit_H_
 
-#include <Eigen/Dense>
-#include "../Executor/Executor.h"
-
 #include <vector>
 #include <utility>
+#include <memory>
+
+#include "../Execution/Progress.h"
+#include <Eigen/Dense>
 
 namespace QSim
 {
@@ -41,13 +42,12 @@ namespace QSim
 		};
 
 
-        template<typename Func, int N, typename Ex>
+        template<typename Func, int N>
         void CurveFitCalcJacobian(
             Func func, const Eigen::Ref<const Eigen::VectorXd>& x,
             Eigen::Matrix<double, Eigen::Dynamic, N>& J,
             const Eigen::Matrix<double, N, 1>& beta, 
-            const Eigen::Matrix<double, N, 1>& step,
-            TExecutor<Ex>& executor)
+            const Eigen::Matrix<double, N, 1>& step)
         {  
             int n = x.size();
             const double* beg = x.data();
@@ -63,9 +63,10 @@ namespace QSim
                 betaCpy[i] = beta[i] + step[i];
                 auto rfunc = [=](double t) { return func(t, betaCpy); };
 
-                (~executor).MapNonBlocking(lfunc, ly, beg, end);
-                (~executor).MapNonBlocking(rfunc, ry, beg, end);
-                (~executor).WaitUntilFinished();
+                for (int j = 0; j < n; j++)
+                    ly[j] = func(beg[j], betaCpy);
+                for (int j = 0; j < n; j++)
+                    ry[j] = func(beg[j], betaCpy);
 
                 for (int j = 0; j < n; j++)
                     J(j, i) = (ry[j] - ly[j]) / (2 * step[i]);                
@@ -73,14 +74,13 @@ namespace QSim
         }
     }
 
-    template<typename Func, int N, typename Ex>
+    template<typename Func, int N>
     Eigen::Matrix<double, N, 1> CurveFitV(
         Func func, const Eigen::Ref<const Eigen::VectorXd>& x, 
         const Eigen::Ref<const Eigen::VectorXd>& y, 
         const Eigen::Matrix<double, N, 1>& beta, 
         const Eigen::Matrix<double, N, 1>& step,
-        const Eigen::Matrix<double, N, 1>& order,
-        TExecutor<Ex>& executor)
+        const Eigen::Matrix<double, N, 1>& order)
     {
         int n = x.size();
         assert(x.size() == y.size());
@@ -108,8 +108,7 @@ namespace QSim
         // calculate f vector
         Eigen::VectorXd f(n);
         for (int i = 0; i < n; i++)
-            (~executor).AddTask([&, i](){ f[i] = nfunc(x[i], currBeta) - y[i]; });
-        (~executor).WaitUntilFinished();
+            f[i] = nfunc(x[i], currBeta) - y[i];
         double currFerr = f.squaredNorm();
 
         Eigen::VectorXd newF = f;
@@ -117,7 +116,7 @@ namespace QSim
 
         // calculate jacobian
         Eigen::Matrix<double, Eigen::Dynamic, N> J(n, N);
-        Internal::CurveFitCalcJacobian(nfunc, x, J, currBeta, step, executor); 
+        Internal::CurveFitCalcJacobian(nfunc, x, J, currBeta, step); 
         
         Eigen::Matrix<double, N, N> A = J.transpose() * J;
         Eigen::Matrix<double, N, 1> g = J.transpose() * f;    
@@ -136,8 +135,7 @@ namespace QSim
 
             // calculate new f vector
             for (int i = 0; i < n; i++)
-                (~executor).AddTask([&, i](){ newF[i] = nfunc(x[i], newBeta) - y[i]; });
-            (~executor).WaitUntilFinished();
+                newF[i] = nfunc(x[i], newBeta) - y[i];
             newFerr = newF.squaredNorm();
 
             double dF = currFerr - newFerr;
@@ -151,7 +149,7 @@ namespace QSim
                 newFerr = currFerr;
                 currBeta = newBeta;
 
-                Internal::CurveFitCalcJacobian(nfunc, x, J, currBeta, step, executor); 
+                Internal::CurveFitCalcJacobian(nfunc, x, J, currBeta, step); 
                 A = J.transpose() * J;
                 g = J.transpose() * f;
 
@@ -209,9 +207,9 @@ namespace QSim
         };
     }
 
-    template<typename Func, typename Ex, typename... Args>
+    template<typename Func, typename... Args>
     void CurveFit(
-        TExecutor<Ex>& executor, Func func, 
+        Func func, 
         const Eigen::Ref<const Eigen::VectorXd>& x, 
         const Eigen::Ref<const Eigen::VectorXd>& y,
         Args&... args)
@@ -234,7 +232,7 @@ namespace QSim
         VType steps(N);
         steps.setConstant(N, 1e-3);
 
-        beta = CurveFitV(funcV, x, y, beta, steps, order, executor);
+        beta = CurveFitV(funcV, x, y, beta, steps, order);
         Internal::CurveFitAssignToPack(beta.data(), args...);
     }
 

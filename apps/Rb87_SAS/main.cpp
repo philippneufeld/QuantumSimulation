@@ -4,7 +4,7 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Executor/ThreadPool.h>
+#include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 #ifdef QSIM_PYTHON3
@@ -50,32 +50,27 @@ public:
     {
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
- 
-        QSim::ThreadPoolExecutor pool; 
+        Eigen::VectorXd populations(detunings.cols());
+
+        QSim::ThreadPool pool; 
         QSim::CLIProgBar progress(detunings.cols());
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;
         constexpr double tint = 1.0 / decay;
 
-        auto rho0 = m_system.CreateGroundState();
-        auto func = [&](auto dets)
-        {
-            auto res = m_doppler.Integrate([&](double vel)
-            { 
-                auto rho = m_system.GetDensityMatrixAv(dets, rho0, vel, 0.0, tint, 0.25*tint, dt);
-                return std::real(rho(1, 1));
-            });
-            progress.IncrementCount();
-            return res;
-        };
-
         // start calculation
-        Eigen::VectorXd populations(detunings.cols());
-        auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
-        
-        progress.Start();
-        pool.MapNonBlockingG(func, populations, genDetuning, detunings.cols());
+        auto rho0 = m_system.CreateGroundState();
+        for (std::size_t i = 0; i < detunings.cols(); i++)
+        {
+            pool.Submit([&, i=i](){ 
+                populations[i] = m_doppler.Integrate([&](double vel)
+                { 
+                    auto rho = m_system.GetDensityMatrixAv(detunings.col(i), rho0, vel, 0.0, tint, 0.25*tint, dt);
+                return std::real(rho(1, 1));
+                });
+            }, progress);
+        } 
         progress.WaitUntilFinished();
         
         simdata.GetDataset("Populations").StoreMatrix(populations);

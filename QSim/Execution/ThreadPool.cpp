@@ -1,6 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
-#include "ThreadPool2.h"
+#include "ThreadPool.h"
 
 namespace QSim
 {
@@ -22,8 +22,7 @@ namespace QSim
         // wait until all tasks are done
         {
             std::unique_lock<std::mutex> lock(m_mutex);
-            while (m_ongoingTasks > 0 || !m_queue.empty())
-                m_taskFinished.wait_for(lock, 10ms); // wake up every 10ms if nothing happened
+            m_taskFinished.wait(lock, [&](){ return m_ongoingTasks == 0 && m_queue.empty(); }); 
         }
 
         // stop all threads and wait until they are finished
@@ -36,6 +35,24 @@ namespace QSim
         // wait until all threads have terminated
         for (auto& t: m_threads)
             t.join();
+    }
+
+    void ThreadPool::EnqueueTask(const std::function<void(void)>& func)
+    {
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_queue.push(func);
+        }
+        m_taskAdded.notify_one();
+    }
+
+    void ThreadPool::EnqueueTask(std::function<void(void)>&& func)
+    {
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_queue.push(std::move(func));
+        }
+        m_taskAdded.notify_one();
     }
 
     void ThreadPool::WorkerThread()
@@ -51,9 +68,7 @@ namespace QSim
                 std::unique_lock<std::mutex> lock(m_mutex);
 
                 // wait until a new task is added (signalled by the m_taskAdded event)
-                // spuriously wake up every 10ms
-                while (!m_stopThreads && m_queue.empty())
-                    m_taskAdded.wait_for(lock, 10ms); // wake up every 10ms if nothing happened
+                m_taskAdded.wait(lock, [&](){ return m_stopThreads || !m_queue.empty(); });
                 
                 // check thread exit condition
                 if (m_stopThreads)
@@ -66,7 +81,7 @@ namespace QSim
                 m_queue.pop();
             }
             
-            task(); // execute task
+            std::invoke(task); // execute task
 
             // decrement task counter and notify all threads waiting
             // on the m_taskFinished event

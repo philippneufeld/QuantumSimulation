@@ -4,7 +4,7 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Executor/ThreadPool.h>
+#include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 #ifdef QSIM_PYTHON3
@@ -74,7 +74,6 @@ public:
     virtual void Init(QSim::DataFileGroup& simdata) override
     {
         // Generate detuning axis
-        // Generate detuning axis
         constexpr static std::size_t cnt = 501;
         Eigen::Matrix<double, 3, cnt> detunings;
         detunings.setZero();
@@ -88,27 +87,22 @@ public:
     {
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
- 
-        QSim::ThreadPoolExecutor pool; 
+        Eigen::VectorXd population(detunings.cols());
+        
+        QSim::ThreadPool pool; 
         QSim::CLIProgBar progress(detunings.cols());
 
-        auto func = [&](auto dets)
-        {
-            auto res = m_doppler.Integrate([&](double vel)
-            { 
-                auto rho = m_system.GetDensityMatrixSS(dets, vel);
-                return std::real(rho(m_desiredLevel, m_desiredLevel));
-            });
-            progress.IncrementCount();
-            return res;
-        };
-
         // start calculation
-        Eigen::VectorXd population(detunings.cols());
-        auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
-        
-        progress.Start();
-        pool.MapNonBlockingG(func, population, genDetuning, detunings.cols());
+        for (std::size_t i = 0; i < detunings.cols(); i++)
+        {
+            pool.Submit([&, i=i](){ 
+                population[i] = m_doppler.Integrate([&](double vel)
+                { 
+                    auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
+                    return std::real(rho(m_desiredLevel, m_desiredLevel));
+                });
+            }, progress);
+        } 
         progress.WaitUntilFinished();
 
         simdata.GetDataset("Population").StoreMatrix(population);

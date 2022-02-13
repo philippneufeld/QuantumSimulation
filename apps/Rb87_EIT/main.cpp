@@ -4,7 +4,7 @@
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-#include <QSim/Executor/ThreadPool.h>
+#include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/CLIProgressBar.h>
 
 #ifdef QSIM_PYTHON3
@@ -52,27 +52,22 @@ public:
     {
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
- 
-        QSim::ThreadPoolExecutor pool; 
+        Eigen::VectorXd absCoeffs(detunings.cols());
+        
+        QSim::ThreadPool pool; 
         QSim::CLIProgBar progress(detunings.cols());
 
-        auto func = [&](auto dets)
-        {
-            auto res = m_doppler.Integrate([&](double vel)
-            { 
-                auto rho = m_system.GetDensityMatrixSS(dets, vel);
-                return std::imag(rho(0, 2)); 
-            });
-            progress.IncrementCount();
-            return res;
-        };
-
         // start calculation
-        Eigen::VectorXd absCoeffs(detunings.cols());
-        auto genDetuning = [&detunings](){static int i=0; return detunings.col(i++).eval(); };
-        
-        progress.Start();
-        pool.MapNonBlockingG(func, absCoeffs, genDetuning, detunings.cols());
+        for (std::size_t i = 0; i < detunings.cols(); i++)
+        {
+            pool.Submit([&, i=i](){ 
+                absCoeffs[i] = m_doppler.Integrate([&](double vel)
+                { 
+                    auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
+                    return std::imag(rho(0, 2));
+                });
+            }, progress);
+        }
         progress.WaitUntilFinished();
         
         simdata.GetDataset("AbsCoeffs").StoreMatrix(absCoeffs);
