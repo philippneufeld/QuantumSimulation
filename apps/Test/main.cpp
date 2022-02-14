@@ -15,7 +15,7 @@
 #include <QSim/Math/Differentiation.h>
 
 #include <QSim/Execution/ThreadPool.h>
-#include <QSim/Util/CLIProgressBar.h>
+#include <QSim/Util/ProgressBar.h>
 
 using namespace QSim;
 
@@ -49,15 +49,15 @@ void test2() {
 int main(int argc, const char* argv[])
 {
     ThreadPool pool;
-    CLIProgBar progbar(20);
+    ProgressBar ProgressBar(20);
     
     for (auto i = 0; i < 10; i++)
-        pool.Submit([&](){ test(); progbar.IncrementCount(); });
+        pool.Submit([&](){ test(); ProgressBar.IncrementCount(); });
     
     for (auto i = 0; i < 10; i++)
-        pool.Submit([&](){ test2(); progbar.IncrementCount(); });
+        pool.Submit([&](){ test2(); ProgressBar.IncrementCount(); });
 
-    progbar.WaitUntilFinished();
+    ProgressBar.WaitUntilFinished();
 
     return 0;
 

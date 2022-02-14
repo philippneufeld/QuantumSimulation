@@ -34,20 +34,11 @@ namespace QSim
             t.join();
     }
 
-    void ThreadPool::EnqueueTask(const std::function<void(void)>& func)
+    void ThreadPool::WaitUntilFinished()
     {
+        // wait until all tasks are done
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_queue.push(func);
-        lock.unlock();
-        m_taskAdded.notify_one();
-    }
-
-    void ThreadPool::EnqueueTask(std::function<void(void)>&& func)
-    {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_queue.push(std::move(func));
-        lock.unlock();
-        m_taskAdded.notify_one();
+        m_taskFinished.wait(lock, [&](){ return m_ongoingTasks == 0 && m_queue.empty(); });
     }
 
     void ThreadPool::WorkerThread()

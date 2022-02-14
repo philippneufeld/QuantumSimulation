@@ -14,8 +14,6 @@
 #include <type_traits>
 #include <future>
 
-#include "Progress.h"
-
 namespace QSim
 {
 
@@ -26,17 +24,15 @@ namespace QSim
         ThreadPool(std::size_t threadCnt);
         ~ThreadPool();
 
+        template<typename Task>
+        void Submit(Task&& task);
+
         template<typename Task, typename RType=std::invoke_result_t<Task>>
-        std::future<RType> Submit(Task&& task);
+        std::future<RType> SubmitWithFuture(Task&& task);
+
+        void WaitUntilFinished();
 
     private:
-        template<typename Task, typename RType>
-        static std::pair<std::function<void(void)>, std::future<RType>> 
-            PackageTask(Task&& task);
-
-        void EnqueueTask(const std::function<void(void)>& func);
-        void EnqueueTask(std::function<void(void)>&& func);
-        
         void WorkerThread();
 
     private:
@@ -57,17 +53,17 @@ namespace QSim
     // Template function definitions
     //
 
-    template<typename Task, typename RType>
-    inline std::future<RType> ThreadPool::Submit(Task&& task)
+    template<typename Task>
+    void ThreadPool::Submit(Task&& task)
     {
-        auto [func, future] = PackageTask<Task, RType>(std::forward<Task&&>(task));
-        EnqueueTask(func);
-        return std::move(future);
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_queue.push(std::forward<Task&&>(task));
+        lock.unlock();
+        m_taskAdded.notify_one();
     }
 
     template<typename Task, typename RType>
-    inline std::pair<std::function<void(void)>, std::future<RType>> 
-        ThreadPool::PackageTask(Task&& task)
+    inline std::future<RType> ThreadPool::SubmitWithFuture(Task&& task)
     {
         // create task and retrieve the future object
         std::packaged_task<RType(void)> packed(std::forward<Task&&>(task));
@@ -79,7 +75,9 @@ namespace QSim
         auto pTask = std::make_shared<decltype(packed)>(std::move(packed));
         auto func = [=](){ std::invoke(*pTask); };
 
-        return std::make_pair(std::move(func), std::move(future));
+        Submit(std::move(func));
+
+        return std::move(future);
     }
 
 }

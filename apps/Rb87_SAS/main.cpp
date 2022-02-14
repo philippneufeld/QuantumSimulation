@@ -5,7 +5,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Execution/ThreadPool.h>
-#include <QSim/Util/CLIProgressBar.h>
+#include <QSim/Util/ProgressBar.h>
 
 #ifdef QSIM_PYTHON3
 #include <QSim/Python/Plotting.h>
@@ -53,7 +53,7 @@ public:
         Eigen::VectorXd populations(detunings.cols());
 
         QSim::ThreadPool pool; 
-        QSim::CLIProgBar progress(detunings.cols());
+        QSim::ProgressBar progress(detunings.cols());
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;

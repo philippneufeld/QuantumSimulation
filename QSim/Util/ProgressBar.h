@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Util_CLIProgressBar_H_
-#define QSim_Util_CLIProgressBar_H_
+#ifndef QSim_Util_ProgressBar_H_
+#define QSim_Util_ProgressBar_H_
 
 #include <cstdint>
 #include <string>
@@ -16,12 +16,12 @@ namespace QSim
 
     std::size_t GetCLIWidth();
 
-    class CLIProgBar
+    class ProgressBar
     {
         using Timestamp_t = std::chrono::high_resolution_clock::time_point;
     public:
-        CLIProgBar(std::size_t total, const std::string& title="");
-        ~CLIProgBar();
+        ProgressBar(std::size_t total, const std::string& title="");
+        ~ProgressBar();
 
         void WaitUntilFinished();
         void Update();

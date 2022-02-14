@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
 #include "../Platform.h"
-#include "CLIProgressBar.h"
+#include "ProgressBar.h"
 
 #ifdef QSim_PLATFORM_LINUX
 #include <sys/ioctl.h> //ioctl() and TIOCGWINSZ
@@ -29,7 +29,7 @@ namespace QSim
     }
 #endif
 
-    CLIProgBar::CLIProgBar(std::size_t total, const std::string& title)
+    ProgressBar::ProgressBar(std::size_t total, const std::string& title)
         : m_thread([&]() { WorkerThread(); }), m_stopThread(false), 
         m_startTs(std::chrono::high_resolution_clock::now()), 
         m_total(total), m_cnt(0), 
@@ -38,13 +38,13 @@ namespace QSim
             m_currTs = m_startTs;
         }
 
-    CLIProgBar::~CLIProgBar()
+    ProgressBar::~ProgressBar()
     {
         if (m_thread.joinable())
             m_thread.join();
     }
 
-    void CLIProgBar::WaitUntilFinished()
+    void ProgressBar::WaitUntilFinished()
     {
         std::unique_lock<std::mutex> lock(m_mutex);  
         m_wakeUp.wait(lock, [&](){ return m_cnt == m_total; });
@@ -54,12 +54,12 @@ namespace QSim
             m_thread.join();
     }
 
-    void CLIProgBar::Update()
+    void ProgressBar::Update()
     {
         m_wakeUp.notify_all();
     }
 
-    void CLIProgBar::IncrementCount(std::size_t inc)
+    void ProgressBar::IncrementCount(std::size_t inc)
     {
         auto ts = std::chrono::high_resolution_clock::now();
         
@@ -71,7 +71,7 @@ namespace QSim
         m_wakeUp.notify_all();
     }
 
-    std::string CLIProgBar::TimeToString(double secs, bool millis)
+    std::string ProgressBar::TimeToString(double secs, bool millis)
     {
         secs = secs > 0 ? secs : 0;
 
@@ -100,7 +100,7 @@ namespace QSim
         return str;
     }
 
-    std::string CLIProgBar::GetProgressText(std::size_t cnt, std::size_t tot)
+    std::string ProgressBar::GetProgressText(std::size_t cnt, std::size_t tot)
     {
         std::string str;
         str.reserve(8);
@@ -113,7 +113,7 @@ namespace QSim
         
         return str;
     }
-    std::string CLIProgBar::GetProgressTextFrac(std::size_t cnt, std::size_t tot)
+    std::string ProgressBar::GetProgressTextFrac(std::size_t cnt, std::size_t tot)
     {
         std::string str;
         str.reserve(16);
@@ -128,7 +128,7 @@ namespace QSim
         return str;
     }
 
-    std::string CLIProgBar::GetTimeText(double elapsedTime, double totalTimeEst, bool finished)
+    std::string ProgressBar::GetTimeText(double elapsedTime, double totalTimeEst, bool finished)
     {  
         std::string str;
         str.reserve(32);
@@ -149,7 +149,7 @@ namespace QSim
         return str;
     }
 
-    std::string CLIProgBar::GenerateBar(std::size_t width, std::size_t cnt, std::size_t tot, 
+    std::string ProgressBar::GenerateBar(std::size_t width, std::size_t cnt, std::size_t tot, 
             double elapsedTime, double totalTimeEst, bool printEst) const
     {
         std::string str;
@@ -181,7 +181,7 @@ namespace QSim
         return str;
     }
 
-    void CLIProgBar::WorkerThread()
+    void ProgressBar::WorkerThread()
     {
         std::string currBar;
         

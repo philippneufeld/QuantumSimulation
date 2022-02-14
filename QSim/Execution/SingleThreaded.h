@@ -14,8 +14,6 @@
 #include <type_traits>
 #include <future>
 
-#include "Progress.h"
-
 namespace QSim
 {
 
@@ -24,28 +22,32 @@ namespace QSim
     public:
         SingleThreaded() = default;
 
+        template<typename Task>
+        void Submit(Task&& task)
+        {
+            std::invoke(task));
+        }
+
         template<typename Task, typename RType=std::invoke_result_t<Task>>
         std::enable_if_t<!std::is_same_v<RType, void>, std::future<RType>> 
-            Submit(Task task, std::shared_ptr<Progress> pProgress = nullptr)
+            SubmitWithFuture(Task&& task)
         {
             std::promise<RType> res;
             res.set_value(std::invoke(task));
-            if (pProgress)
-                pProgress->IncrementCount();
             return res.get_future();
         }
 
         template<typename Task, typename RType=std::invoke_result_t<Task>>
         std::enable_if_t<std::is_same_v<RType, void>, std::future<void>> 
-            Submit(Task task, std::shared_ptr<Progress> pProgress = nullptr)
+            SubmitWithFuture(Task&& task)
         {
             std::promise<RType> res;
             std::invoke(task);
             res.set_value();
-            if (pProgress)
-                pProgress->IncrementCount();
             return res.get_future();
         }
+
+        void WaitUntilFinished() {}
     };
 
 }

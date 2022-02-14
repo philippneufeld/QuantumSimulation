@@ -5,7 +5,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Execution/ThreadPool.h>
-#include <QSim/Util/CLIProgressBar.h>
+#include <QSim/Util/ProgressBar.h>
 
 #ifdef QSIM_PYTHON3
 #include <QSim/Python/Plotting.h>
@@ -49,7 +49,7 @@ public:
         Eigen::VectorXd absCoeffs(detunings.cols());
  
         QSim::ThreadPool pool; 
-        QSim::CLIProgBar progress(detunings.cols());
+        QSim::ProgressBar progress(detunings.cols());
 
         // start calculation
         for (std::size_t i = 0; i < detunings.cols(); i++)
