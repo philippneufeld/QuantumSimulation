@@ -12,7 +12,7 @@ namespace QSim
     class TCRTP
     {
     protected:
-        TCRTP() = default;
+        ~TCRTP() = default;
         
     public:
         // CRTP conversion operators to the actual vector type (type-safe downcast)

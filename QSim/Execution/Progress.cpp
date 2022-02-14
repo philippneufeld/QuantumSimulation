@@ -30,17 +30,14 @@ namespace QSim
         std::unique_lock<std::mutex> lock(m_mutex);
         std::size_t cnt = m_cnt;
         std::size_t tot = m_total;
-        m_signal.wait(lock, [&](){ return cnt < tot && cnt == m_cnt && tot == m_total; });
+        m_signal.wait(lock, [&](){ return m_cnt == m_total || cnt != m_cnt || tot != m_total; });
         return std::make_pair(m_cnt, m_total);
     }
 
     void Progress::WaitUntilFinished() const
     {
-        while(true)
-        {
-            auto [cnt, tot] = WaitForUpdate();
-            if (cnt < tot) break;
-        }
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_signal.wait(lock, [&](){ return m_cnt == m_total; });
     }
 
     void Progress::IncrementCount(std::size_t inc)

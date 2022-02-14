@@ -3,16 +3,11 @@
 #ifndef QSim_Execution_SingleThreaded_H_
 #define QSim_Execution_SingleThreaded_H_
 
-#include <vector>
-#include <thread>
-#include <mutex>
-#include <queue>
 #include <functional>
-#include <condition_variable>
-#include <memory>
-
 #include <type_traits>
 #include <future>
+
+#include "Progress.h"
 
 namespace QSim
 {
@@ -22,10 +17,12 @@ namespace QSim
     public:
         SingleThreaded() = default;
 
+        static ProgressST CreateProgressTracker(std::size_t cnt) { return ProgressST(cnt); }
+
         template<typename Task>
         void Submit(Task&& task)
         {
-            std::invoke(task));
+            std::invoke(task);
         }
 
         template<typename Task, typename RType=std::invoke_result_t<Task>>

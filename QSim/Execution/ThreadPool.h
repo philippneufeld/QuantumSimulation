@@ -10,9 +10,10 @@
 #include <functional>
 #include <condition_variable>
 #include <memory>
-
 #include <type_traits>
 #include <future>
+
+#include "Progress.h"
 
 namespace QSim
 {
@@ -23,6 +24,8 @@ namespace QSim
         ThreadPool();
         ThreadPool(std::size_t threadCnt);
         ~ThreadPool();
+
+        static Progress CreateProgressTracker(std::size_t cnt) { return Progress(cnt); }
 
         template<typename Task>
         void Submit(Task&& task);
@@ -57,7 +60,7 @@ namespace QSim
     void ThreadPool::Submit(Task&& task)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_queue.push(std::forward<Task&&>(task));
+        m_queue.push(std::forward<Task>(task));
         lock.unlock();
         m_taskAdded.notify_one();
     }
@@ -66,7 +69,7 @@ namespace QSim
     inline std::future<RType> ThreadPool::SubmitWithFuture(Task&& task)
     {
         // create task and retrieve the future object
-        std::packaged_task<RType(void)> packed(std::forward<Task&&>(task));
+        std::packaged_task<RType(void)> packed(std::forward<Task>(task));
         auto future = packed.get_future();
 
         // std::packaged_task is only movable (not copyable) and

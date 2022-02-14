@@ -7,7 +7,7 @@
 #include <utility>
 #include <memory>
 
-#include "../Util/Progress.h"
+#include "../Execution/Progress.h"
 #include <Eigen/Dense>
 
 namespace QSim

@@ -11,70 +11,84 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-#include <QSim/Math/Functor.h>
+#include <QSim/Util/Functor.h>
 #include <QSim/Math/Differentiation.h>
 
 #include <QSim/Execution/ThreadPool.h>
+#include <QSim/Execution/SingleThreaded.h>
 #include <QSim/Util/ProgressBar.h>
+
+#include <QSim/Execution/Progress.h>
 
 using namespace QSim;
 
-struct Test1
-{
-    double operator()(double x) { return std::sin(x); }
-};
 
-struct Test2
-{
-    double operator()(Eigen::Vector2d x) { return std::sin(x[0]) + std::cos(x[1]); }
-};
-
-struct Generic {};
-
-template<typename Func>
-void foo(Func& func) { std::cout << func(1.0) << std::endl; }
-template<typename Func>
-void bar(TFunctor<Func, double, std::tuple<double>>& func) { std::cout << func(1.0) << std::endl; }
-
-
-double test() {
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    return 1.0;
+double test1(Eigen::Vector2d x) 
+{ 
+    return std::sin(x[0]) + std::cos(x[1]); 
 }
 
-void test2() {
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+Eigen::Vector2d test2(Eigen::Vector2d x)
+{
+    return { 2*x[0] + x[1], x[0]*x[1] -3*x[0] + x[1]*x[1] };
 }
+
+Eigen::VectorXd test3(Eigen::Vector2d x) 
+{ 
+    return Eigen::Matrix<double, 1, 1>{std::sin(x[0]) + std::cos(x[1])}; 
+}
+
+double test4(Eigen::VectorXd x)
+{
+    return 2*x[0]*x[0]+3*x[0]+5;
+}
+
+double test5(double x)
+{
+    return 2*x*x+3*x+5;
+}
+
+
+
+// template<typename Ty>
+// using TMatrixEvalType_t = typename TMatrixEvalType<Ty>::type;
+
+// template<typename Ty, typename=std::void_t<decltype(std::declval<std::decay_t<ty2>>().eval())>
+
+
 
 int main(int argc, const char* argv[])
 {
-    ThreadPool pool;
-    ProgressBar ProgressBar(20);
-    
-    for (auto i = 0; i < 10; i++)
-        pool.Submit([&](){ test(); ProgressBar.IncrementCount(); });
-    
-    for (auto i = 0; i < 10; i++)
-        pool.Submit([&](){ test2(); ProgressBar.IncrementCount(); });
+    auto func = test5;
 
-    ProgressBar.WaitUntilFinished();
+    ThreadPool pool;
+    
+    Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
+    Eigen::VectorXd y = x;
+    Eigen::VectorXd dy = x;
+    
+    Internal::TJacobianHelper diff;
+    auto J1 = diff.Jacobian(test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
+    auto J2 = diff.Jacobian(test5, 0.0, /*Eigen::VectorXd::Ones(1) * */ 1e-3);
+
+    std::cout << J1 << std::endl;
+    std::cout << J2 << std::endl;
+
+    std::cout << Eigen::Matrix<double, 1, 1>{5.0} / 2.0;
 
     return 0;
 
-    /*Test2 test;
-    auto f1 = CreateFunctor(test);
-
-    Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
-    Eigen::VectorXd y = x;
-    Eigen::VectorXd dy = x.eval();
-    
-    TDiff1O2<Eigen::Vector2d> diff;
-
+    /*auto progress = pool.CreateProgressTracker(x.size());
     for (int i = 0; i < x.size(); i++)
     {
-        y[i] = f1(Eigen::Vector2d{x[i], 0.0});
-        dy[i] = diff.Differentiate(f1, Eigen::Vector2d{x[i], 0.0}, Eigen::Vector2d::Unit(0) * 1e-3);
+        pool.Submit([&, i=i]()
+        {
+            y[i] = func(Eigen::Vector2d{x[i], 0.0});
+            dy[i] = diff.Differentiate(func, Eigen::Vector2d{x[i], 0.0}, Eigen::Vector2d::Unit(0) * 1e-3);
+            progress.IncrementCount();
+        });
     }
+    progress.WaitUntilFinished();
 
 #ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;

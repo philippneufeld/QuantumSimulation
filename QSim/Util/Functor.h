@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Math_Functor_H_
-#define QSim_Math_Functor_H_
+#ifndef QSim_Util_Functor_H_
+#define QSim_Util_Functor_H_
 
 #include <tuple>
 #include <type_traits>

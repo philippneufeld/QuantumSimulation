@@ -32,6 +32,9 @@ namespace QSim
             bool counterProp;
         };
 
+    protected:
+        ~TNLevelSystemCRTP() = default;
+
     public:
 
         template<int compileTimeSize>
@@ -43,7 +46,9 @@ namespace QSim
 
         // copy operations
         TNLevelSystemCRTP(const TNLevelSystemCRTP&) = default;
+        TNLevelSystemCRTP(TNLevelSystemCRTP&&) = default;
         TNLevelSystemCRTP& operator=(const TNLevelSystemCRTP&) = default;
+        TNLevelSystemCRTP& operator=(TNLevelSystemCRTP&&) = default;
 
         static constexpr bool IsStaticDim() { return (N != DynamicDim_v); }
         unsigned int GetDims() const { return m_levels.size(); }
