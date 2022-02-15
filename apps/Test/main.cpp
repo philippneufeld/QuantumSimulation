@@ -13,6 +13,7 @@
 
 #include <QSim/Util/Functor.h>
 #include <QSim/Math/Differentiation.h>
+#include <QSim/Math/Jacobian.h>
 
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Execution/SingleThreaded.h>
@@ -66,9 +67,12 @@ int main(int argc, const char* argv[])
     Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
     Eigen::VectorXd y = x;
     Eigen::VectorXd dy = x;
-    
-    Internal::TJacobianHelper diff;
+
+    TJacobian diff;
+
     auto J1 = diff.Jacobian(test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
+    // Eigen::MatrixXd J1(2, 2); diff.JacobianInPlace(J1, test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
+
     auto J2 = diff.Jacobian(test5, 0.0, /*Eigen::VectorXd::Ones(1) * */ 1e-3);
 
     std::cout << J1 << std::endl;
