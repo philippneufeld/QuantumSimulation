@@ -30,12 +30,13 @@ namespace QSim
 #endif
 
     ProgressBar::ProgressBar(std::size_t total, const std::string& title)
-        : m_thread([&]() { WorkerThread(); }), m_stopThread(false), 
+        : m_stopThread(false), 
         m_startTs(std::chrono::high_resolution_clock::now()), 
         m_total(total), m_cnt(0), 
         m_title(title), m_width(GetCLIWidth()), m_progressChar('#') 
         { 
             m_currTs = m_startTs;
+            m_thread = std::thread([&]() { WorkerThread(); });
         }
 
     ProgressBar::~ProgressBar()
@@ -160,6 +161,8 @@ namespace QSim
 
         // cutoff front and back string if necessary
         std::size_t minWidth = 5;
+        width = std::max(width, minWidth);
+
         if (front.size() + back.size() > width - minWidth)
         {
             std::size_t exess = std::min(back.size(), front.size() + back.size() - width + minWidth);
