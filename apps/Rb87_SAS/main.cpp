@@ -11,17 +11,19 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-class CRb87SASApp : public QSim::SimulationApp
+using namespace QSim;
+
+class CRb87SASApp : public SimulationApp
 {
     constexpr static double decay = 6.065e6;
 public:
     CRb87SASApp()
     {
         // calculate parameters
-        constexpr double dip = 4.227 * QSim::ElementaryCharge_v * QSim::BohrRadius_v;
-        constexpr double intProbe = QSim::GetIntensityFromRabiFrequency(dip, 3.5e6);
-        constexpr double intPump = QSim::GetIntensityFromRabiFrequency(dip, 10e6);       
-        constexpr double freq = QSim::SpeedOfLight_v / 780.241e-9;
+        constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
+        constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 3.5e6);
+        constexpr double intPump = GetIntensityFromRabiFrequency(dip, 10e6);       
+        constexpr double freq = SpeedOfLight_v / 780.241e-9;
 
         // Create system
         m_system.SetLevel(0, 0.0);
@@ -34,7 +36,7 @@ public:
         m_doppler.SetMass(1.44316060e-25);
     }
 
-    virtual void Init(QSim::DataFileGroup& simdata) override
+    virtual void Init(DataFileGroup& simdata) override
     {
         // Generate detuning axis
         constexpr std::size_t cnt = 501;
@@ -46,14 +48,14 @@ public:
         simdata.CreateDataset("Populations", { cnt });
     }
 
-    virtual void Continue(QSim::DataFileGroup& simdata)  override
+    virtual void Continue(DataFileGroup& simdata)  override
     {
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
         Eigen::VectorXd populations(detunings.cols());
 
-        QSim::ThreadPool pool; 
-        QSim::ProgressBar progress(detunings.cols());
+        ThreadPool pool; 
+        ProgressBar progress(detunings.cols());
 
         // dt << Rabi^-1, Doppler^-1, detuning^-1
         double dt = 1e-10;
@@ -78,13 +80,13 @@ public:
         SetFinished(simdata);
     }
 
-    virtual void Plot(QSim::DataFileGroup& simdata) override
+    virtual void Plot(DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
         auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(0).eval();
         auto y_axis = simdata.GetDataset("Populations").LoadMatrix();
 
-        QSim::PythonMatplotlib matplotlib;
+        PythonMatplotlib matplotlib;
         auto figure = matplotlib.CreateFigure();
         auto ax = figure.AddSubplot();
         ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
@@ -93,8 +95,8 @@ public:
     }
 
 private:
-    QSim::TNLevelSystemSC<2> m_system;
-    QSim::DopplerIntegrator m_doppler;
+    TNLevelSystemSC<2> m_system;
+    DopplerIntegrator m_doppler;
 };
 
 int main(int argc, const char* argv[])

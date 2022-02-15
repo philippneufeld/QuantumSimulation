@@ -43,6 +43,27 @@ namespace QSim
     template<typename Ty>
     using TMatrixEvalType_t = typename TMatrixEvalType<Ty>::type;
 
+    // Element type
+    namespace Internal
+    {
+        template<typename Ty>
+        struct TMatrixElementTypeHelper
+        {
+            using type = std::decay_t<Ty>;
+        };
+
+        template<typename Ty, int N, int M>
+        struct TMatrixElementTypeHelper<Eigen::Matrix<Ty, N, M>>
+        {
+            using type = std::decay_t<Ty>;
+        };
+    }
+    template<typename Ty>
+    struct TMatrixElementType 
+        : Internal::TMatrixElementTypeHelper<TMatrixEvalType_t<Ty>> {};
+    template<typename Ty>
+    using TMatrixElementType_t = typename TMatrixElementType<Ty>::type;
+
     // Class that makes the type and value of the 
     // length of a dx vector (or scalar) easily accessible
     namespace Internal

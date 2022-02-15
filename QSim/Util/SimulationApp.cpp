@@ -61,7 +61,7 @@ namespace QSim
         std::string defaultDir = remoteHome + "/SimulationData/" + ExtractProgramName(argc, argv);
 
         // parse command line arguents
-        QSim::ArgumentParser parser;
+        ArgumentParser parser;
         parser.AddOptionDefault("f,file", "Absolute or relative path (from data directory) to data file.", defaultFileName);
         parser.AddOptionDefault("d,dir", "Data directory path.", defaultDir);
         parser.AddOption("c,continue", "Name of the simulation to continue with.");

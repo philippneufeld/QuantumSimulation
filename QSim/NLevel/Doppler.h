@@ -72,7 +72,7 @@ namespace QSim
             double vmin = -m_sigmas * sigma;
             double vmax = m_sigmas * sigma;
 
-            TQuadAdaptive<double> integrator;
+            TQuadrature<QuadAdaptivePolicy> integrator;
             auto convFunc = [=](double v){ return norm * std::exp(-v*v*sigma2SqRec) * func(v); };
             return integrator.Integrate(convFunc, vmin, vmax, m_steps, m_rtol, m_atol, m_maxDepth);
         }

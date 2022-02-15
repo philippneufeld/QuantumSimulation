@@ -9,7 +9,7 @@
 namespace QSim
 {
     // Differentiation policy
-    // Implements at least two functions:
+    // Implements at least the following functions:
     // 1) Differentiate func at position x with a step dx:
     //      auto Differentiate(func, x, dx)
     // 2) Same as 1) but with an auxilliary parameter specifying

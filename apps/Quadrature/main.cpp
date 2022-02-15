@@ -13,7 +13,7 @@ auto createErrorFunction(std::function<double(double)> func, double a, double b,
 {
     return [=](double n)
     { 
-        double res = Quad{}.Integrate(func, a, b, (std::size_t)n);
+        double res = TQuadrature<Quad>::Integrate(func, a, b, (std::size_t)n);
         return std::abs(exact - res); 
     };
 }
@@ -26,7 +26,7 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
         ns[i] = i + 1; 
     std::vector<double> errors(ns.size());
     
-    QSim::PythonMatplotlib matplotlib;
+    PythonMatplotlib matplotlib;
     
     auto fig = matplotlib.CreateFigure();
     auto ax = fig.AddSubplot(); 
@@ -36,23 +36,23 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
     ax.SetYLabel("Absolute error");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<TQuadMidpoint<double>>(func, a, b, exact), ns[i]);
+        errors[i] = std::invoke(createErrorFunction<QuadMidpointPolicy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "midpoint");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<TQuadTrapezoidal<double>>(func, a, b, exact), ns[i]);
+        errors[i] = std::invoke(createErrorFunction<QuadTrapezoidalPolicy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "trapezoid");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<TQuadSimpson<double>>(func, a, b, exact), ns[i]);
+        errors[i] = std::invoke(createErrorFunction<QuadSimpsonPolicy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "simpson");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<TQuadSimpson38<double>>(func, a, b, exact), ns[i]);
+        errors[i] = std::invoke(createErrorFunction<QuadSimpson38Policy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "simpson38");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<TQuadBoole<double>>(func, a, b, exact), ns[i]);
+        errors[i] = std::invoke(createErrorFunction<QuadBoolePolicy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "boole");
 
     // adaptive integrator
@@ -63,7 +63,7 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
         double expmin = 2;
         double expmax = 14;
         double rtol = std::pow(10.0, -(j*(expmax - expmin)/ns_ad.size() + expmin));
-        auto res = QSim::TQuadAdaptive<double>{}.IntegrateFevs(func, a, b, 250, rtol, std::min(1e-12, rtol), 5);
+        auto res = TQuadrature<QuadAdaptivePolicy>::IntegrateFevs(func, a, b, 250, rtol, std::min(1e-12, rtol), 5);
         errs_ad[j] = std::abs(exact - res.first);
         ns_ad[j] = res.second;
     }
@@ -75,18 +75,18 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
 
 int main(int argc, const char* argv[])
 {
-    QSim::PythonMatplotlib matplotlib;
+    PythonMatplotlib matplotlib;
 
     testIntegrators("sin(x)*(1-x+x^2)", 
         [](double x){ return std::sin(x) * (1 - x + x*x); }, 
         0.0, 5.0, -15.01989999576955);
 
     testIntegrators("1/(pi*(x^2+1))", 
-            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, 
+            [](double x){ return 1 / (Pi_v * (x*x + 1)); }, 
             -2, 2, 0.7048327646991335);
 
     testIntegrators("1/(pi*(x^2+1))", 
-            [](double x){ return 1 / (QSim::Pi_v * (x*x + 1)); }, 
+            [](double x){ return 1 / (Pi_v * (x*x + 1)); }, 
             -250.0, 250.0, 0.9974535344916211);
 
     testIntegrators("sin(1/x)", 
