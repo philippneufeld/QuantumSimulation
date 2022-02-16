@@ -9,6 +9,21 @@
 
 namespace QSim
 {
+    namespace Internal
+    {
+        // Unwraps a type that has been wrapped inside of the Jacobian function
+        template<bool wrapped>
+        struct TJacobianUnwrapHelper 
+        { 
+            template<typename T> static auto Do(T&& x) { return x[0]; }
+        };
+        template<>
+        struct TJacobianUnwrapHelper<false> 
+        { 
+            template<typename T> static auto Do(T&& x) { return x; }
+        };
+    }
+
     template<typename DiffPolicy=Diff1O2Policy>
     class TJacobian : public DiffPolicy
     {
@@ -16,12 +31,6 @@ namespace QSim
         template<typename Ty>
         using WrappedType_t = std::conditional_t<TIsMatrix_v<Ty>, 
             Ty, Eigen::Matrix<std::decay_t<Ty>, 1, 1>>;
-
-        // Unwraps a type that has been wrapped inside of the Jacobian function
-        template<bool wrapped>
-        struct UnwrapHelper { template<typename T> static auto Do(T&& x) { return x[0]; }};
-        template<>
-        struct UnwrapHelper<false> { template<typename T> static auto Do(T&& x) { return x; }};
 
         template<bool strict, typename FTy, typename XTy, typename DXTy>
         static constexpr bool IsValidExpr_v = 
@@ -86,7 +95,7 @@ namespace QSim
             using FTy = std::invoke_result_t<Func, XTy>;
             return [&](auto t) 
             { 
-                auto unwrappedT = UnwrapHelper<!TIsMatrix_v<XTy>>::Do(t);
+                auto unwrappedT = Internal::TJacobianUnwrapHelper<!TIsMatrix_v<XTy>>::Do(t);
                 return static_cast<WrappedType_t<FTy>>(std::invoke(func, unwrappedT)); 
             };
         }

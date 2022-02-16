@@ -13,6 +13,7 @@
 
 #include <QSim/Util/Functor.h>
 #include <QSim/Math/Differentiation.h>
+#include <QSim/Math/Quadrature.h>
 #include <QSim/Math/Jacobian.h>
 
 #include <QSim/Execution/ThreadPool.h>
@@ -23,80 +24,8 @@
 
 using namespace QSim;
 
-
-double test1(Eigen::Vector2d x) 
-{ 
-    return std::sin(x[0]) + std::cos(x[1]); 
-}
-
-Eigen::Vector2d test2(Eigen::Vector2d x)
-{
-    return { 2*x[0] + x[1], x[0]*x[1] -3*x[0] + x[1]*x[1] };
-}
-
-Eigen::VectorXd test3(Eigen::Vector2d x) 
-{ 
-    return Eigen::Matrix<double, 1, 1>{std::sin(x[0]) + std::cos(x[1])}; 
-}
-
-double test4(Eigen::VectorXd x)
-{
-    return 2*x[0]*x[0]+3*x[0]+5;
-}
-
-double test5(double x)
-{
-    return 2*x*x+3*x+5;
-}
-
-
 int main(int argc, const char* argv[])
 {
-    /*auto func = test5;
-
-    ThreadPool pool;
-    
-    Eigen::VectorXd x = Eigen::VectorXd::LinSpaced(500, -5.0, 5.0);
-    Eigen::VectorXd y = x;
-    Eigen::VectorXd dy = x;
-
-    TJacobian diff;
-
-    auto J1 = diff.Jacobian(test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
-    // Eigen::MatrixXd J1(2, 2); diff.JacobianInPlace(J1, test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
-
-    auto J2 = diff.Jacobian(test5, 0.0, 1e-3);
-
-    std::cout << J1 << std::endl;
-    std::cout << J2 << std::endl;
-
-    std::cout << Eigen::Matrix<double, 1, 1>{5.0} / 2.0;
-
-    return 0;*/
-
-    /*auto progress = pool.CreateProgressTracker(x.size());
-    for (int i = 0; i < x.size(); i++)
-    {
-        pool.Submit([&, i=i]()
-        {
-            y[i] = func(Eigen::Vector2d{x[i], 0.0});
-            dy[i] = diff.Differentiate(func, Eigen::Vector2d{x[i], 0.0}, Eigen::Vector2d::Unit(0) * 1e-3);
-            progress.IncrementCount();
-        });
-    }
-    progress.WaitUntilFinished();
-
-#ifdef QSIM_PYTHON3
-    PythonMatplotlib matplotlib;
-    auto fig = matplotlib.CreateFigure();
-    auto ax = fig.AddSubplot();
-    ax.Plot(x.data(), y.data(), x.size());
-    ax.Plot(x.data(), dy.data(), x.size());
-    matplotlib.RunGUILoop();
-#endif
-
-    return 0;*/
-
     constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
 

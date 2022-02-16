@@ -33,7 +33,7 @@ namespace QSim
         {
             using type = TMatrixEvalType_t<decltype(
                 std::declval<std::invoke_result_t<Func, TQuadXType_t<XTyA, XTyB>>>() * 
-                std::declval<TQuadXType_t<XTyA, XTyB>>())>;
+                std::declval<TDxLength_t<TQuadXType_t<XTyA, XTyB>>>())>;
         };
         template<typename Func, typename XTyA, typename XTyB>
         using TQuadResultType_t = typename TQuadResultType<Func, XTyA, XTyB>::type;
@@ -131,7 +131,7 @@ namespace QSim
             ConstexprFor<std::size_t, 0, ccnt, 1>(helper);
 
             constexpr double den = static_cast<double>(Den) / ccnt;
-            result *= dx / den;
+            result *= TDxLength<XTy>::Get(dx) / den;
             return result;
         }
     };
@@ -153,7 +153,7 @@ namespace QSim
 
     public:
         QuadAdaptivePolicy()
-            : m_rtol(1e-8), m_atol(1e-12), m_depth(10) {}
+            : m_rtol(1e-8), m_atol(1e-12), m_depth(5) {}
 
         void SetIntegrationRTol(double rtol) { m_rtol = rtol; }
         void SetIntegrationATol(double atol) { m_atol = atol; }
@@ -184,11 +184,13 @@ namespace QSim
             XTy dx = dist / sections;
             atol /= sections;
 
+            auto dxlen = TDxLength<XTy>::Get(dx);
+
             // first iteration
             YTy f0 = std::invoke(func, a);
             YTy f1 = std::invoke(func, a + 0.5*dx);
             YTy f2 = std::invoke(func, a + dx);
-            auto [res, sub_fevs] = IntegrateHelper(func, a, dx, 0, f0, f1, f2, rtol, atol, depth);
+            auto [res, sub_fevs] = IntegrateHelper(func, a, dx, dxlen, 0, f0, f1, f2, rtol, atol, depth);
             YTy result = std::move(res);
             std::size_t fevs = 3 + sub_fevs;
 
@@ -198,7 +200,7 @@ namespace QSim
                 f0 = f2;
                 f1 = std::invoke(func, a + (i+0.5)*dx);
                 f2 = std::invoke(func, a + (i+1)*dx);
-                auto [res, sub_fevs] = IntegrateHelper(func, a+i*dx, dx, 0, f0, f1, f2, rtol, atol, depth);
+                auto [res, sub_fevs] = IntegrateHelper(func, a+i*dx, dx, dxlen, 0, f0, f1, f2, rtol, atol, depth);
 
                 result += res;
                 fevs += 2 + sub_fevs;
@@ -218,7 +220,7 @@ namespace QSim
     private:
         template<typename Func, typename XTyA, typename DXTy>
         static std::pair<Internal::TQuadResultType_t<Func, XTyA, DXTy>, std::size_t> IntegrateHelper(
-            Func& func, XTyA&& a, DXTy&& dx, std::size_t d,
+            Func& func, XTyA&& a, DXTy&& dx, TDxLength_t<DXTy> dxlen, std::size_t d,
             const Internal::TQuadResultType_t<Func, XTyA, DXTy>& f0,
             const Internal::TQuadResultType_t<Func, XTyA, DXTy>& f2,
             const Internal::TQuadResultType_t<Func, XTyA, DXTy>& f4,
@@ -232,14 +234,14 @@ namespace QSim
             std::size_t fevs = 2;
 
             // calculate area via Simpson's rule
-            YTy I1 = (dx / 6) * (f0 + 4*f2 + f4);
+            YTy I1 = (dxlen / 6) * (f0 + 4*f2 + f4);
             
             // calculate function value at intermediary points
             YTy f1 = std::invoke(func, a + 0.25*dx);
             YTy f3 = std::invoke(func, a + 0.75*dx);
 
             // calculate area via two Simpson's rule steps with half step size
-            YTy I2 = (dx / 12) * (f0 + 4*(f1 + f3) + 2*f2 + f4);
+            YTy I2 = (dxlen / 12) * (f0 + 4*(f1 + f3) + 2*f2 + f4);
             
             YTy Ierr = (I2 - I1) / 15;
             YTy I = I2 + Ierr; // add error to I2 (I is equivalent to Boole's rule)
@@ -248,8 +250,9 @@ namespace QSim
             if (std::abs(Ierr) - Internal::TQuadValueLike<YTy>::Generate(atol, Ierr) > rtol*std::abs(I) && d < depth)
             {
                 XTy dx2 = dx / 2;
-                auto [res1, sub_fevs1] = IntegrateHelper(func, a, dx2, d+1, f0, f1, f2, rtol, atol / 2, depth);
-                auto [res2, sub_fevs2] = IntegrateHelper(func, a+dx2, dx2, d+1, f2, f3, f4, rtol, atol / 2, depth);
+                auto dxlen2 = dxlen / 2;
+                auto [res1, sub_fevs1] = IntegrateHelper(func, a, dx2, dxlen2, d+1, f0, f1, f2, rtol, atol / 2, depth);
+                auto [res2, sub_fevs2] = IntegrateHelper(func, a+dx2, dx2, dxlen2, d+1, f2, f3, f4, rtol, atol / 2, depth);
                 
                 I = res1 + res2;
                 fevs += sub_fevs1 + sub_fevs2;
