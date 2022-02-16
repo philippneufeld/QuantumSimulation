@@ -50,17 +50,9 @@ double test5(double x)
 }
 
 
-
-// template<typename Ty>
-// using TMatrixEvalType_t = typename TMatrixEvalType<Ty>::type;
-
-// template<typename Ty, typename=std::void_t<decltype(std::declval<std::decay_t<ty2>>().eval())>
-
-
-
 int main(int argc, const char* argv[])
 {
-    auto func = test5;
+    /*auto func = test5;
 
     ThreadPool pool;
     
@@ -73,14 +65,14 @@ int main(int argc, const char* argv[])
     auto J1 = diff.Jacobian(test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
     // Eigen::MatrixXd J1(2, 2); diff.JacobianInPlace(J1, test2, Eigen::Vector2d{0.0, 0.0}, Eigen::VectorXd::Ones(2) * 1e-3);
 
-    auto J2 = diff.Jacobian(test5, 0.0, /*Eigen::VectorXd::Ones(1) * */ 1e-3);
+    auto J2 = diff.Jacobian(test5, 0.0, 1e-3);
 
     std::cout << J1 << std::endl;
     std::cout << J2 << std::endl;
 
     std::cout << Eigen::Matrix<double, 1, 1>{5.0} / 2.0;
 
-    return 0;
+    return 0;*/
 
     /*auto progress = pool.CreateProgressTracker(x.size());
     for (int i = 0; i < x.size(); i++)
@@ -105,7 +97,7 @@ int main(int argc, const char* argv[])
 
     return 0;*/
 
-    /*constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
+    constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
 
     TNLevelSystemSC<DynamicDim_v> system2(2);
@@ -130,5 +122,5 @@ int main(int argc, const char* argv[])
     matplotlib.RunGUILoop();
 #endif
 
-    return 0;*/
+    return 0;
 }

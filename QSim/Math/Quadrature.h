@@ -14,8 +14,8 @@ namespace QSim
 
     // Quadrature policy
     // Implements at least the following functions:
-    // 1) Integrate func at position x with a step dx:
-    //      auto Integrate(func, x, dx)
+    // 1) Integrate func over the interval [a, b] in (at least) n steps:
+    //      auto Integrate(func, a, b, n)
 
     // Helper type traits
     namespace Internal

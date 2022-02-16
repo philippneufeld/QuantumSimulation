@@ -7,28 +7,36 @@
 
 namespace QSim
 {
+    // ODEStepper policy
+    // Implements at least the following functions:
+    // 1) Calculate evolution step of func from x to x+dx:
+    //      auto Step(func, y, x, dx)
 
     // Euler ode integrator
-    template<typename XTy, typename YTy>
-    class ODEEuler
+    class ODEEulerPolicy
     {
+    protected:
+        ~ODEEulerPolicy() = default;
+
     public:
-        template<typename Func>
-        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
         {
             return func(x, y) * dx;
         }
     };
 
     // Runge-Kutta 4th order ode integrator
-    template<typename XTy, typename YTy>
-    class ODERK4
+    class ODERK4Policy
     {
+    protected:
+        ~ODERK4Policy() = default;
+
     public:
-        template<typename Func>
-        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
         {
-            double dx2 = dx/2;
+            auto dx2 = dx/2;
             auto k1 = func(x, y);
             auto k2 = func(x + dx2, y + dx2*k1);
             auto k3 = func(x + dx2, y + dx2*k2);
@@ -39,12 +47,14 @@ namespace QSim
 
     
     // Runge-Kutta 6th order ode integrator
-    template<typename XTy, typename YTy>
-    class ODERK6
+    class ODERK6Policy
     {
+    protected:
+        ~ODERK6Policy() = default;
+
     public:
-        template<typename Func>
-        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
         {
             auto k1 = func(x, y);
             auto k2 = func(x + dx/3, y + (dx/3)*k1);
@@ -58,19 +68,21 @@ namespace QSim
     };
 
     // Bogacki–Shampine ode integrator
-    template<typename XTy, typename YTy>
-    class ODEBS32
+    class ODEBS32Policy
     {
+    protected:
+        ~ODEBS32Policy() = default;
+
     public:      
         
-        template<typename Func>
-        YTy Step(const Func& func, const YTy& y, XTy x, XTy dx)
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
         {
-            return StepWithErrorEst(y, x, dx, func).first;
+            return StepWithErrorEst(func, y, x, dx).first;
         }
 
-        template<typename Func>
-        std::pair<YTy, YTy> StepWithErrorEst(const Func& func, const YTy& y, XTy x, XTy dx)
+       template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
         {
             auto k1 = func(x, y);
             auto k2 = func(x + (dx/2), y + (dx/2)*k1);
@@ -82,6 +94,10 @@ namespace QSim
             return std::make_pair(dy2, err);
         }
     };
+
+    // Helper class for usecases where inheritance from the policy is not desired
+    template<typename ODEStepperPolicy=ODERK4Policy>
+    class TODEStepper : public ODEStepperPolicy {};
 
 }
 
