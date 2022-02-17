@@ -62,7 +62,18 @@ namespace QSim
         template<bool strict, typename JTy, typename Func, typename XTy, typename DXTy>
         using EnableJacIP_t = std::enable_if_t<IsValidExprInPlace_v<strict, JTy, std::invoke_result_t<Func, XTy>, XTy, DXTy>>;
 
+        template<typename Func, typename XTy>
+        using FuncRetType_t = decltype(std::declval<DiffPolicy>().Differentiate(
+            std::declval<Func>(), std::declval<XTy>(), std::declval<XTy>()));
+
     public:
+
+        template<typename Func, typename XTy>
+        using Jacobian_t = Eigen::Matrix<
+            TMatrixElementType_t<FuncRetType_t<Func, XTy>>,
+            TMatrixSizeAtCompileTime_v<FuncRetType_t<Func, XTy>>, 
+            TMatrixSizeAtCompileTime_v<XTy>>;
+
         // Calculates jacobian
         // Forwards parameters to JacobianHelper which only accepts 
         // Eigen matrix types, so if scalar types are involved, they are
@@ -108,20 +119,23 @@ namespace QSim
             assert(dx.rows() == 1 || dx.cols() == 1); // dx is vector
             assert(x.size() == dx.size()); // x and dx have same length
     
-            auto df_dx0 = DiffPolicy::Differentiate(func, x, XTy::Unit(x.size(), 0) * dx[0], dx[0]); 
+            auto df_dx0 = DiffPolicy::Differentiate(func, x, 
+                TMatrixEvalType_t<XTy>::Unit(x.size(), 0) * dx[0], dx[0]); 
 
             // setup jacobian matrix
-            using ElementType = std::decay_t<decltype(df_dx0[0])>;
-            constexpr int JRows = TMatrixSizeAtCompileTime_v<decltype(df_dx0)>;
-            constexpr int JCols = TMatrixSizeAtCompileTime_v<XTy>;
-            Eigen::Matrix<ElementType, JRows, JCols> jac(df_dx0.size(), x.size());
+            // using ElementType = std::decay_t<decltype(df_dx0[0])>;
+            // constexpr int JRows = TMatrixSizeAtCompileTime_v<decltype(df_dx0)>;
+            // constexpr int JCols = TMatrixSizeAtCompileTime_v<XTy>;
+            // Eigen::Matrix<ElementType, JRows, JCols> jac(df_dx0.size(), x.size());
+            Jacobian_t<Func, XTy> jac(df_dx0.size(), x.size());
 
             for (int i = 0; i < jac.rows(); i++)
                 jac(i, 0) = df_dx0[i];
             
             for (int j = 1; j < jac.cols(); j++)
             {
-                auto df_dxj = DiffPolicy::Differentiate(func, x, XTy::Unit(x.size(), j) * dx[j], dx[j]);
+                auto df_dxj = DiffPolicy::Differentiate(func, x, 
+                    TMatrixEvalType_t<XTy>::Unit(x.size(), j) * dx[j], dx[j]);
                 for (int i = 0; i < jac.rows(); i++)
                     jac(i, j) = df_dxj[i];
             }
@@ -137,7 +151,8 @@ namespace QSim
             assert(dx.rows() == 1 || dx.cols() == 1); // dx is vector
             assert(x.size() == dx.size()); // x and dx have same length
     
-            auto df_dx0 = DiffPolicy::Differentiate(func, x, XTy::Unit(x.size(), 0) * dx[0], dx[0]); 
+            auto df_dx0 = DiffPolicy::Differentiate(func, x, 
+                TMatrixEvalType_t<XTy>::Unit(x.size(), 0) * dx[0], dx[0]); 
             assert(jac.rows() == df_dx0.size());
             assert(jac.cols() == x.size());
             for (int i = 0; i < jac.rows(); i++)
@@ -145,7 +160,8 @@ namespace QSim
             
             for (int j = 1; j < jac.cols(); j++)
             {
-                auto df_dxj = DiffPolicy::Differentiate(func, x, XTy::Unit(x.size(), j) * dx[j], dx[j]);
+                auto df_dxj = DiffPolicy::Differentiate(func, x, 
+                    TMatrixEvalType_t<XTy>::Unit(x.size(), j) * dx[j], dx[j]);
                 for (int i = 0; i < jac.rows(); i++)
                     jac(i, j) = df_dxj[i];
             }

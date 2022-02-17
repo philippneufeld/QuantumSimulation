@@ -1,6 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
 #include <iostream>
+#include <random>
 #include <Eigen/Dense>
 
 #include <QSim/NLevel/NLevelSystem.h>
@@ -11,45 +12,60 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-#include <QSim/Util/Functor.h>
-#include <QSim/Math/Differentiation.h>
-#include <QSim/Math/Quadrature.h>
-#include <QSim/Math/Jacobian.h>
-
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Execution/SingleThreaded.h>
 #include <QSim/Util/ProgressBar.h>
 
-#include <QSim/Execution/Progress.h>
+#include <QSim/Math/Quadrature.h>
+#include <QSim/Math/LevenbergMarquard.h>
 
 using namespace QSim;
+using namespace Eigen;
 
-double test1(double x)
+double test1(double x, const Vector4d& beta)
 {
-    return x*x*x*x;
+    return ((beta[0]*x + beta[1])*x + beta[2])*x + beta[3];
 }
 
-double test2(Eigen::Vector2d x)
+double randf()
 {
-    return x[0]*x[0] + 2*x[1];
+    return (static_cast<double>(std::rand()) / RAND_MAX - 0.5) * 2;
 }
 
+#include <utility>
 int main(int argc, const char* argv[])
 {
-    
-    TQuadrature<QuadSimpsonPolicy> quad1;
-    TQuadrature<QuadAdaptivePolicy> quad2;
+    Vector4d beta = Vector4d{0.5, 3, -2, 1};
 
-    std::cout << quad1.Integrate(test1, 0, 2, 10) << std::endl;
-    std::cout << quad2.Integrate(test1, 0, 2, 10) << std::endl;
+    constexpr int n = 100;
+    VectorXd x = VectorXd::LinSpaced(n, -5, 5);
+    VectorXd y(n);
+    for (int i = 0; i < n; i++)
+        y[i] = test1(x[i], beta) + 5*randf();
+    Vector4d beta0 = Vector4d{0, 0, 0, 0};
 
-    std::cout << quad1.Integrate(test2, Eigen::Vector2d{0, 0}, Eigen::Vector2d{4, 2}, 100) << std::endl;
-    std::cout << quad2.Integrate(test2, Eigen::Vector2d{0, 0}, Eigen::Vector2d{4, 2}, 100) << std::endl;
-    
+    LevenbergMarquard fit;
+    Vector4d betafit = fit.CurveFitV(test1, x, y, beta0, (Vector4d::Ones()*1e-3).eval());
+
+    VectorXd xfit = VectorXd::LinSpaced(500, -5, 5);
+    VectorXd yfit(xfit.size());
+    for (int i = 0; i < xfit.size(); i++)
+        yfit[i] = test1(xfit[i], betafit);
+
+    std::cout << betafit << std::endl;
+
+#ifdef QSIM_PYTHON3
+    PythonMatplotlib matplotlib;
+    auto fig = matplotlib.CreateFigure();
+    auto ax = fig.AddSubplot();
+    ax.Plot(x.eval().data(), y.data(), x.size(), "Data", "x");
+    ax.Plot(xfit.data(), yfit.data(), xfit.size(), "Fit");
+    matplotlib.RunGUILoop();
+#endif
+
     return 0;
     
-    
-    constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
+    /*constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
 
     TNLevelSystemSC<DynamicDim_v> system2(2);
@@ -74,5 +90,5 @@ int main(int argc, const char* argv[])
     matplotlib.RunGUILoop();
 #endif
 
-    return 0;
+    return 0;*/
 }
