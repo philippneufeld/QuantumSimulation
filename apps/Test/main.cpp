@@ -24,8 +24,31 @@
 
 using namespace QSim;
 
+double test1(double x)
+{
+    return x*x*x*x;
+}
+
+double test2(Eigen::Vector2d x)
+{
+    return x[0]*x[0] + 2*x[1];
+}
+
 int main(int argc, const char* argv[])
 {
+    
+    TQuadrature<QuadSimpsonPolicy> quad1;
+    TQuadrature<QuadAdaptivePolicy> quad2;
+
+    std::cout << quad1.Integrate(test1, 0, 2, 10) << std::endl;
+    std::cout << quad2.Integrate(test1, 0, 2, 10) << std::endl;
+
+    std::cout << quad1.Integrate(test2, Eigen::Vector2d{0, 0}, Eigen::Vector2d{4, 2}, 100) << std::endl;
+    std::cout << quad2.Integrate(test2, Eigen::Vector2d{0, 0}, Eigen::Vector2d{4, 2}, 100) << std::endl;
+    
+    return 0;
+    
+    
     constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
     constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
 

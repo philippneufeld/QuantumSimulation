@@ -23,7 +23,11 @@ namespace QSim
         template<typename XTyA, typename XTyB>
         struct TQuadXType
         {
-            using type = TMatrixEvalType_t<decltype(std::declval<XTyB>() + std::declval<XTyA>())>;
+        private:
+            using AddRes_t = TMatrixEvalType_t<decltype(std::declval<XTyB>() + std::declval<XTyA>())>;
+        
+        public:
+            using type = std::conditional_t<std::is_integral_v<AddRes_t>, double, AddRes_t>;
         };
         template<typename XTyA, typename XTyB>
         using TQuadXType_t = typename TQuadXType<XTyA, XTyB>::type;
@@ -73,7 +77,7 @@ namespace QSim
             if (n == 0)
                 return YTy{};
             
-            XTy dx = (b - a) / n;
+            XTy dx = static_cast<XTy>(b - a) / n;
 
             // use first iteration for initialization of the result (no addition needed)
             XTy x0 = a + dx/2;
@@ -109,7 +113,7 @@ namespace QSim
                 n = wcnt;
             n -= (n - 1) % (wcnt - 1);
 
-            XTy dx = (b - a) / (n - 1);
+            XTy dx = static_cast<XTy>(b - a) / (n - 1);
 
             // handle borders
             constexpr auto wFirst = TConstListFront_v<WeightList>;
@@ -180,7 +184,7 @@ namespace QSim
             n -= (n - 1) % 4;
             std::size_t sections = (n - 1) / 4;
 
-            XTy dist = b - a;
+            XTy dist = static_cast<XTy>(b - a);
             XTy dx = dist / sections;
             atol /= sections;
 
@@ -249,10 +253,14 @@ namespace QSim
             // check if accuracy is sufficient
             if (std::abs(Ierr) - Internal::TQuadValueLike<YTy>::Generate(atol, Ierr) > rtol*std::abs(I) && d < depth)
             {
+                // NOTE:
+                // static_cast<XTy>(a+dx2) in IntegrateHelper is necessary in order to
+                // prevent the expression template to be passed directly and thus
+                // exceeding the template recursion limit
                 XTy dx2 = dx / 2;
                 auto dxlen2 = dxlen / 2;
                 auto [res1, sub_fevs1] = IntegrateHelper(func, a, dx2, dxlen2, d+1, f0, f1, f2, rtol, atol / 2, depth);
-                auto [res2, sub_fevs2] = IntegrateHelper(func, a+dx2, dx2, dxlen2, d+1, f2, f3, f4, rtol, atol / 2, depth);
+                auto [res2, sub_fevs2] = IntegrateHelper(func, static_cast<XTy>(a+dx2), dx2, dxlen2, d+1, f2, f3, f4, rtol, atol / 2, depth);
                 
                 I = res1 + res2;
                 fevs += sub_fevs1 + sub_fevs2;
