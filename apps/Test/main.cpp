@@ -16,15 +16,18 @@
 #include <QSim/Execution/SingleThreaded.h>
 #include <QSim/Util/ProgressBar.h>
 
+#include <QSim/Util/Functor.h>
+
 #include <QSim/Math/Quadrature.h>
-#include <QSim/Math/LevenbergMarquard.h>
+#include <QSim/Math/LevenbergMarquardt.h>
+#include <QSim/Math/Gamma.h>
 
 using namespace QSim;
 using namespace Eigen;
 
 double test1(double x, const Vector4d& beta)
 {
-    return ((beta[0]*x + beta[1])*x + beta[2])*x + beta[3];
+    return (((beta[0]/1e8)*x + beta[1])*x + beta[2])*x + beta[3];
 }
 
 double randf()
@@ -35,24 +38,63 @@ double randf()
 #include <utility>
 int main(int argc, const char* argv[])
 {
-    Vector4d beta = Vector4d{0.5, 3, -2, 1};
+
+    /*std::cout << std::tgamma(5) << std::endl;
+    std::cout << GammaFunction::GammaP(2, 4) << std::endl;
+    std::cout << GammaFunction::InvGammaP(2, GammaFunction::GammaP(2, 4)) << std::endl;
+
+    VectorXd x = VectorXd::LinSpaced(10000, 0.0, 500.0);
+    VectorXd y1 = x.unaryExpr([](double x){ return GammaFunction::GammaP(10, x); });
+    VectorXd y2 = x.unaryExpr([](double x){ return GammaFunction::GammaP(3, x); });
+    VectorXd y3 = x.unaryExpr([](double x){ return GammaFunction::GammaP(1, x); });
+    VectorXd y4 = x.unaryExpr([](double x){ return GammaFunction::GammaP(0.5, x); });
+    VectorXd y5 = x.unaryExpr([](double x){ return GammaFunction::GammaP(100, x); });
+    VectorXd y6 = x.unaryExpr([](double x){ return GammaFunction::GammaP(400, x); });
+    
+    VectorXd y = VectorXd::LinSpaced(1000, 0.0, 0.999);
+    VectorXd x1 = y.unaryExpr([](double y){ return GammaFunction::InvGammaP(200, y); });
+    VectorXd x2 = y.unaryExpr([](double y){ return GammaFunction::InvGammaP(0.75, y); });
+    
+
+#ifdef QSIM_PYTHON3
+    PythonMatplotlib matplotlib;
+    auto fig = matplotlib.CreateFigure();
+    auto ax = fig.AddSubplot();
+    ax.Plot(x.eval().data(), y1.data(), x.size(), "a=10");
+    ax.Plot(x.eval().data(), y2.data(), x.size(), "a=3");
+    ax.Plot(x.eval().data(), y3.data(), x.size(), "a=1");
+    ax.Plot(x.eval().data(), y4.data(), x.size(), "a=0.5");
+    ax.Plot(x.eval().data(), y5.data(), x.size(), "a=100");
+    ax.Plot(x.eval().data(), y6.data(), x.size(), "a=400");
+    ax.Plot(x1.eval().data(), y.data(), y.size(), "a=200");
+    ax.Plot(x2.eval().data(), y.data(), y.size(), "a=0.75");
+    fig.Legend();
+    matplotlib.RunGUILoop();
+#endif
+
+    return 0;*/
+
+    Vector4d beta = Vector4d{0.5*1e8, 3, -2, 1};
 
     constexpr int n = 100;
+    double yerrMag = 5;
     VectorXd x = VectorXd::LinSpaced(n, -5, 5);
-    VectorXd y(n);
-    for (int i = 0; i < n; i++)
-        y[i] = test1(x[i], beta) + 5*randf();
+    VectorXd y = x.unaryExpr([&](double x){ return test1(x, beta) + yerrMag*randf(); });
+    VectorXd yerrs = VectorXd::Ones(y.size())*yerrMag/1.5;
     Vector4d beta0 = Vector4d{0, 0, 0, 0};
 
-    LevenbergMarquard fit;
-    Vector4d betafit = fit.CurveFitV(test1, x, y, beta0, (Vector4d::Ones()*1e-3).eval());
+    LevenbergMarquardt fit;
+    auto [params, cov, good] = fit.CurveFitV(test1, x, y, yerrs, beta0);
+    Vector4d errs = cov.diagonal().cwiseSqrt();
 
     VectorXd xfit = VectorXd::LinSpaced(500, -5, 5);
-    VectorXd yfit(xfit.size());
-    for (int i = 0; i < xfit.size(); i++)
-        yfit[i] = test1(xfit[i], betafit);
-
-    std::cout << betafit << std::endl;
+    VectorXd yfit = xfit.unaryExpr([p=params](double x){ return test1(x, p); });
+    VectorXd yfit2 = xfit.unaryExpr([p=params+errs](double x){ return test1(x, p); });
+    VectorXd yfit3 = xfit.unaryExpr([p=params-errs](double x){ return test1(x, p); });
+    
+    std::cout << params << std::endl << std::endl;
+    std::cout << errs.cwiseQuotient(params) * 100 << std::endl << std::endl;
+    std::cout << good << std::endl;
 
 #ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;
@@ -60,6 +102,9 @@ int main(int argc, const char* argv[])
     auto ax = fig.AddSubplot();
     ax.Plot(x.eval().data(), y.data(), x.size(), "Data", "x");
     ax.Plot(xfit.data(), yfit.data(), xfit.size(), "Fit");
+    ax.Plot(xfit.data(), yfit2.data(), xfit.size(), "Fit upper");
+    ax.Plot(xfit.data(), yfit3.data(), xfit.size(), "Fit lower");
+    fig.Legend();
     matplotlib.RunGUILoop();
 #endif
 

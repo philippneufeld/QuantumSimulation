@@ -16,17 +16,6 @@ namespace QSim
     constexpr double GetRabiFrequencyFromIntensity(double dipole, double intensity);
     constexpr double GetIntensityFromRabiFrequency(double dipole, double rabi);
 
-    namespace Internal
-    {
-        constexpr double ConstexprSqrt(double a)
-        {
-            double x = a;
-            for (std::size_t i = 0; i < 10; i++)
-                x -= 0.5 * (x - a/x);
-            return x;
-        }
-    }
-
     constexpr double GetIntensityFromPower(double power, double waistRadius)
     {
         // I(r, 0) = I0 * exp(-2*r^2 / w0^2)
@@ -37,7 +26,7 @@ namespace QSim
     constexpr double GetElectricFieldFromIntensity(double intensity)
     {
         constexpr double conv = 2 / (SpeedOfLight_v * VacuumPermittivity_v); 
-        return Internal::ConstexprSqrt(conv * intensity);
+        return ConstexprSqrt(conv * intensity);
     }
 
     constexpr double GetIntensityFromElectricField(double electricField)

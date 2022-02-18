@@ -22,6 +22,15 @@ namespace QSim
     constexpr static double ElementaryCharge_v = 1.602176462e-19;
     constexpr static double BohrRadius_v = 0.5291772083e-10;
     constexpr static double Debye_v = 0.39343 * ElementaryCharge_v * BohrRadius_v;
+
+    // utility functions for constants
+    constexpr double ConstexprSqrt(double a)
+    {
+        double x = a;
+        for (std::size_t i = 0; i < 10; i++)
+            x -= 0.5 * (x - a/x);
+        return x;
+    }
 }
 
 #endif

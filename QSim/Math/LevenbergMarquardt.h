@@ -1,18 +1,20 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Math_LevenbergMarquard_H
-#define QSim_Math_LevenbergMarquard_H
+#ifndef QSim_Math_LevenbergMarquardt_H
+#define QSim_Math_LevenbergMarquardt_H
 
 #include <type_traits>
 #include <functional>
+#include <cmath>
 #include "MatrixTraits.h"
 #include "Jacobian.h"
+#include "Gamma.h"
 
 namespace QSim
 {
     
     template<typename DiffPolicy=Diff1O2Policy>
-    class LevenbergMarquard
+    class LevenbergMarquardt
     {
     private:
 
@@ -51,17 +53,18 @@ namespace QSim
 
     public:
         template<typename Func, typename XTy, typename YTy, int N, typename=EnableCFV_t<Func, XTy, YTy, N>>
-        Eigen::Matrix<double, N, 1> CurveFitV(
+        std::pair<Eigen::Matrix<double, N, 1>, Eigen::Matrix<double, N, N>> CurveFitV(
             Func&& func, XTy&& x, YTy&& y,
-            const Eigen::Matrix<double, N, 1>& beta,
-            const Eigen::Matrix<double, N, 1>& step)
-            // const Eigen::Matrix<double, N, 1>& order)
+            const Eigen::Matrix<double, N, 1>& beta)
         {
+            // no errors for the y values are known, use yerr=1 for the time being
+
             // compile time operations
             using FTy = Eigen::VectorXd;
             using VecTy = TMatrixEvalType_t<XTy>; // TODO: Improve
 
             // run-time checks
+            assert(x.size() > N);
             assert(x.size() == y.size());
 
             const TMatrixEvalType_t<XTy>& xeval = x;
@@ -73,19 +76,63 @@ namespace QSim
                 return fs;
             };
 
-            return CurveFitVHelper(funcV, std::forward<YTy>(y), beta, step);
+            auto [params, cov, chi2] = CurveFitVHelper(funcV, std::forward<YTy>(y), beta/*, step*/);
+
+            // estimate the errors
+            Eigen::Matrix<double, N, N> adjCov = cov * chi2 / (2*(x.size() - N));
+
+            // here, no independent "goodness-of-fit" metric is available
+            return std::pair(params, adjCov);
+        }
+
+        template<typename Func, typename XTy, typename YTy, typename YErrTy, int N, typename=EnableCFV_t<Func, XTy, YTy, N>>
+        std::tuple<Eigen::Matrix<double, N, 1>, Eigen::Matrix<double, N, N>, double> CurveFitV(
+            Func&& func, XTy&& x, YTy&& y, YErrTy&& yerr,
+            const Eigen::Matrix<double, N, 1>& beta)
+        {
+            // Weights are added to the function and the y values, such that 
+            // chi^2 = sum_i ((y_i - f(x_i | beta)) / yerr_i)^2 = sum_i (y'_i - f'(x_i | beta))
+
+            // compile time operations
+            using FTy = Eigen::VectorXd;
+            using XEvalTy = TMatrixEvalType_t<XTy>;
+            using YEvalTy = TMatrixEvalType_t<YTy>;
+            using YErrEvalTy = TMatrixEvalType_t<YErrTy>;
+
+            // run-time checks
+            assert(x.size() > N);
+            assert(x.size() == y.size());
+
+            const XEvalTy& xEval = x;
+            const YErrEvalTy& weigths = YErrEvalTy::Ones(yerr.size()).cwiseQuotient(yerr);
+
+            // calculate weighted function values
+            auto funcV = [&](const Eigen::Matrix<double, N, 1>& beta) -> FTy
+            {
+                FTy fs(xEval.size());
+                for (int i = 0; i < xEval.size(); i++)
+                    fs[i] = std::invoke(func, xEval[i], beta);
+                return fs.cwiseProduct(weigths).eval();
+            };
+
+            auto [params, cov, chi2] =  CurveFitVHelper(funcV, y.cwiseProduct(weigths), beta/*, step*/);
+
+            // calculate the probability that the fit is good, given the data 
+            // approximate via the chi-squared distribution (exact for linear models)
+            auto nu = x.size() - N;
+            double prob = 1 - GammaFunction::GammaP(0.5*nu, 0.5*chi2);
+
+            return std::make_tuple(params, cov, prob);
         }
 
     private:
         template<typename Func, typename YTy, int N, typename=EnableCFVH_t<Func, YTy, N>>
-        Eigen::Matrix<double, N, 1> CurveFitVHelper(
-            Func&& func, YTy&& y,
-            Eigen::Matrix<double, N, 1> beta,
-            const Eigen::Matrix<double, N, 1>& step)
-            // const Eigen::Matrix<double, N, 1>& order)
+        std::tuple<Eigen::Matrix<double, N, 1>, Eigen::Matrix<double, N, N>, double> CurveFitVHelper(
+            Func&& func, YTy&& y, Eigen::Matrix<double, N, 1> beta)
         {
             // define types
             using FuncRet = std::invoke_result_t<Func, Eigen::Matrix<double, N, 1>>;
+            using YEvalTy = TMatrixEvalType_t<YTy>;
             using FTy = TMatrixEvalType_t<FuncRet>; // Function values type
             using PTy = Eigen::Matrix<double, N, 1>; // Parameter type
             using JCalc = TJacobian<DiffPolicy>;
@@ -98,34 +145,48 @@ namespace QSim
             double eps2sq = eps2*eps2;
 
             const auto id = Eigen::Matrix<double, N, N>::Identity();
-            const int kmax = 500;
+            const int kmax = 100;
+            const int ndone = 5;
+            double rtol = 1e-3;
             double lambda = 1e-3;
             
             // model deviation from the data
-            FTy g = y - std::invoke(func, beta);
+            const YEvalTy& yEval = y;
+            FTy chi = yEval - std::invoke(func, beta);
+            double chi2 = chi.squaredNorm();
 
-            // variables associated with the jacobian
+            // define jacobian and the curvature matrix (alpha)
             bool updateJacobian = true;
-            JTy jac(y.size(), N); ATy a; ATy diag;
+            JTy jac(y.size(), N); ATy alpha; ATy diag;
 
-            for(int k = 0; k < kmax; k++)
+            // used to estimate the optimal stepsize (d(beta) = beta * sqrt(ulp))
+            const double sqrtULP = std::sqrt(std::numeric_limits<double>::epsilon()); 
+
+            for(int k = 0, done = 0; k < kmax && done <= ndone; k++)
             {
-                // recalculate the jacobian since the value for beta has changed
+                // recalculate the jacobian and the curvature matrix, 
+                // since the value for beta has changed
                 if (updateJacobian)
                 {
+                    PTy step = sqrtULP * ((beta.array() != 0).select(beta, 1).matrix());
+
                     JCalc::JacobianInPlace(jac, func, beta, step);
-                    a = jac.transpose()*jac;
-                    diag = a.diagonal().asDiagonal(); 
+                    alpha = jac.transpose()*jac;
+                    diag = alpha.diagonal().asDiagonal(); 
                     updateJacobian = false;
                 }
 
                 // calculate step
-                PTy delta = (a+lambda*diag).colPivHouseholderQr().solve(jac.transpose()*g);
+                PTy delta = (alpha+lambda*diag).colPivHouseholderQr().solve(jac.transpose()*chi);
                 
-                
-                
-                FTy gnew = y - std::invoke(func, beta + delta);
-                if (gnew.squaredNorm() > g.squaredNorm())
+                FTy chiUp = yEval - std::invoke(func, beta + delta);
+                double chi2Up = chiUp.squaredNorm();
+
+                // check if step was small
+                if (std::abs(chi2 - chi2Up) < rtol*std::max(chi2, chi2Up))
+                    done++;
+
+                if (chi2Up > chi2)
                 {
                     // new model worse than old one -> increase lambda
                     // this increases the gradiant descent contribution
@@ -138,15 +199,19 @@ namespace QSim
                     // this increases the Gauss-Newton contribution
                     lambda /= 10;
                     beta += delta;
-                    g = std::move(gnew);
+                    chi = std::move(chiUp);
+                    chi2 = chi2Up;
                     updateJacobian = true;
                 }
 
-                if (delta.norm() <= eps2*beta.norm()+eps2)
-                    break;
+                // if (delta.norm() <= eps2*beta.norm()+eps2)
+                //     break;
             }
 
-            return beta;
+            // estimate the covariance matrix
+            ATy cov = alpha.inverse(); 
+
+            return std::make_tuple(beta, cov, chi2);
         }
     };
     
