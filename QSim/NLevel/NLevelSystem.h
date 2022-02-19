@@ -7,6 +7,7 @@
 #include <array>
 #include <vector>
 #include <map>
+#include <functional>
 #include <type_traits>
 #include <Eigen/Dense>
 
@@ -22,20 +23,15 @@ namespace QSim
 
     constexpr int DynamicDim_v = Eigen::Dynamic;
 
-    template<int N, typename MyT>
+    template<int N, typename MyT, bool AM>
     class TNLevelSystemCRTP : public TCRTP<MyT>
     {
-        struct CouplingLaser
-        {
-            std::pair<unsigned int, unsigned int> lvls;
-            double E0;
-            bool counterProp;
-        };
-
     protected:
         ~TNLevelSystemCRTP() = default;
 
     public:
+
+        using Laser_t = TNLevelLaser<AM>;
 
         template<int compileTimeSize>
         using EnableDefaultCtor_t = std::enable_if_t<(compileTimeSize != DynamicDim_v)>;
@@ -69,19 +65,16 @@ namespace QSim
         bool SetDipoleElement(unsigned int from, unsigned int to, std::complex<double> dip);
 
         // coupling laser
+        unsigned int GetLaserCount() const { return m_lasers.size(); }
+        Laser_t& GetLaser(unsigned int idx) { return m_lasers.at(idx); }
+        const Laser_t& GetLaser(unsigned int idx) const { return m_lasers.at(idx); }
+        bool AddLaser(Laser_t laser);
         bool AddLaser(unsigned int lvl1, unsigned int lvl2, double intensity, bool counter);
 
-        unsigned int GetLaserCount() const { return m_lasers.size(); }
+        // auxilliary functions
         const Eigen::VectorXd& GetLaserFrequencies() const { return m_laserFreqs; }
         Eigen::VectorXd GetDopplerLaserFreqs(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
-
-        std::pair<unsigned int, unsigned int> GetLaserLevels(unsigned int idx) const;
-        double GetLaserElectricAmplitude(unsigned int idx) const;
-        double GetLaserIntensity(unsigned int idx) const;
-        bool GetLaserCounterPropagation(unsigned int idx) const;
-
-        bool SetLaserIntensity(unsigned int idx, double intensity);
 
         // hamiltonian
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonian(
@@ -133,29 +126,29 @@ namespace QSim
         std::map<std::pair<unsigned int, unsigned int>, double> m_decays;
 
         // coupling lasers
-        std::vector<CouplingLaser> m_lasers;
+        std::vector<TNLevelLaser<AM>> m_lasers;
 
         // laser related performance enhancing auxilliary variables 
         Eigen::VectorXd m_laserFreqs;
     };
 
 
-    template<int N, typename MyT>
-    TNLevelSystemCRTP<N, MyT>::TNLevelSystemCRTP(unsigned int dims) 
+    template<int N, typename MyT, bool AM>
+    TNLevelSystemCRTP<N, MyT, AM>::TNLevelSystemCRTP(unsigned int dims) 
         : m_levels(dims), m_dipoleOp(dims, dims) 
     {
         m_levels.setZero();
         m_dipoleOp.setZero();
     }
 
-    template<int N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetLevel(unsigned int idx) const
+    template<int N, typename MyT, bool AM>
+    double TNLevelSystemCRTP<N, MyT, AM>::GetLevel(unsigned int idx) const
     {
         return idx < GetDims() ? m_levels(idx) : 0.0;
     }
 
-    template<int N, typename MyT>
-    bool TNLevelSystemCRTP<N, MyT>::SetLevel(unsigned int idx, double level)
+    template<int N, typename MyT, bool AM>
+    bool TNLevelSystemCRTP<N, MyT, AM>::SetLevel(unsigned int idx, double level)
     {
         if (idx >= GetDims())
             return false;
@@ -164,16 +157,16 @@ namespace QSim
         return true;
     }
 
-    template<int N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetDecay(
+    template<int N, typename MyT, bool AM>
+    double TNLevelSystemCRTP<N, MyT, AM>::GetDecay(
         unsigned int from, unsigned int to) const
     {
         auto it = m_decays.find(std::make_pair(from, to));
         return it != m_decays.end() ? it->second : 0.0;
     }
 
-    template<int N, typename MyT>
-    bool TNLevelSystemCRTP<N, MyT>::SetDecay(
+    template<int N, typename MyT, bool AM>
+    bool TNLevelSystemCRTP<N, MyT, AM>::SetDecay(
         unsigned int from, unsigned int to, double rate)
     {
         if (from >= GetDims() || to >= GetDims())
@@ -182,16 +175,16 @@ namespace QSim
         return true;
     }
 
-    template<int N, typename MyT>
-    std::complex<double> TNLevelSystemCRTP<N, MyT>::GetDipoleElement(
+    template<int N, typename MyT, bool AM>
+    std::complex<double> TNLevelSystemCRTP<N, MyT, AM>::GetDipoleElement(
         unsigned int from, unsigned int to) const
     {
         return (from < GetDims() && to < GetDims()) ? 
             m_dipoleOp(from, to) : 0.0;
     }
 
-    template<int N, typename MyT>
-    bool TNLevelSystemCRTP<N, MyT>::SetDipoleElement(
+    template<int N, typename MyT, bool AM>
+    bool TNLevelSystemCRTP<N, MyT, AM>::SetDipoleElement(
         unsigned int from, unsigned int to, std::complex<double> dip)
     {
         if (from >= GetDims() || to >= GetDims())
@@ -204,23 +197,19 @@ namespace QSim
         return true;
     }
 
-    template<int N, typename MyT>
-    bool TNLevelSystemCRTP<N, MyT>::AddLaser(unsigned int lvl1, 
-        unsigned int lvl2, double intensity, bool counter)
+    template<int N, typename MyT, bool AM>
+    bool TNLevelSystemCRTP<N, MyT, AM>::AddLaser(TNLevelLaser<AM> laser)
     {
-        if (lvl1 >= GetDims()  || lvl2 >= GetDims() || lvl1 == lvl2)
+        auto [lvl1, lvl2] = laser.GetLevels();
+        if (lvl1 >= GetDims() || lvl2 >= GetDims() || lvl1 == lvl2)
             return false; // invalid levels
-
-        CouplingLaser laser;
-        laser.lvls = std::make_pair(lvl1, lvl2);
-        laser.E0 = GetElectricFieldFromIntensity(intensity);
-        laser.counterProp = counter;
 
         m_lasers.push_back(laser);
         UpdateLaserFrequencies();
-
+        
         // Add laser and remove it again, if OnLaserAdded returns false
-        if (!(~(*this)).OnLaserAdded(lvl1, lvl2, counter))
+        const auto& cLaserRef = laser;
+        if (!(~(*this)).OnLaserAdded(cLaserRef))
         {
             m_lasers.pop_back();
             UpdateLaserFrequencies();
@@ -231,67 +220,29 @@ namespace QSim
         return true;
     }
 
-    template<int N, typename MyT>
-    Eigen::VectorXd TNLevelSystemCRTP<N, MyT>::GetDopplerLaserFreqs(
+    template<int N, typename MyT, bool AM>
+    bool TNLevelSystemCRTP<N, MyT, AM>::AddLaser(unsigned int lvl1, 
+        unsigned int lvl2, double intensity, bool counter)
+    {
+        return AddLaser(TNLevelLaser<AM>({lvl1, lvl2}, intensity, counter ? -1.0 : 1.0));
+    }
+
+    template<int N, typename MyT, bool AM>
+    Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetDopplerLaserFreqs(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
     {
-        assert(detunings.rows() == this->GetLaserCount()); 
+        assert(detunings.rows() == GetLaserCount()); 
         Eigen::VectorXd laserFreqs = m_laserFreqs + detunings;
         
         double doppler = velocity / SpeedOfLight_v;
         for (unsigned int i = 0; i < m_lasers.size(); i++)
-            laserFreqs[i] *= m_lasers[i].counterProp ? 1 + doppler : 1 - doppler;
+            laserFreqs[i] *= 1.0 - m_lasers[i].GetPropDirection() * doppler;
 
         return laserFreqs;
     }
 
-    template<int N, typename MyT>
-    std::pair<unsigned int, unsigned int> 
-        TNLevelSystemCRTP<N, MyT>::GetLaserLevels(unsigned int idx) const
-    {
-        if (idx >= m_lasers.size())
-            return std::make_pair<unsigned int, unsigned int>(-1, -1);
-        return m_lasers[idx].lvls;
-    }
-
-    template<int N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetLaserElectricAmplitude(unsigned int idx) const
-    {
-        if (idx >= m_lasers.size())
-            return 0.0;
-        return m_lasers[idx].E0;
-    } 
-
-    template<int N, typename MyT>
-    double TNLevelSystemCRTP<N, MyT>::GetLaserIntensity(unsigned int idx) const
-    {
-        if (idx >= m_lasers.size())
-            return 0.0;
-        double electricField = m_lasers[idx].E0;
-        return GetIntensityFromElectricField(electricField);
-    }
-
-    template<int N, typename MyT>
-    bool TNLevelSystemCRTP<N, MyT>::GetLaserCounterPropagation(unsigned int idx) const
-    {
-        if (idx >= m_lasers.size())
-            return false;
-        return m_lasers[idx].counterProp;
-    }
-
-    template<int N, typename MyT>
-    bool TNLevelSystemCRTP<N, MyT>::SetLaserIntensity(
-        unsigned int idx, double intensity)
-    {
-        if (idx >= m_lasers.size())
-            return false;
-
-        m_lasers[idx].E0 = GetElectricFieldFromIntensity(intensity);
-        return true;
-    }
-
-    template<int N, typename MyT>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetHamiltonian(
+    template<int N, typename MyT, bool AM>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetHamiltonian(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
         double velocity, double t) const
     {
@@ -299,8 +250,8 @@ namespace QSim
         return (~(*this)).GetHamiltonianFast(auxData, t);
     }
 
-    template<int N, typename MyT>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrix(
+    template<int N, typename MyT, bool AM>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityMatrix(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double dt)
@@ -309,11 +260,11 @@ namespace QSim
         unsigned int steps = static_cast<unsigned int>(std::ceil((t-t0) / dt));
         dt = (t-t0) / steps;
         const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
-        return this->EvolveDensityMatrix(auxData, rho0, t0, dt, steps);
+        return EvolveDensityMatrix(auxData, rho0, t0, dt, steps);
     }
 
-    template<int N, typename MyT>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetDensityMatrixAv(
+    template<int N, typename MyT, bool AM>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityMatrixAv(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double tav, double dt)
@@ -329,7 +280,7 @@ namespace QSim
         // evolve up to the starting point of the averaging
         unsigned int steps1 = static_cast<unsigned int>(std::ceil((t1-t0) / dt));
         double dt1 = (t1 - t0) / steps1;
-        auto rho = this->EvolveDensityMatrix(auxData, rho0, t0, dt1, steps1);
+        auto rho = EvolveDensityMatrix(auxData, rho0, t0, dt1, steps1);
 
         // continue evolving while averaging the newly calculated density matrices
         unsigned int steps2 = static_cast<unsigned int>(std::ceil((t2-t1) / dt));
@@ -338,7 +289,7 @@ namespace QSim
         auto rhoAv = rho;
         for (unsigned int i = 0; i < steps2; i++)
         {
-            rho = this->EvolveDensityMatrix(auxData, rho, t1 + i*dt2, dt2, 1);
+            rho = EvolveDensityMatrix(auxData, rho, t1 + i*dt2, dt2, 1);
             rhoAv += rho;
         }
         rhoAv *= 1.0 / (steps2 + 1);
@@ -346,8 +297,8 @@ namespace QSim
         return rhoAv;
     }
     
-    template<int N, typename MyT>
-    std::pair<Eigen::VectorXd, std::vector<Eigen::Matrix<std::complex<double>, N, N>>> TNLevelSystemCRTP<N, MyT>::GetTrajectory(
+    template<int N, typename MyT, bool AM>
+    std::pair<Eigen::VectorXd, std::vector<Eigen::Matrix<std::complex<double>, N, N>>> TNLevelSystemCRTP<N, MyT, AM>::GetTrajectory(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double dt)
@@ -362,21 +313,21 @@ namespace QSim
         const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
         for (unsigned int i = 0; i < steps; i++)
         {
-            rho = this->EvolveDensityMatrix(auxData, rho, t0 + i*dt, dt, 1);
+            rho = EvolveDensityMatrix(auxData, rho, t0 + i*dt, dt, 1);
             trajectory.push_back(rho);
         }
 
         return {Eigen::VectorXd::LinSpaced(steps + 1, t0, t0 + steps*dt), trajectory};
     }
 
-    template<int N, typename MyT>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::CreateGroundState() const
+    template<int N, typename MyT, bool AM>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::CreateGroundState() const
     { 
         return CreateThermalState(0.0);
     }
 
-    template<int N, typename MyT>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::CreateThermalState(double temperature) const
+    template<int N, typename MyT, bool AM>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::CreateThermalState(double temperature) const
     { 
         unsigned int dims = GetDims();
         temperature = temperature > 0 ? temperature : 0;
@@ -396,20 +347,20 @@ namespace QSim
         return thermalWeights.matrix().asDiagonal();
     }
 
-    template<int N, typename MyT>
-    void TNLevelSystemCRTP<N, MyT>::UpdateLaserFrequencies()
+    template<int N, typename MyT, bool AM>
+    void TNLevelSystemCRTP<N, MyT, AM>::UpdateLaserFrequencies()
     {
         m_laserFreqs.resize(GetLaserCount());
         for (unsigned int i = 0; i < m_laserFreqs.size(); i++)
         {
-            auto [l1, l2] = m_lasers[i].lvls;
+            auto [l1, l2] = m_lasers[i].GetLevels();
             m_laserFreqs[i] = std::abs(m_levels[l1] - m_levels[l2]);
         }
     }
 
-    template<int N, typename MyT>
+    template<int N, typename MyT, bool AM>
     template<typename AuxType>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::GetDensityOpDerivative(
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityOpDerivative(
         const AuxType& auxData, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho, 
         double t) const
@@ -419,7 +370,7 @@ namespace QSim
         auto rhoPrime = (-1.0i * (h * rho - rho * h)).eval();
 
         // add lindblad dissipation term
-        for (const auto& decay: this->m_decays)
+        for (const auto& decay: m_decays)
         {
             auto [lvls, rate] = decay;
             auto [i, f] = lvls;
@@ -435,9 +386,9 @@ namespace QSim
         return rhoPrime;
     }
 
-    template<int N, typename MyT>
+    template<int N, typename MyT, bool AM>
     template<typename AuxType>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT>::EvolveDensityMatrix(
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::EvolveDensityMatrix(
         const AuxType& auxData, const Eigen::Matrix<std::complex<double>, N, N>& rho0, 
         double t0, double dt, unsigned int steps)
     {
@@ -449,7 +400,7 @@ namespace QSim
         {
             auto func = [&](double x, const YType& y) 
             { 
-                return this->GetDensityOpDerivative(auxData, y, x);
+                return GetDensityOpDerivative(auxData, y, x);
             };
             rho += integrator.Step(func, rho, t0 + i * dt, dt);       
         }

@@ -28,17 +28,23 @@ using namespace Eigen;
 int main(int argc, const char* argv[])
 {
     constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
-    constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 30.5e6);
+    double intProbe = NLevelLaser::RabiToIntensity(dip, 30.5e6);
 
-    TNLevelSystemSC<DynamicDim_v> system2(2);
+    TNLevelSystemSC<DynamicDim_v, true> system2(2);
     system2.SetLevel(0, 0.0);
     system2.SetLevel(1, SpeedOfLight_v / 780.241e-9);
     system2.SetDecay(1, 0, 6.065e6);
     system2.SetDipoleElement(0, 1, dip);
-    system2.AddLaser(0, 1, intProbe, false);
+
+    double modPeriod = 1e-6;
+    ModulatedNLevelLaser laser({0, 1});
+    laser.SetIntensity(intProbe);
+    laser.SetModulationFunc([=](double t){ t = std::fmod(t, modPeriod); return t <= modPeriod / 2 ? 1.0 : 0.0; });
+
+    system2.AddLaser(laser);
 
     auto rho0 = system2.CreateGroundState();
-    auto[ts, rhos] = system2.GetTrajectory(VectorXd::Zero(1), rho0, 0.0, 0.0, 4e-7, 1e-9);
+    auto[ts, rhos] = system2.GetTrajectory(VectorXd::Zero(1), rho0, 0.0, 0.0, 4e-6, 1e-9);
 
     std::vector<double> pops(rhos.size());
     for (std::size_t i = 0; i<rhos.size(); i++)

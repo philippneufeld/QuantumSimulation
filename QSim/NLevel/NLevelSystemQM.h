@@ -18,11 +18,13 @@ namespace QSim
     //
 
     template<int N>
-    class TNLevelSystemQM : public TNLevelSystemCRTP<N, TNLevelSystemQM<N>>
+    class TNLevelSystemQM : public TNLevelSystemCRTP<N, TNLevelSystemQM<N>, false>
     {
-        friend class TNLevelSystemCRTP<N, TNLevelSystemQM<N>>;
-        using MyParent = TNLevelSystemCRTP<N, TNLevelSystemQM<N>>;
+        friend class TNLevelSystemCRTP<N, TNLevelSystemQM<N>, false>;
+        using MyParent = TNLevelSystemCRTP<N, TNLevelSystemQM<N>, false>;
     public:
+        // parent type
+        using Laser_t = typename MyParent::Laser_t;
 
         // constructors
         //template<int dummy=N, typename=EnableDefaultCtor_t<dummy>>
@@ -41,14 +43,13 @@ namespace QSim
             const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
         
     private:
-
         // Helper methods to prepare the hamiltonian calculation
         void PrepareHamiltonian();
         bool PrepareCalculation();
         bool PreparePhotonBasis(std::vector<unsigned int>& trans_path, 
             std::set<unsigned int>& visitedLevels, unsigned int transFrom);
 
-        bool OnLaserAdded(unsigned int lvl1, unsigned int lvl2, bool counter) { return PrepareCalculation(); }
+        bool OnLaserAdded(const Laser_t&) { return PrepareCalculation(); }
         void OnLaserRemoved() { PrepareCalculation(); }
         void OnDipoleOperatorChanged() { PrepareHamiltonian(); }
         
@@ -143,11 +144,12 @@ namespace QSim
         // Interaction hamiltonian
         for (unsigned int i = 0; i < this->GetLaserCount(); i++)
         {
-            auto lvls = this->GetLaserLevels(i);
-            auto rabi = 0.5 * this->GetLaserElectricAmplitude(i) * 
-                this->GetDipoleElement(lvls.first, lvls.second) / ReducedPlanckConstant_v;
-            m_hamiltonianNoLight(lvls.first, lvls.second) += rabi;
-            m_hamiltonianNoLight(lvls.second, lvls.first) += std::conj(rabi);
+            constexpr double hbarHalf = 0.5 / ReducedPlanckConstant_v;
+            auto& laser = this->GetLaser(i);
+            auto [l1, l2] = laser.GetLevels();
+            auto rabiHalf = hbarHalf * laser.GetElAmplitude() * this->GetDipoleElement(l1, l2);
+            m_hamiltonianNoLight(l1, l2) += rabiHalf;
+            m_hamiltonianNoLight(l2, l1) += std::conj(rabiHalf);
         }
     }
 
@@ -204,12 +206,12 @@ namespace QSim
 
             // skip if currLevel is not involved in the current transition
             // otherwise check to which level the transition leads
-            auto lvls = this->GetLaserLevels(tIdx);
+            auto [l1, l2] = this->GetLaser(tIdx).GetLevels();
             unsigned int transTo = 0;
-            if (lvls.first == transFrom)
-                transTo = lvls.second;
-            else if (lvls.second == transFrom)
-                transTo = lvls.first;
+            if (l1 == transFrom)
+                transTo = l2;
+            else if (l2 == transFrom)
+                transTo = l1;
             else
                 continue;
             

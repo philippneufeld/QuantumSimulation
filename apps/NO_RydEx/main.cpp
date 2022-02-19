@@ -43,9 +43,9 @@ public:
         constexpr double decayTransit = 1e4;
 
         // laser intensities
-        constexpr double uvInt = GetIntensityFromPower(0.02, 1e-3); // 20mW
-        constexpr double greenInt = GetIntensityFromPower(1.0, 1e-3); // 1W
-        constexpr double redInt = GetIntensityFromPower(1.0, 1e-3); // 1W
+        double uvInt = NLevelLaser::PowerToIntensity(0.02, 1e-3); // 20mW
+        double greenInt = NLevelLaser::PowerToIntensity(1.0, 1e-3); // 1W
+        double redInt = NLevelLaser::PowerToIntensity(1.0, 1e-3); // 1W
 
         m_system.SetLevel(0, lvlX);
         m_system.SetLevel(1, lvlA);

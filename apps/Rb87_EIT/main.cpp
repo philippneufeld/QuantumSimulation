@@ -22,8 +22,8 @@ public:
     {
         // calculate parameters
         constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
-        constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 3.5e6);
-        constexpr double intPump = GetIntensityFromRabiFrequency(dip, 10.0e6);
+        double intProbe = NLevelLaser::RabiToIntensity(dip, 3.5e6);
+        double intPump = NLevelLaser::RabiToIntensity(dip, 10.0e6);
 
         // Create system
         m_system.SetLevel(0, -4.271e9);

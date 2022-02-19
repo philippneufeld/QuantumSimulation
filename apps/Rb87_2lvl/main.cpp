@@ -22,7 +22,7 @@ public:
     {
         // calculate parameters
         constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
-        constexpr double intProbe = GetIntensityFromRabiFrequency(dip, 3.5e6);
+        double intProbe = NLevelLaser::RabiToIntensity(dip, 3.5e6);
         constexpr double freq = SpeedOfLight_v / 780.241e-9;
 
         // Create system

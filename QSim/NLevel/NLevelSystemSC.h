@@ -15,12 +15,15 @@ namespace QSim
     // Solver for a semi-classical model of a N-level system that is driven by light fields
     //
 
-    template<int N>
-    class TNLevelSystemSC : public TNLevelSystemCRTP<N, TNLevelSystemSC<N>>
+    template<int N, bool AM=false>
+    class TNLevelSystemSC : public TNLevelSystemCRTP<N, TNLevelSystemSC<N, AM>, AM>
     {
-        friend class TNLevelSystemCRTP<N, TNLevelSystemSC<N>>;
-        using MyParent = TNLevelSystemCRTP<N, TNLevelSystemSC<N>>;
+        friend class TNLevelSystemCRTP<N, TNLevelSystemSC<N, AM>, AM>;
+        using MyParent = TNLevelSystemCRTP<N, TNLevelSystemSC<N, AM>, AM>;
     public:
+        // parent type
+        using Laser_t = typename MyParent::Laser_t;
+
         // constructors
         TNLevelSystemSC() : MyParent() { }
         TNLevelSystemSC(unsigned int dims) : MyParent(dims) { }
@@ -31,7 +34,7 @@ namespace QSim
 
     private:
         // Allow every possible laser configuration
-        bool OnLaserAdded(std::size_t lvl1, std::size_t lvl2, bool counter) { return true; }
+        bool OnLaserAdded(const Laser_t&) { return true; }
         void OnLaserRemoved() { }
         void OnDipoleOperatorChanged() { }
 
@@ -40,18 +43,20 @@ namespace QSim
 
         // auxilliary data that can be prepared once during a time series and be reused later
         using HAuxData = std::tuple<
-            // hamiltonian without time-dependent terms:
-            Eigen::Matrix<std::complex<double>, N, N>, 
-            // Time dependent laser fields (lvl1, lvl2, rabi, (angular) freq):
-            std::vector<std::tuple<std::size_t, std::size_t, std::complex<double>, double>>
+            // hamiltonian without time-dependent terms
+            Eigen::Matrix<std::complex<double>, N, N>,
+            // doppler shifted laser frequencies
+            Eigen::Matrix<double, N, 1>,
+            // rotating frame frequencies
+            Eigen::Matrix<double, N, 1>
             >;
 
         HAuxData GetHamiltonianAux(const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(const HAuxData& auxData, double t) const;   
     };
 
-    template<int N>
-    Eigen::Matrix<double, N, 1> TNLevelSystemSC<N>::CalculateRotatingFrame(
+    template<int N, bool AM>
+    Eigen::Matrix<double, N, 1> TNLevelSystemSC<N, AM>::CalculateRotatingFrame(
         const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
     {
         auto levels = this->GetLevels();
@@ -70,8 +75,8 @@ namespace QSim
         return frame;
     }
 
-    template<int N>
-    typename TNLevelSystemSC<N>::HAuxData TNLevelSystemSC<N>::GetHamiltonianAux(
+    template<int N, bool AM>
+    typename TNLevelSystemSC<N, AM>::HAuxData TNLevelSystemSC<N, AM>::GetHamiltonianAux(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
     {
         assert(detunings.size() == this->GetLaserCount());
@@ -88,68 +93,54 @@ namespace QSim
         auto laserFreqs = this->GetDopplerLaserFreqs(detunings, velocity);
         auto frame = this->CalculateRotatingFrame(laserFreqs);
         h0 -= TwoPi_v * frame.asDiagonal();
-        
-        // Calculate electric field and system-light interaction
-        // Time dependent laser fields (lvl1, lvl2, rabi, (angular) freq):
-        std::vector<std::tuple<std::size_t, std::size_t, std::complex<double>, double>> laserFields;
+
+        // return auxilliary data
+        return std::make_tuple(h0, laserFreqs, frame);
+    }
+    
+    template<int N, bool AM>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemSC<N, AM>::GetHamiltonianFast(
+        const HAuxData& auxData, double t) const
+    {
+        // unpack auxilliary data
+        const auto& [h0, laserFreqs, frame] = auxData;
+        Eigen::Matrix<std::complex<double>, N, N> h = h0;
+
+        // Calculate time dependent system-light interaction
         for (std::size_t i = 0; i < laserFreqs.size(); i++)
         {
-            double E0 = this->GetLaserElectricAmplitude(i);    
-            for (std::size_t j = 0; j < dims; j++)
+            double elAmp = this->GetLaser(i).GetModElAmplitude(t);
+            for (std::size_t j = 0; j < this->GetDims(); j++)
             {
-                for (std::size_t k = j + 1; k < dims; k++)
+                for (std::size_t k = j + 1; k < this->GetDims(); k++)
                 {
-                    std::complex<double> rabi = 0.5 * E0 * this->GetDipoleElement(k, j) / ReducedPlanckConstant_v;
-                    if (std::abs(rabi) == 0.0)
+                    constexpr double hbarHalf = 0.5 / ReducedPlanckConstant_v;
+                    std::complex<double> rabiHalf = elAmp * this->GetDipoleElement(k, j) * hbarHalf;
+                    if (std::abs(rabiHalf) == 0.0)
                         continue;
 
                     // calculate frequencies of the electric field components
-                    double elFieldFreq = laserFreqs(i);
-                    double frame_kj = frame(k) - frame(j);
+                    double elFieldFreq = laserFreqs[i];
+                    double frame_kj = frame[k] - frame[j];
                     double freqs[] = { frame_kj + elFieldFreq, frame_kj - elFieldFreq };
 
                     // Rotating wave approximation: Ignore counter rotating wave
                     // if both frequencies are equal (in absolute terms) then keep both
-                    double maxFreq = std::abs(freqs[0]) < std::abs(freqs[1]) ? std::abs(freqs[0]) : std::abs(freqs[1]);
+                    double smallerFreq = std::min(std::abs(freqs[0]), std::abs(freqs[1]));
                     for (double freq: freqs)
                     {
-                        if (std::abs(freq) > maxFreq)
+                        if (std::abs(freq) > smallerFreq)
                             continue;
 
-                        // if the contribution is not time dependent, 
-                        // it can directly be added to the hamiltonian
-                        if (freq != 0.0)
-                        {
-                            laserFields.emplace_back(k, j, rabi, TwoPi_v*freq);
-                        }
-                        else
-                        {
-                            h0(k, j) += rabi;
-                            h0(j, k) += std::conj(rabi);
-                        }
+                        // add coupling to the hamiltonian
+                        std::complex<double> wave = (freq != 0.0 ? std::exp(1.0i * TwoPi_v * freq * t) : 1.0);
+                        std::complex<double> coupling = rabiHalf * wave;
+                        
+                        h(k, j) += coupling;
+                        h(j, k) += std::conj(coupling);
                     }
                 }
             }
-        }
-
-        // return auxilliary data
-        return std::make_tuple(h0, std::move(laserFields));
-    }
-    
-    template<int N>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemSC<N>::GetHamiltonianFast(
-        const HAuxData& auxData, double t) const
-    {
-        // unpack auxilliary data
-        const auto& [h0, fields] = auxData;
-        Eigen::Matrix<std::complex<double>, N, N> h = h0;
-
-        for (const auto& field: fields)
-        {
-            auto [l1, l2, rabi, angFreq] = field;
-            auto coupling = rabi * std::exp(std::complex<double>(1.0i * angFreq * t));
-            h(l1, l2) += coupling;
-            h(l2, l1) += std::conj(coupling);
         }
 
         return h;

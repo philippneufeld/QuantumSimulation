@@ -4,6 +4,7 @@
 #define QSim_Math_Ode_H_
 
 #include "../Platform.h"
+#include "MatrixTraits.h"
 
 namespace QSim
 {
@@ -11,6 +12,18 @@ namespace QSim
     // Implements at least the following functions:
     // 1) Calculate evolution step of func from x to x+dx:
     //      auto Step(func, y, x, dx)
+
+    namespace Internal
+    {
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        struct TODEResultType
+        {
+            using type = TMatrixEvalType_t<decltype(std::declval<DXTy>() *
+                std::declval<std::invoke_result_t<Func, XTy, YTy>>())>;
+        };
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        using TODEResultType_t = typename TODEResultType<Func, YTy, XTy, DXTy>::type;
+    }
 
     // Euler ode integrator
     class ODEEulerPolicy
@@ -20,7 +33,8 @@ namespace QSim
 
     public:
         template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
+            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
         {
             return func(x, y) * dx;
         }
@@ -34,7 +48,8 @@ namespace QSim
 
     public:
         template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
+            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
         {
             auto dx2 = dx/2;
             auto k1 = func(x, y);
@@ -54,7 +69,8 @@ namespace QSim
 
     public:
         template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
+            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
         {
             auto k1 = func(x, y);
             auto k2 = func(x + dx/3, y + (dx/3)*k1);
@@ -76,13 +92,15 @@ namespace QSim
     public:      
         
         template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
+            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
         {
             return StepWithErrorEst(func, y, x, dx).first;
         }
 
        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
+            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
         {
             auto k1 = func(x, y);
             auto k2 = func(x + (dx/2), y + (dx/2)*k1);
