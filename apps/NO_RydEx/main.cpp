@@ -12,6 +12,7 @@
 #endif
 
 using namespace QSim;
+using namespace Eigen;
 
 class CNORydEx : public SimulationApp
 {
@@ -68,8 +69,6 @@ public:
         m_system.SetDecay(4, 0, decayTransit);
 
         m_doppler.SetMass(30.0061 * AtomicMassUnit_v);
-        m_doppler.SetATol(1e-10);
-        // m_doppler.SetRTol(1e-8);
         // m_doppler.SetIntegrationWidth(m_scanLaser != "UV" ? 0.35 : 3.5); // peak is narrow
     }
 
@@ -77,19 +76,19 @@ public:
     {
         // Generate detuning axis
         constexpr static std::size_t cnt = 501;
-        Eigen::Matrix<double, 3, cnt> detunings;
+        Matrix<double, 3, cnt> detunings;
         detunings.setZero();
-        detunings.row(m_scanLaser) = Eigen::RowVectorXd::LinSpaced(cnt, -50.0e6, 50.0e6);
+        detunings.row(m_scanLaser) = RowVectorXd::LinSpaced(cnt, -50.0e6, 50.0e6);
 
         simdata.CreateDataset("Detunings", { 3, cnt }).StoreMatrix(detunings);
-        simdata.CreateDataset("Population", { cnt });
+        simdata.CreateDataset("Population", { 5, cnt });
     }
 
     virtual void Continue(DataFileGroup& simdata)  override
     {
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
-        Eigen::VectorXd population(detunings.cols());
+        MatrixXd population(5, detunings.cols());
         
         ThreadPool pool; 
         ProgressBar progress(detunings.cols());
@@ -98,10 +97,11 @@ public:
         for (std::size_t i = 0; i < detunings.cols(); i++)
         {
             pool.Submit([&, i=i](){ 
-                population[i] = m_doppler.Integrate([&](double vel)
+                population.col(i) = m_doppler.Integrate([&](double vel)
                 { 
                     auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
-                    return std::real(rho(m_desiredLevel, m_desiredLevel));
+                    return real(rho.diagonal().array()).matrix().eval();
+                    // return std::real(rho(m_desiredLevel, m_desiredLevel));
                 });
                 progress.IncrementCount();
             });
@@ -116,17 +116,24 @@ public:
     {
 #ifdef QSIM_PYTHON3
         auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(m_scanLaser).eval();
-        auto y_axis = simdata.GetDataset("Population").LoadMatrix();
-        
+        auto populations = simdata.GetDataset("Population").LoadMatrix();
+
         std::string laserNames[] = {"UV", "Green", "Red"};
         std::string levelNames[] = {"X", "A", "H", "R", "Ion"};
 
         PythonMatplotlib matplotlib;
-        auto figure = matplotlib.CreateFigure();
-        auto ax = figure.AddSubplot();
-        ax.SetXLabel(laserNames[m_scanLaser] + " detuning [MHz]");
-        ax.SetYLabel(levelNames[m_desiredLevel] + " population");
-        ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
+
+        // for (std::size_t i = 0; i < 5; i++)
+        auto i = 4;
+        {
+            VectorXd pop = populations.row(i);
+            auto figure = matplotlib.CreateFigure();
+            auto ax = figure.AddSubplot();
+            ax.SetXLabel(laserNames[m_scanLaser] + " detuning [MHz]");
+            ax.SetYLabel(levelNames[i] + " population");
+            ax.Plot(x_axis.data(), pop.data(), x_axis.size());
+        }
+
         matplotlib.RunGUILoop();
 #endif
     }
@@ -135,7 +142,7 @@ private:
     unsigned int m_scanLaser;
     unsigned int m_desiredLevel;
     TNLevelSystemQM<5> m_system;
-    DopplerIntegrator m_doppler;
+    TDopplerIntegrator<> m_doppler;
 };
 
 int main(int argc, const char* argv[])

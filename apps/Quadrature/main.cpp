@@ -1,5 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
+#include <iostream>
+
 #ifdef QSIM_PYTHON3
 #include <functional>
 #include <QSim/Constants.h>
@@ -56,18 +58,22 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
     ax.Plot(ns.data(), errors.data(), ns.size(), "boole");
 
     // adaptive integrator
-    auto ns_ad = std::vector<double>(2500);
-    auto errs_ad = std::vector<double>(ns_ad.size());
-    for (std::size_t j = 0; j < ns_ad.size(); j++)
+    std::size_t cnt = 2500;
+    auto ns_ad1 = std::vector<double>(cnt);
+    auto errs_ad1 = std::vector<double>(ns_ad1.size());
+    auto ns_ad2 = std::vector<double>(cnt);
+    auto errs_ad2 = std::vector<double>(ns_ad1.size());
+    for (std::size_t j = 0; j < cnt; j++)
     {
         double expmin = 2;
         double expmax = 14;
-        double rtol = std::pow(10.0, -(j*(expmax - expmin)/ns_ad.size() + expmin));
-        auto res = TQuadrature<QuadAdaptivePolicy>::IntegrateFevs(func, a, b, 250, rtol, std::min(1e-12, rtol), 5);
-        errs_ad[j] = std::abs(exact - res.first);
-        ns_ad[j] = res.second;
+        double rtol = std::pow(10.0, -(j*(expmax - expmin)/cnt + expmin));
+        
+        auto [res1, fevs1] = TQuadrature<QuadAdaptivePolicy>::IntegrateFevs(func, a, b, 250, rtol, std::min(1e-12, rtol), 10);
+        errs_ad1[j] = std::abs(exact - res1);
+        ns_ad1[j] = fevs1;
     }
-    ax.Plot(ns_ad.data(), errs_ad.data(), ns_ad.size(), "adaptive");
+    ax.Plot(ns_ad1.data(), errs_ad1.data(), ns_ad1.size(), "adaptive");
     
     ax.Legend();
 }
@@ -92,12 +98,26 @@ int main(int argc, const char* argv[])
     testIntegrators("sin(1/x)", 
             [](double x){ return std::sin(1 / x); }, 
             0.025, 1.0, 0.5044592407911533);
-    
+            
     matplotlib.RunGUILoop();
+
+    /*int fcnt = 0;
+    auto func = [&](double x){ fcnt++; return 1 / (Pi_v * (x*x + 1)); };
+    double exact = 0.9974535344916211;
+    double atol = 1e-9;
+    double rtol = 1e-7;
+    std::size_t n = 200;
+
+    fcnt = 0;
+    auto [I1, fevs1] = TQuadrature<QuadAdaptivePolicy>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
+    std::cout << std::abs(I1-exact) << " (" << fevs1 << ", " << fcnt << ")" << std::endl;
+    
+    fcnt = 0;
+    auto [I2, fevs2] = TQuadrature<QuadAdaptive2Policy>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
+    std::cout << std::abs(I2-exact) << " (" << fevs2 << ", " << fcnt << ")" << std::endl;*/
 }
 
 #else
-#include <iostream>
 int main(int argc, const char* argv[])
 {
     std::cout << "QSIM_PYTHON3 macro is not set. Aborting..." << std::endl;

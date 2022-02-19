@@ -12,6 +12,7 @@
 #endif
 
 using namespace QSim;
+using namespace Eigen;
 
 class CRb87EITApp : public SimulationApp
 {
@@ -42,9 +43,9 @@ public:
     {
         // Generate detuning axis
         constexpr static std::size_t cnt = 501;
-        Eigen::Matrix<double, 2, cnt> detunings;
+        Matrix<double, 2, cnt> detunings;
         detunings.setZero();
-        detunings.row(0) = Eigen::RowVectorXd::LinSpaced(cnt, -100.0e6, 100.0e6);
+        detunings.row(0) = RowVectorXd::LinSpaced(cnt, -100.0e6, 100.0e6);
         
         simdata.CreateDataset("Detunings", { 2, cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("AbsCoeffs", { cnt });
@@ -54,7 +55,7 @@ public:
     {
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
-        Eigen::VectorXd absCoeffs(detunings.cols());
+        VectorXd absCoeffs(detunings.cols());
         
         ThreadPool pool; 
         ProgressBar progress(detunings.cols());
@@ -94,7 +95,7 @@ public:
 
 private:
     TNLevelSystemQM<3> m_system;
-    DopplerIntegrator m_doppler;
+    TDopplerIntegrator<> m_doppler;
 };
 
 int main(int argc, const char* argv[])

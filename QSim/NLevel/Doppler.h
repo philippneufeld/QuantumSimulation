@@ -6,25 +6,55 @@
 #include <cstdint>
 #include <functional>
 
+#include "../Math/MatrixTraits.h"
 #include "../Math/Quadrature.h"
 #include "../Constants.h"
 
 namespace QSim
 {
 
-    class DopplerIntegrator
+    namespace Internal
+    {
+        template<typename QP>
+        class TDopplerIntegratorHelper
+        {
+        protected:
+            ~TDopplerIntegratorHelper() { }
+            
+        public:
+            TDopplerIntegratorHelper() { }
+        };
+
+        template<>
+        class TDopplerIntegratorHelper<QuadAdaptivePolicy> : public QuadAdaptivePolicy
+        {
+        protected:
+            ~TDopplerIntegratorHelper() { }
+            
+        public:
+            TDopplerIntegratorHelper() 
+            {
+                // maximal machine precision is not required here
+                this->SetIntegrationRTol(1e-6);
+                this->SetIntegrationDepth(10);
+            }
+        };
+
+    }
+
+    template<typename QuadPolicy=QuadAdaptivePolicy>
+    class TDopplerIntegrator : public Internal::TDopplerIntegratorHelper<QuadAdaptivePolicy>
     {
     public:
         // constructors
-        DopplerIntegrator() : DopplerIntegrator(1.674e-27, 300) { }
-        DopplerIntegrator(double mass, double temperature) : DopplerIntegrator(mass, temperature, 250) { }
-        DopplerIntegrator(double mass, double temperature, std::size_t steps)
-            : m_mass(mass), m_temperature(temperature), m_steps(steps), 
-            m_rtol(1e-7), m_atol(1e-9), m_maxDepth(10), m_sigmas(3.5) { }
+        TDopplerIntegrator() : TDopplerIntegrator(1.674e-27, 300) { }
+        TDopplerIntegrator(double mass, double temperature) : TDopplerIntegrator(mass, temperature, 250) { }
+        TDopplerIntegrator(double mass, double temperature, std::size_t steps)
+            : m_mass(mass), m_temperature(temperature), m_steps(steps), m_sigmas(3.5) { }
 
         // copy operators
-        DopplerIntegrator(const DopplerIntegrator&) = default;
-        DopplerIntegrator& operator=(const DopplerIntegrator&) = default;
+        TDopplerIntegrator(const TDopplerIntegrator&) = default;
+        TDopplerIntegrator& operator=(const TDopplerIntegrator&) = default;
 
         // Thermal parameters
         void SetMass(double mass) { m_mass = mass; }
@@ -35,12 +65,6 @@ namespace QSim
         // Integration parameters
         void SetIntegrationSteps(std::size_t steps) { m_steps = steps; }
         std::size_t GetIntegrationSteps() const { return m_steps; }
-        void SetRTol(double rtol) { m_rtol = rtol; }
-        double GetRTol() const { return m_rtol; }
-        void SetATol(double atol) { m_atol = atol; }
-        double GetATol() const { return m_atol; }
-        void SetMaxRecursionDepth(double depth) { m_maxDepth = depth; }
-        double GetMaxRecursionDepth() const { return m_maxDepth; }
         void SetIntegrationWidth(double sigmas) { m_sigmas = sigmas; }
         double GetIntegrationWidth(double sigmas) const { return m_sigmas; }
 
@@ -52,15 +76,13 @@ namespace QSim
     private:
         double m_mass;
         double m_temperature;
-        double m_rtol;
-        double m_atol;
-        double m_maxDepth;
         double m_sigmas;
         std::size_t m_steps;
     };
 
+    template<typename QuadPolicy>
     template<typename Lambda, typename Ret>
-    Ret DopplerIntegrator::Integrate(Lambda func) const
+    Ret TDopplerIntegrator<QuadPolicy>::Integrate(Lambda func) const
     {
         const static double pi = std::acos(-1.0);
         if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
@@ -72,15 +94,19 @@ namespace QSim
             double vmin = -m_sigmas * sigma;
             double vmax = m_sigmas * sigma;
 
-            TQuadrature<QuadAdaptivePolicy> integrator;
-            auto convFunc = [=](double v){ return norm * std::exp(-v*v*sigma2SqRec) * func(v); };
-            return integrator.Integrate(convFunc, vmin, vmax, m_steps, m_rtol, m_atol, m_maxDepth);
+            auto convFunc = [=](double v) 
+            { 
+                auto res =  norm * std::exp(-v*v*sigma2SqRec) * func(v);
+                return static_cast<TMatrixEvalType_t<decltype(res)>>(res);
+            };
+            return QuadPolicy::Integrate(convFunc, vmin, vmax, m_steps);
         }
         else
             return func(0);
     }
     
-    double DopplerIntegrator::GetDopplerWidth(double frequency) const
+    template<typename QuadPolicy>
+    double TDopplerIntegrator<QuadPolicy>::GetDopplerWidth(double frequency) const
     {
         constexpr double constants = 8*BoltzmannConstant_v*Ln2_v / (SpeedOfLight_v * SpeedOfLight_v); 
         return std::sqrt(constants * m_temperature / m_mass) * frequency;
