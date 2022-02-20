@@ -31,8 +31,8 @@ public:
         m_system.SetLevel(2, SpeedOfLight_v / 780.241e-9);
         m_system.SetDipoleElement(0, 2, dip);
         m_system.SetDipoleElement(1, 2, dip);
-        m_system.AddLaser(0, 2, intProbe, false);
-        m_system.AddLaser(1, 2, intPump, false);
+        m_system.AddLaser(NLevelLaser({0, 2}, intProbe, 1.0));
+        m_system.AddLaser(NLevelLaser({1, 2}, intPump, 1.0));
         m_system.SetDecay(2, 0, 3.0/8.0 * 6.065e6);
         m_system.SetDecay(2, 1, 5.0/8.0 * 6.065e6);
         

@@ -32,18 +32,18 @@ public:
 
         // dipole matrix elements
         constexpr double dipXA = 0.1595 * Debye_v; // https://doi.org/10.1093/mnras/stx1211
-        constexpr double dipAH = 2e-3 * ElementaryCharge_v * BohrRadius_v;
-        constexpr double dipHR = 1e-3 * ElementaryCharge_v * BohrRadius_v;
+        constexpr double dipAH = 1e-2 * ElementaryCharge_v * BohrRadius_v;
+        constexpr double dipHR = 5e-3 * ElementaryCharge_v * BohrRadius_v;
 
         // decay rates
         constexpr double decayAX = 13.8e6; // https://doi.org/10.1063/1.454958
         constexpr double decayHA = 1.0e6;
         constexpr double decayRH = 1.0e5;
-        constexpr double decayIonizaion = 1e4;
+        constexpr double decayIonizaion = 2e4;
         constexpr double decayTransit = 1e4;
 
         // laser intensities
-        double uvInt = NLevelLaser::PowerToIntensity(0.02, 1e-3); // 20mW
+        double uvInt = NLevelLaser::PowerToIntensity(0.05, 1e-3); // 50mW
         double greenInt = NLevelLaser::PowerToIntensity(1.0, 1e-3); // 1W
         double redInt = NLevelLaser::PowerToIntensity(1.0, 1e-3); // 1W
 
@@ -56,9 +56,9 @@ public:
         m_system.SetDipoleElement(0, 1, dipXA);
         m_system.SetDipoleElement(1, 2, dipAH);
         m_system.SetDipoleElement(2, 3, dipHR);
-        m_system.AddLaser(0, 1, uvInt, false);
-        m_system.AddLaser(1, 2, greenInt, true);
-        m_system.AddLaser(2, 3, redInt, true);
+        m_system.AddLaser(NLevelLaser({0, 1}, uvInt, 1.0));
+        m_system.AddLaser(NLevelLaser({1, 2}, greenInt, -1.0));
+        m_system.AddLaser(NLevelLaser({2, 3}, redInt, -1.0));
         
         m_system.SetDecay(1, 0, decayAX + decayTransit);
         m_system.SetDecay(2, 1, decayHA);
@@ -69,7 +69,6 @@ public:
         m_system.SetDecay(4, 0, decayTransit);
 
         m_doppler.SetMass(30.0061 * AtomicMassUnit_v);
-        // m_doppler.SetIntegrationWidth(m_scanLaser != "UV" ? 0.35 : 3.5); // peak is narrow
     }
 
     virtual void Init(DataFileGroup& simdata) override
@@ -101,7 +100,6 @@ public:
                 { 
                     auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
                     return real(rho.diagonal().array()).matrix().eval();
-                    // return std::real(rho(m_desiredLevel, m_desiredLevel));
                 });
                 progress.IncrementCount();
             });

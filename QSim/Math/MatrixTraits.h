@@ -3,6 +3,7 @@
 #ifndef QSim_Math_MatrixTraits_H
 #define QSim_Math_MatrixTraits_H
 
+#include <utility>
 #include <type_traits>
 #include <Eigen/Dense>
 
@@ -42,6 +43,30 @@ namespace QSim
     };
     template<typename Ty>
     using TMatrixEvalType_t = typename TMatrixEvalType<Ty>::type;
+
+    // Evaluation
+    namespace Internal
+    {
+        template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
+        struct TMatrixEvalHelper
+        {
+            static_assert(TIsMatrix_v<Ty>, "Ty must be a matrix type");
+            static TMatrixEvalType_t<Ty> Eval(Ty&& val) { return val.eval(); }
+        };
+
+        template<typename Ty>
+        struct TMatrixEvalHelper<Ty, false>
+        {
+            static_assert(!TIsMatrix_v<Ty>, "Ty mut not be a matrix type");
+            static TMatrixEvalType_t<Ty> Eval(Ty&& val) { return val; }
+        };
+    }
+    template<typename Ty>
+    auto MatrixEval(Ty&& val) 
+    { 
+        return Internal::TMatrixEvalHelper<Ty>::Eval(std::forward<Ty>(val)); 
+    }
+    
 
     // Element type
     namespace Internal

@@ -30,8 +30,8 @@ public:
         m_system.SetLevel(0, 0.0);
         m_system.SetLevel(1, freq);
         m_system.SetDipoleElement(0, 1, dip);
-        m_system.AddLaser(0, 1, intProbe, false);
-        m_system.AddLaser(0, 1, intPump, true);
+        m_system.AddLaser(NLevelLaser({0, 1}, intProbe, 1.0));
+        m_system.AddLaser(NLevelLaser({0, 1}, intPump, -1.0));
         m_system.SetDecay(1, 0, 6.065e6);
         
         m_doppler.SetMass(1.44316060e-25);

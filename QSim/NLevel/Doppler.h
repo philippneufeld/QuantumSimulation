@@ -70,8 +70,8 @@ namespace QSim
 
         double GetDopplerWidth(double frequency) const;
 
-        template<typename Lambda, typename Ret = decltype(std::declval<Lambda>()(std::declval<double>()))>
-        Ret Integrate(Lambda func) const;
+        template<typename Lambda, typename=std::enable_if_t<std::is_invocable_v<Lambda, double>>>
+        TMatrixEvalType_t<std::invoke_result_t<Lambda, double>> Integrate(Lambda func) const;
     
     private:
         double m_mass;
@@ -81,8 +81,9 @@ namespace QSim
     };
 
     template<typename QuadPolicy>
-    template<typename Lambda, typename Ret>
-    Ret TDopplerIntegrator<QuadPolicy>::Integrate(Lambda func) const
+    template<typename Lambda, typename>
+    TMatrixEvalType_t<std::invoke_result_t<Lambda, double>> 
+        TDopplerIntegrator<QuadPolicy>::Integrate(Lambda func) const
     {
         const static double pi = std::acos(-1.0);
         if (m_temperature > 0 && m_mass > 0 && m_steps > 1)
@@ -94,11 +95,11 @@ namespace QSim
             double vmin = -m_sigmas * sigma;
             double vmax = m_sigmas * sigma;
 
-            auto convFunc = [=](double v) 
+            auto convFunc = [=](double v)
             { 
-                auto res =  norm * std::exp(-v*v*sigma2SqRec) * func(v);
-                return static_cast<TMatrixEvalType_t<decltype(res)>>(res);
+                return MatrixEval(norm * std::exp(-v*v*sigma2SqRec) * func(v));
             };
+
             return QuadPolicy::Integrate(convFunc, vmin, vmax, m_steps);
         }
         else

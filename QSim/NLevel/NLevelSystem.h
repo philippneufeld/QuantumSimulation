@@ -69,7 +69,6 @@ namespace QSim
         Laser_t& GetLaser(unsigned int idx) { return m_lasers.at(idx); }
         const Laser_t& GetLaser(unsigned int idx) const { return m_lasers.at(idx); }
         bool AddLaser(Laser_t laser);
-        bool AddLaser(unsigned int lvl1, unsigned int lvl2, double intensity, bool counter);
 
         // auxilliary functions
         const Eigen::VectorXd& GetLaserFrequencies() const { return m_laserFreqs; }
@@ -92,8 +91,8 @@ namespace QSim
             const Eigen::Matrix<std::complex<double>, N, N>& rho0,
             double velocity, double t0, double t, double tav, double dt);
 
-        std::pair<Eigen::VectorXd, std::vector<Eigen::Matrix<std::complex<double>, N, N>>>
-        GetTrajectory(
+        Eigen::VectorXd GetTrajectoryTimeaxis(double t0, double dt, std::size_t n);
+        std::vector<Eigen::Matrix<std::complex<double>, N, N>> GetTrajectory(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, 
             const Eigen::Matrix<std::complex<double>, N, N>& rho0,
             double velocity, double t0, double t, double dt);
@@ -221,13 +220,6 @@ namespace QSim
     }
 
     template<int N, typename MyT, bool AM>
-    bool TNLevelSystemCRTP<N, MyT, AM>::AddLaser(unsigned int lvl1, 
-        unsigned int lvl2, double intensity, bool counter)
-    {
-        return AddLaser(TNLevelLaser<AM>({lvl1, lvl2}, intensity, counter ? -1.0 : 1.0));
-    }
-
-    template<int N, typename MyT, bool AM>
     Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetDopplerLaserFreqs(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
     {
@@ -298,26 +290,33 @@ namespace QSim
     }
     
     template<int N, typename MyT, bool AM>
-    std::pair<Eigen::VectorXd, std::vector<Eigen::Matrix<std::complex<double>, N, N>>> TNLevelSystemCRTP<N, MyT, AM>::GetTrajectory(
+    Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetTrajectoryTimeaxis(double t0, double dt, std::size_t n)
+    {
+        if (n==0) return Eigen::VectorXd();
+        return Eigen::VectorXd::LinSpaced(n, t0, t0 + (n-1)*dt);
+    }
+
+    template<int N, typename MyT, bool AM>
+    std::vector<Eigen::Matrix<std::complex<double>, N, N>> TNLevelSystemCRTP<N, MyT, AM>::GetTrajectory(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double velocity, double t0, double t, double dt)
     {
-        unsigned int steps = static_cast<unsigned int>(std::ceil((t-t0) / dt));
+        std::size_t n = static_cast<std::size_t>(std::ceil((t-t0) / dt));
 
         std::vector<Eigen::Matrix<std::complex<double>, N, N>> trajectory;
-        trajectory.reserve(steps + 1);
+        trajectory.reserve(n + 1);
         trajectory.push_back(rho0);
         
         auto rho = rho0;
         const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
-        for (unsigned int i = 0; i < steps; i++)
+        for (std::size_t i = 0; i < n; i++)
         {
             rho = EvolveDensityMatrix(auxData, rho, t0 + i*dt, dt, 1);
             trajectory.push_back(rho);
         }
-
-        return {Eigen::VectorXd::LinSpaced(steps + 1, t0, t0 + steps*dt), trajectory};
+        
+        return trajectory;
     }
 
     template<int N, typename MyT, bool AM>
