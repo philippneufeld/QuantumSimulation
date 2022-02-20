@@ -4,7 +4,9 @@
 out*/
 build*/
 
+# python
 venv/
+__pycache__/
 
 # ignore Visual Studio specific files
 .vs/
