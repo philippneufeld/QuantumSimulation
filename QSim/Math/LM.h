@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Math_LevenbergMarquardt_H
-#define QSim_Math_LevenbergMarquardt_H
+#ifndef QSim_Math_LM_H
+#define QSim_Math_LM_H
 
 #include <type_traits>
 #include <functional>

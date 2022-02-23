@@ -5,7 +5,8 @@
 #ifdef QSIM_PYTHON3
 #include <functional>
 #include <QSim/Constants.h>
-#include <QSim/Math/Quadrature.h>
+#include <QSim/Math/Quad.h>
+#include <QSim/Math/QuadAdapt.h>
 #include <QSim/Python/Plotting.h>
 
 using namespace QSim;

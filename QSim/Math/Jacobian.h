@@ -5,7 +5,7 @@
 
 #include <functional>
 #include "MatrixTraits.h"
-#include "Differentiation.h"
+#include "Diff.h"
 
 namespace QSim
 {

@@ -7,7 +7,7 @@
 #include <functional>
 
 #include "../Math/MatrixTraits.h"
-#include "../Math/Quadrature.h"
+#include "../Math/QuadAdapt.h"
 #include "../Constants.h"
 
 namespace QSim

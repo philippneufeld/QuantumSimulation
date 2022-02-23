@@ -4,7 +4,7 @@
 #include <random>
 #include <Eigen/Dense>
 
-#include <QSim/Math/LevenbergMarquardt.h>
+#include <QSim/Math/LM.h>
 
 #ifdef QSIM_PYTHON3
 #include <QSim/Python/Plotting.h>
