@@ -38,25 +38,22 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
     ax.SetXLabel("Function evaluations");
     ax.SetYLabel("Absolute error");
 
-    for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<QuadMidpointPolicy>(func, a, b, exact), ns[i]);
-    ax.Plot(ns.data(), errors.data(), ns.size(), "midpoint");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<QuadTrapezoidalPolicy>(func, a, b, exact), ns[i]);
-    ax.Plot(ns.data(), errors.data(), ns.size(), "trapezoid");
+        errors[i] = std::invoke(createErrorFunction<QuadBoolePolicy>(func, a, b, exact), ns[i]);
+    ax.Plot(ns.data(), errors.data(), ns.size(), "boole");
 
     for (std::size_t i = 0; i < ns.size(); i++)
         errors[i] = std::invoke(createErrorFunction<QuadSimpsonPolicy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "simpson");
 
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<QuadSimpson38Policy>(func, a, b, exact), ns[i]);
-    ax.Plot(ns.data(), errors.data(), ns.size(), "simpson38");
-
+        errors[i] = std::invoke(createErrorFunction<QuadMidpointPolicy>(func, a, b, exact), ns[i]);
+    ax.Plot(ns.data(), errors.data(), ns.size(), "midpoint");
+    
     for (std::size_t i = 0; i < ns.size(); i++)
-        errors[i] = std::invoke(createErrorFunction<QuadBoolePolicy>(func, a, b, exact), ns[i]);
-    ax.Plot(ns.data(), errors.data(), ns.size(), "boole");
+        errors[i] = std::invoke(createErrorFunction<QuadTrapezoidalPolicy>(func, a, b, exact), ns[i]);
+    ax.Plot(ns.data(), errors.data(), ns.size(), "trapezoid");
 
     // adaptive integrator
     std::size_t cnt = 2500;
