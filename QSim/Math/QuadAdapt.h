@@ -13,82 +13,14 @@ namespace QSim
 {
 
     // Quadrature policy (see Math/Quad.h)
-    
-    // Helper type traits
-    namespace Internal
-    {
-        // Implements a unifying interface for creating scalar constants 
-        // and matrix constants in which all elements have the same value
-        template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
-        struct TQuadValueLike
-        {
-            static auto Generate(TMatrixElementType_t<Ty> val, const Ty& like) 
-            { 
-                return TMatrixEvalType_t<Ty>::Ones(like.rows(), like.cols()) * val; 
-            }
-        };
-        template<typename Ty>
-        struct TQuadValueLike<Ty, false>
-        {
-            static auto Generate(TMatrixElementType_t<Ty> val, const Ty&) { return val; }
-        };
-
-
-        // Implements a unifying interface for calculating the 
-        // componentwise absolute value (works for matrices and scalars)
-        template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
-        struct TQuadCwiseAbs
-        {
-            static auto Abs(const Ty& mat) { return mat.cwiseAbs().eval(); }
-        };
-        template<typename Ty>
-        struct TQuadCwiseAbs<Ty, false>
-        {
-            static auto Abs(const Ty& val) { return std::abs(val); }
-        };
-
-        // Implements a unifying interface for calculating the 
-        // componentwise absolute maximum value (works for matrices and scalars)
-        template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
-        struct TQuadCwiseAbsMax
-        {
-            static auto AbsMax(const Ty& mat1, const Ty& mat2) 
-            { 
-                return (mat1.cwiseAbs()).cwiseMax((mat2.cwiseAbs())).eval(); 
-            }
-        };
-        template<typename Ty>
-        struct TQuadCwiseAbsMax<Ty, false>
-        {
-            static auto AbsMax(const Ty& val1, const Ty& val2) 
-            { 
-                return std::max(std::abs(val1), std::abs(val2)); 
-            }
-        };
-
-        // Implements a unifying interface for calculating the 
-        // componentwise absolute maximum value (works for matrices and scalars)
-        template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
-        struct TQuadAnyCwiseLess
-        {
-            static bool Compare(const Ty& mat1, const Ty& mat2) 
-            { 
-                return (mat1.array() < mat2.array()).any(); 
-            }
-        };
-        template<typename Ty>
-        struct TQuadAnyCwiseLess<Ty, false>
-        {
-            static bool Compare(const Ty& val1, const Ty& val2) 
-            { 
-                return val1 < val2; 
-            }
-        };  
-    }
-
     // Adaptive step size integrator
     class QuadAdaptivePolicy
     {
+        template<typename Func, typename XTyA, typename XTyB>
+        using YTy_t = TMatrixMulResultFP_t<
+            std::invoke_result_t<Func, TMatrixAddResultFP_t<XTyA, XTyB>>, 
+            TMatrixAddResultFP_t<XTyA, XTyB>>;
+
     protected:
         ~QuadAdaptivePolicy() = default;
 
@@ -113,8 +45,8 @@ namespace QSim
             double rtol, double atol, std::size_t depth)
         {
             // define types
-            using XTy = Internal::TQuadXType_t<XTyA, XTyB>;
-            using YTy = Internal::TQuadResultType_t<Func, XTyA, XTyB>;
+            using XTy = TMatrixAddResultFP_t<XTyA, XTyB>;
+            using YTy = YTy_t<Func, XTyA, XTyB>;
 
             // adjust n to fit the simpson method used
             if (n < 5)
@@ -125,7 +57,7 @@ namespace QSim
             XTy dx = static_cast<XTy>(b - a) / sections;
             atol /= sections;
 
-            auto dxlen = TDxLength<XTy>::Get(dx);
+            auto dxlen = TMatrixNorm<XTy>::Get(dx);
 
             std::size_t fsCnt = 1+2*sections;
             Eigen::Matrix<YTy, -1, 1> fs(fsCnt);
@@ -164,17 +96,15 @@ namespace QSim
 
     private:
         template<typename Func, typename XTyA, typename DXTy>
-        static std::pair<Internal::TQuadResultType_t<Func, XTyA, DXTy>, std::size_t> IntegrateHelper(
-            Func& func, XTyA&& a, DXTy&& dx, TDxLength_t<DXTy> dxlen, std::size_t d,
-            const Internal::TQuadResultType_t<Func, XTyA, DXTy>& f0,
-            const Internal::TQuadResultType_t<Func, XTyA, DXTy>& f2,
-            const Internal::TQuadResultType_t<Func, XTyA, DXTy>& f4,
-            const Internal::TQuadResultType_t<Func, XTyA, DXTy>& Iest,
+        static std::pair<YTy_t<Func, XTyA, DXTy>, std::size_t> IntegrateHelper(
+            Func& func, XTyA&& a, DXTy&& dx, TMatrixNorm_t<DXTy> dxlen, std::size_t d,
+            const YTy_t<Func, XTyA, DXTy>& f0, const YTy_t<Func, XTyA, DXTy>& f2,
+            const YTy_t<Func, XTyA, DXTy>& f4, const YTy_t<Func, XTyA, DXTy>& Iest,
             double rtol, double atol, std::size_t depth)
         {
             // define types
-            using XTy = Internal::TQuadXType_t<XTyA, DXTy>;
-            using YTy = Internal::TQuadResultType_t<Func, XTyA, DXTy>;
+            using XTy = TMatrixAddResultFP_t<XTyA, DXTy>;
+            using YTy = YTy_t<Func, XTyA, DXTy>;
             
             std::size_t fevs = 2;
 
@@ -191,11 +121,12 @@ namespace QSim
             YTy Ierr = (I2 - I1) / 15;
             YTy I = I2 + Ierr; // add error to I2 (I is equivalent to Boole's rule)
 
+
             // check if accuracy is sufficient (otherwise recurse)
-            YTy IerrAbs = Internal::TQuadCwiseAbs<YTy>::Abs(Ierr);
-            YTy atolY = Internal::TQuadValueLike<YTy>::Generate(atol, Ierr);
-            YTy IestAdj = Internal::TQuadCwiseAbsMax<YTy>::AbsMax(Iest, I);
-            if (d < depth && Internal::TQuadAnyCwiseLess<YTy>::Compare(rtol*IestAdj, IerrAbs-atolY))
+            YTy IerrAbs = TMatrixCwiseAbs<YTy>::Get(Ierr);
+            YTy atolY = TMatrixOnesLike<YTy>::Get(Ierr) * atol;
+            YTy IestAdj = TMatrixCwiseAbsMax<YTy>::Get(Iest, I);
+            if (d < depth && TMatrixAnyCwiseLess<YTy>::Get(rtol*IestAdj, IerrAbs-atolY))
             {
                 // NOTE:
                 // static_cast<XTy>(a+dx2) in IntegrateHelper is necessary in order to

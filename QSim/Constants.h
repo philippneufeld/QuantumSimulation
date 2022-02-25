@@ -7,6 +7,18 @@
 
 namespace QSim
 {
+
+    // constexpr functions 
+    // NOTE: These functions should only be used in constexpr contexts,
+    //       since they are inefficient at runtime
+    constexpr double ConstexprPow(double x, int n)
+    {
+        double res = 1;
+        for (int i = 0; i < n; i++)
+            res *= x;
+        return res;
+    }
+
     // General constants
     constexpr static double Ln2_v = 0.69314718056;
     constexpr static double Pi_v = 3.14159265358979323846;
@@ -20,8 +32,12 @@ namespace QSim
     constexpr static double ReducedPlanckConstant_v = 1.054571817e-34;
     constexpr static double AtomicMassUnit_v = 1.66053906660e-27;
     constexpr static double ElementaryCharge_v = 1.602176462e-19;
+    constexpr static double ElectronMass_v = 9.1093837015e-31;
     constexpr static double BohrRadius_v = 0.5291772083e-10;
     constexpr static double Debye_v = 0.39343 * ElementaryCharge_v * BohrRadius_v;
+    constexpr static double RydbergConstant_v = ElectronMass_v*ConstexprPow(ElementaryCharge_v, 4) /
+        (8*ConstexprPow(VacuumPermittivity_v, 2)*ConstexprPow(PlanckConstant_v, 3)*SpeedOfLight_v);
+    constexpr static double RydbergEnergy_v = PlanckConstant_v*SpeedOfLight_v*RydbergConstant_v;
 
 }
 

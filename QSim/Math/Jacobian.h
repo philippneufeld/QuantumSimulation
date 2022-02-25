@@ -37,25 +37,25 @@ namespace QSim
             // all matrix types
             (!strict || (TIsMatrix_v<FTy> && TIsMatrix_v<XTy> && TIsMatrix_v<DXTy>)) &&
             // same number of elements (or dynamic)
-            (TMatrixSizeAtCompileTime_v<XTy> == TMatrixSizeAtCompileTime_v<DXTy> || 
-             TMatrixSizeAtCompileTime_v<XTy> < 0 || TMatrixSizeAtCompileTime_v<DXTy> < 0) &&
+            (TMatrixCompileTimeSize_v<XTy> == TMatrixCompileTimeSize_v<DXTy> || 
+             TMatrixCompileTimeSize_v<XTy> < 0 || TMatrixCompileTimeSize_v<DXTy> < 0) &&
             // XTy is a vector type
-            (TMatrixRowsAtCompileTime_v<XTy> == 1 || TMatrixColsAtCompileTime_v<XTy> == 1) &&
+            (TMatrixCompileTimeRows_v<XTy> == 1 || TMatrixCompileTimeCols_v<XTy> == 1) &&
             // DXTy is a vector type
-            (TMatrixRowsAtCompileTime_v<DXTy> == 1 || TMatrixColsAtCompileTime_v<DXTy> == 1) &&
+            (TMatrixCompileTimeRows_v<DXTy> == 1 || TMatrixCompileTimeCols_v<DXTy> == 1) &&
             // FTy is a vector type
-            (TMatrixRowsAtCompileTime_v<FTy> == 1 || TMatrixColsAtCompileTime_v<FTy> == 1);
+            (TMatrixCompileTimeRows_v<FTy> == 1 || TMatrixCompileTimeCols_v<FTy> == 1);
 
         template<bool strict, typename JTy, typename FTy, typename XTy, typename DXTy>
         static constexpr bool IsValidExprInPlace_v = IsValidExpr_v<strict, FTy, XTy, DXTy> &&
             // Is JTy capable of holding right amount of rows
-            (TMatrixSizeAtCompileTime_v<FTy> == TMatrixRowsAtCompileTime_v<JTy> || 
-             TMatrixSizeAtCompileTime_v<FTy> < 0 || TMatrixRowsAtCompileTime_v<JTy> < 0) &&
+            (TMatrixCompileTimeSize_v<FTy> == TMatrixCompileTimeRows_v<JTy> || 
+             TMatrixCompileTimeSize_v<FTy> < 0 || TMatrixCompileTimeRows_v<JTy> < 0) &&
             // Is JTy capable of holding right amount of columns
-            (TMatrixSizeAtCompileTime_v<XTy> == TMatrixColsAtCompileTime_v<JTy> || 
-             TMatrixSizeAtCompileTime_v<XTy> < 0 || TMatrixColsAtCompileTime_v<JTy> < 0) &&
-            (TMatrixSizeAtCompileTime_v<DXTy> == TMatrixColsAtCompileTime_v<JTy> || 
-             TMatrixSizeAtCompileTime_v<DXTy> < 0 || TMatrixColsAtCompileTime_v<JTy> < 0);
+            (TMatrixCompileTimeSize_v<XTy> == TMatrixCompileTimeCols_v<JTy> || 
+             TMatrixCompileTimeSize_v<XTy> < 0 || TMatrixCompileTimeCols_v<JTy> < 0) &&
+            (TMatrixCompileTimeSize_v<DXTy> == TMatrixCompileTimeCols_v<JTy> || 
+             TMatrixCompileTimeSize_v<DXTy> < 0 || TMatrixCompileTimeCols_v<JTy> < 0);
 
         template<bool strict, typename Func, typename XTy, typename DXTy>
         using EnableJac_t = std::enable_if_t<IsValidExpr_v<strict, std::invoke_result_t<Func, XTy>, XTy, DXTy>>;
@@ -71,8 +71,8 @@ namespace QSim
         template<typename Func, typename XTy>
         using Jacobian_t = Eigen::Matrix<
             TMatrixElementType_t<FuncRetType_t<Func, XTy>>,
-            TMatrixSizeAtCompileTime_v<FuncRetType_t<Func, XTy>>, 
-            TMatrixSizeAtCompileTime_v<XTy>>;
+            TMatrixCompileTimeSize_v<FuncRetType_t<Func, XTy>>, 
+            TMatrixCompileTimeSize_v<XTy>>;
 
         // Calculates jacobian
         // Forwards parameters to JacobianHelper which only accepts 
@@ -124,8 +124,8 @@ namespace QSim
 
             // setup jacobian matrix
             // using ElementType = std::decay_t<decltype(df_dx0[0])>;
-            // constexpr int JRows = TMatrixSizeAtCompileTime_v<decltype(df_dx0)>;
-            // constexpr int JCols = TMatrixSizeAtCompileTime_v<XTy>;
+            // constexpr int JRows = TMatrixCompileTimeSize_v<decltype(df_dx0)>;
+            // constexpr int JCols = TMatrixCompileTimeSize_v<XTy>;
             // Eigen::Matrix<ElementType, JRows, JCols> jac(df_dx0.size(), x.size());
             Jacobian_t<Func, XTy> jac(df_dx0.size(), x.size());
 

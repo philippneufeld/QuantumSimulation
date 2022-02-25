@@ -30,12 +30,12 @@ namespace QSim
         static auto Differentiate(Func&& func, XTy&& x, DXTy&& dx)
         {
             return Differentiate(std::forward<Func>(func), std::forward<XTy>(x), 
-                std::forward<DXTy>(dx), TDxLength<XTy>::Get(dx));
+                std::forward<DXTy>(dx), TMatrixNorm<XTy>::Get(dx));
         }
 
         template<typename Func, typename XTy, typename DXTy>
         static TMatrixEvalType_t<std::invoke_result_t<Func, XTy>>
-            Differentiate(Func&& func, XTy&& x, DXTy&& dx, TDxLength_t<XTy> dxLen)
+            Differentiate(Func&& func, XTy&& x, DXTy&& dx, TMatrixNorm_t<XTy> dxLen)
         {
             return ((std::invoke(func, x + dx) - std::invoke(func, x - dx)) / (2*dxLen));
         }

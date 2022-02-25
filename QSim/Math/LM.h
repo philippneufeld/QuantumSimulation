@@ -23,12 +23,12 @@ namespace QSim
             // all matrix types
             (TIsMatrix_v<FTy> && TIsMatrix_v<YTy>) &&
             // same number of elements (or dynamic)
-            (TMatrixSizeAtCompileTime_v<FTy> == TMatrixSizeAtCompileTime_v<YTy> || 
-             TMatrixSizeAtCompileTime_v<FTy> < 0 || TMatrixSizeAtCompileTime_v<YTy> < 0) &&
+            (TMatrixCompileTimeSize_v<FTy> == TMatrixCompileTimeSize_v<YTy> || 
+             TMatrixCompileTimeSize_v<FTy> < 0 || TMatrixCompileTimeSize_v<YTy> < 0) &&
             // FTy is a vector type
-            (TMatrixRowsAtCompileTime_v<FTy> == 1 || TMatrixColsAtCompileTime_v<FTy> == 1) &&
+            (TMatrixCompileTimeRows_v<FTy> == 1 || TMatrixCompileTimeCols_v<FTy> == 1) &&
             // YTy is a vector type
-            (TMatrixRowsAtCompileTime_v<YTy> == 1 || TMatrixColsAtCompileTime_v<YTy> == 1) &&
+            (TMatrixCompileTimeRows_v<YTy> == 1 || TMatrixCompileTimeCols_v<YTy> == 1) &&
             // Function invocable
             std::is_invocable_r_v<FTy, Func, Eigen::Matrix<double, N, 1>>;
 
@@ -39,10 +39,10 @@ namespace QSim
             // all matrix types
             TIsMatrix_v<XTy> &&
             // same number of elements (or dynamic)
-            (TMatrixSizeAtCompileTime_v<XTy> == TMatrixSizeAtCompileTime_v<YTy> || 
-             TMatrixSizeAtCompileTime_v<XTy> < 0 || TMatrixSizeAtCompileTime_v<YTy> < 0) &&
+            (TMatrixCompileTimeSize_v<XTy> == TMatrixCompileTimeSize_v<YTy> || 
+             TMatrixCompileTimeSize_v<XTy> < 0 || TMatrixCompileTimeSize_v<YTy> < 0) &&
             // XTy is a vector type
-            (TMatrixRowsAtCompileTime_v<XTy> == 1 || TMatrixColsAtCompileTime_v<XTy> == 1) &&
+            (TMatrixCompileTimeRows_v<XTy> == 1 || TMatrixCompileTimeCols_v<XTy> == 1) &&
             // Function check
             std::is_invocable_r_v<double, Func, TMatrixElementType_t<XTy>, Eigen::Matrix<double, N, 1>>;
 

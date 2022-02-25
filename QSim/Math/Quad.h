@@ -19,32 +19,6 @@ namespace QSim
     // 1) Integrate func over the interval [a, b] in (at least) n steps:
     //      auto Integrate(func, a, b, n)
 
-    // Helper type traits
-    namespace Internal
-    {
-        template<typename XTyA, typename XTyB>
-        struct TQuadXType
-        {
-        private:
-            using AddRes_t = TMatrixEvalType_t<decltype(std::declval<XTyB>() + std::declval<XTyA>())>;
-        
-        public:
-            using type = std::conditional_t<std::is_integral_v<AddRes_t>, double, AddRes_t>;
-        };
-        template<typename XTyA, typename XTyB>
-        using TQuadXType_t = typename TQuadXType<XTyA, XTyB>::type;
-
-        template<typename Func, typename XTyA, typename XTyB>
-        struct TQuadResultType
-        {
-            using type = TMatrixEvalType_t<decltype(
-                std::declval<std::invoke_result_t<Func, TQuadXType_t<XTyA, XTyB>>>() * 
-                std::declval<TDxLength_t<TQuadXType_t<XTyA, XTyB>>>())>;
-        };
-        template<typename Func, typename XTyA, typename XTyB>
-        using TQuadResultType_t = typename TQuadResultType<Func, XTyA, XTyB>::type;
-    }
-
     // Midpoint integrator
     class QuadMidpointPolicy
     {
@@ -56,8 +30,8 @@ namespace QSim
         static auto Integrate(Func&& func, XTyA&& a, XTyB&& b, std::size_t n)
         {
             // define types
-            using XTy = Internal::TQuadXType_t<XTyA, XTyB>;
-            using YTy = Internal::TQuadResultType_t<Func, XTyA, XTyB>;
+            using XTy = TMatrixAddResultFP_t<XTyA, XTyB>;
+            using YTy = TMatrixMulResultFP_t<std::invoke_result_t<Func, XTy>, XTy>;
 
             if (n == 0)
                 return YTy{};
@@ -72,7 +46,7 @@ namespace QSim
             for (std::size_t i = 1; i < n; i++)
                 result += std::invoke(func, x0 + i*dx);
             
-            result *= TDxLength<XTy>::Get(dx);
+            result *= TMatrixNorm<XTy>::Get(dx);
             return result;
         }
     };
@@ -93,10 +67,10 @@ namespace QSim
 
         template<typename YTy>
         constexpr static bool IsValidData_v = TIsMatrix_v<YTy> && 
-            (TMatrixRowsAtCompileTime_v<YTy> == 1 || TMatrixColsAtCompileTime_v<YTy> == 1);
+            (TMatrixCompileTimeRows_v<YTy> == 1 || TMatrixCompileTimeCols_v<YTy> == 1);
         template<typename Func, typename XTyA, typename XTyB>
         constexpr static bool IsValidFunc_v = !IsValidData_v<Func> && 
-            std::is_invocable_v<Func, Internal::TQuadXType_t<XTyA, XTyB>>;
+            std::is_invocable_v<Func, TMatrixAddResultFP_t<XTyA, XTyB>>;
 
     protected:
         ~TQuadNewtonCotesPolicy() = default;
@@ -109,32 +83,32 @@ namespace QSim
             constexpr std::size_t wcnt = TConstListSizeof_v<WeightList1_t>;
             
             // check for zero or one size
-            if (TMatrixSizeAtCompileTime_v<YTy> < 2 && y.size() < 2)
+            if (TMatrixCompileTimeSize_v<YTy> < 2 && y.size() < 2)
             {
                 if (y.size() == 0) return RType_t<YTy, XTy>{};
-                else return y[0] * TDxLength<XTy>::Get(dx);
+                else return y[0] * TMatrixNorm<XTy>::Get(dx);
             }
             
             // use composite rule
             auto rem = (y.size() - 1) % (wcnt - 1);
             if (rem == 0)
             {
-                return IntegrateHelper<Den1, WeightList1_t>(y) * TDxLength<XTy>::Get(dx);
+                return IntegrateHelper<Den1, WeightList1_t>(y) * TMatrixNorm<XTy>::Get(dx);
             }
             else if(y.size() - 1 > wcnt*rem)
             {
                 return (IntegrateHelper<Den1, WeightList1_t>(y(Eigen::seqN(Eigen::fix<0>, y.size() - rem*wcnt, Eigen::fix<1>))) 
                     + IntegrateHelper<Den2, WeightList2_t>(y(Eigen::lastN(rem*wcnt + Eigen::fix<1>, Eigen::fix<1>)))) 
-                    * TDxLength<XTy>::Get(dx);
+                    * TMatrixNorm<XTy>::Get(dx);
             }
             else if(y.size() - 1 == wcnt*rem)
             {
-                return IntegrateHelper<Den2, WeightList2_t>(y) * TDxLength<XTy>::Get(dx);
+                return IntegrateHelper<Den2, WeightList2_t>(y) * TMatrixNorm<XTy>::Get(dx);
             }
             else
             {
                 // fallback to trapezoidal rule
-                return IntegrateHelper<2, TConstList<int, 1, 1>>(y) * TDxLength<XTy>::Get(dx);
+                return IntegrateHelper<2, TConstList<int, 1, 1>>(y) * TMatrixNorm<XTy>::Get(dx);
             }
         }
 
@@ -142,12 +116,12 @@ namespace QSim
             typename=std::enable_if_t<IsValidFunc_v<Func, XTyA, XTyB>>>
         static auto Integrate(Func&& func, XTyA a, XTyB b, std::size_t n)
         {
-            using XTy = Internal::TQuadXType_t<XTyA, XTyB>;
+            using XTy = TMatrixAddResultFP_t<XTyA, XTyB>;
             if (n < 0) 
                 return RType_t<Eigen::Matrix<std::invoke_result_t<Func, XTy>, -1, 1>, XTy>{};
 
             auto x = Eigen::Matrix<XTy, -1, 1>::LinSpaced(n, a, b);
-            return Integrate(x.unaryExpr(func), TDxLength<XTy>::Get((b-a) / (n-1)));
+            return Integrate(x.unaryExpr(func), TMatrixNorm<XTy>::Get((b-a) / (n-1)));
         }
 
     private:
@@ -156,7 +130,7 @@ namespace QSim
         {
             // compile time assertion
             constexpr std::size_t wcnt = TConstListSizeof_v<WeightList>;
-            constexpr int ysize = TMatrixSizeAtCompileTime_v<YTy>;
+            constexpr int ysize = TMatrixCompileTimeSize_v<YTy>;
             static_assert(ysize < 0 || (ysize >= wcnt && ((ysize - 1) % (wcnt - 1)) == 0));
 
             // compile time actions
