@@ -60,7 +60,7 @@ namespace QSim
             auto dxlen = TMatrixNorm<XTy>::Get(dx);
 
             std::size_t fsCnt = 1+2*sections;
-            Eigen::Matrix<YTy, -1, 1> fs(fsCnt);
+            Eigen::Matrix<YTy, Eigen::Dynamic, 1> fs(fsCnt);
             for (size_t i = 0; i < fsCnt; i++)
                 fs[i] = std::invoke(func, a+i*0.5*dx);
             std::size_t fevs = fsCnt;

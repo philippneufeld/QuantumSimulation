@@ -10,28 +10,10 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-#include <QSim/Math/Quad.h>
+#include <QSim/Math/Numerov.h>
 
 using namespace QSim;
 using namespace Eigen;
-
-class Numerov
-{
-public:
-    template<typename KFunc, typename XTyA, typename XTyB, typename YTyA, typename YTyB>
-    static void IntegrateInPlace(KFunc&& kfunc, XTyA xmin, XTyB xmax, std::size_t n, YTyA y0, YTyB y1)
-    {
-        using XTy = TMatrixAddResultFP_t<XTyA, XTyB>;
-        //using YTy = TMatrixAddResultFP_t<
-
-
-
-    }
-
-
-};
-
-
 
 double potential(double r, unsigned int n, unsigned int l)
 { 
@@ -51,28 +33,9 @@ std::pair<VectorXd, VectorXd> SimulateWavefunction(double dx, double xmax, unsig
 {
 	size_t n = (size_t)std::ceil(xmax / dx);
 
-    VectorXd xs = VectorXd::LinSpaced(n, xmax, xmax/n + xmax*2/n);
-    VectorXd psis = VectorXd::Zero(n);
-    psis[0] = 0;
-    psis[1] = 0.01;
-
-    dx = xs[1]-xs[0];
-    double c = dx*dx/12;
-
-    // auto kfunc = [&](double x){return (E-V(x, l)); };
     auto kfunc = [&](double x){ return potential(x, nE, l); };
+    auto [xs, psis] = Numerov::Integrate(kfunc, xmax, xmax/n, n, 0.01, 0);
 
-    for (int i = 2; i < xs.size(); i++)
-    {
-        double den = (1+c*kfunc(xs[i]));
-        double s1 = 2*(1-5*c*kfunc(xs[i-1]))*psis[i-1];
-        double s2 = (1+c*kfunc(xs[i-2]))*psis[i-2];
-        psis[i] = (s1 - s2) / den;
-
-        // psis[i] = ((2 - kfunc(xs[i]) * dx * dx) * psis[i-1] - (1 - dx / xs[i]) * psis[i-2]) / (1 + dx / xs[i]);
-        // psis[i] = (2 - kfunc(xs[i-1]) * dx * dx) * psis[i-1] - psis[i-2];
-    }
-    
     psis = (4*Pi_v*xs.array()*xs.array()*psis.array()*psis.array()).matrix().eval();
     psis = psis / std::sqrt(psis.sum());
 
@@ -83,11 +46,6 @@ std::pair<VectorXd, VectorXd> SimulateWavefunction(double dx, double xmax, unsig
 
 int main(int argc, const char* argv[])
 {
-
-    using type1 = typename TMatrixMulResultFP<short, VectorXd>::type;
-    
-    type1 t1;
-
     HydrogenicSystem hyd;
 
     // auto [r, y] = hyd.NumerovWF(potential, 0, 2, 1e-3, 1, 0);

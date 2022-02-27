@@ -117,10 +117,10 @@ namespace QSim
         static auto Integrate(Func&& func, XTyA a, XTyB b, std::size_t n)
         {
             using XTy = TMatrixAddResultFP_t<XTyA, XTyB>;
-            if (n < 0) 
-                return RType_t<Eigen::Matrix<std::invoke_result_t<Func, XTy>, -1, 1>, XTy>{};
+            if (n < 0)
+                return RType_t<Eigen::Matrix<std::invoke_result_t<Func, XTy>, 1, 1>, XTy>{};
 
-            auto x = Eigen::Matrix<XTy, -1, 1>::LinSpaced(n, a, b);
+            auto x = Eigen::Matrix<XTy, Eigen::Dynamic, 1>::LinSpaced(n, a, b);
             return Integrate(x.unaryExpr(func), TMatrixNorm<XTy>::Get((b-a) / (n-1)));
         }
 
