@@ -11,6 +11,8 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
+#include <iostream>
+
 using namespace QSim;
 using namespace Eigen;
 
@@ -64,11 +66,13 @@ public:
         for (std::size_t i = 0; i < detunings.cols(); i++)
         {
             pool.Submit([&, i=i](){ 
-                absCoeffs[i] = m_doppler.Integrate([&](double vel)
+                auto natural = [&](double vel)
                 { 
                     auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
                     return std::imag(rho(0, 2));
-                });
+                };
+
+                absCoeffs[i] = m_doppler.Integrate(natural);
                 progress.IncrementCount();
             });
         }

@@ -9,7 +9,7 @@ from tqdm import tqdm
 from qsim.ladder import LadderSystem
 
 def calc_doppler_ss(det, sys):
-    ss = sys.doppler_steadystate([det,])
+    ss = sys.doppler_steadystate((det,))
     return np.imag(ss[0, 1])
 
 if __name__ == '__main__':

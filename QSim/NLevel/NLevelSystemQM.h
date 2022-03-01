@@ -87,7 +87,7 @@ namespace QSim
         using SSTy = Eigen::Matrix<std::complex<double>, N, N>;
         
         unsigned int dims = this->GetDims();
-        ATy A(dims*dims + 1, dims*dims);
+        ATy A = ATy::Zero(dims*dims + 1, dims*dims);
 
         // von Neumann part of the evolution operator
         for (unsigned int i = 0; i < dims; i++)
@@ -107,13 +107,13 @@ namespace QSim
         {
             auto [lvls, rate] = decay;
             auto [i, f] = lvls;
-            rate *= TwoPi_v;
             
-            A(f*dims+f, i*dims+i) += rate;
+            double ratePi = Pi_v * rate;
+            A(f*dims+f, i*dims+i) += 2 * ratePi;
             for (unsigned int j = 0; j < dims; j++)
             {
-                A(j*dims+i, j*dims+i) -= 0.5 * rate;
-                A(i*dims+j, i*dims+j) -= 0.5 * rate;
+                A(j*dims+i, j*dims+i) -= ratePi;
+                A(i*dims+j, i*dims+j) -= ratePi;
             }
         }
 
@@ -151,6 +151,10 @@ namespace QSim
             m_hamiltonianNoLight(l1, l2) += rabiHalf;
             m_hamiltonianNoLight(l2, l1) += std::conj(rabiHalf);
         }
+
+        // Set energy zero
+        std::size_t dims = this->GetDims();
+        m_hamiltonianNoLight -= m_hamiltonianNoLight(0,0) * Eigen::Matrix<std::complex<double>, N, N>::Identity(dims, dims);
     }
 
     template<int N>

@@ -369,17 +369,19 @@ namespace QSim
         auto rhoPrime = (-1.0i * (h * rho - rho * h)).eval();
 
         // add lindblad dissipation term
+        unsigned int dims = this->GetDims();
         for (const auto& decay: m_decays)
         {
             auto [lvls, rate] = decay;
             auto [i, f] = lvls;
-            rate *= TwoPi_v;
-            
-            std::complex<double> popDecayRate = rate * rho(i, i);
-            rhoPrime(i, i) -= popDecayRate;
-            rhoPrime(f, f) += popDecayRate;
-            rhoPrime(i, f) -= 0.5 * rate * rho(i, f);
-            rhoPrime(f, i) -= 0.5 * rate * rho(f, i);
+            double ratePi = Pi_v * rate; 
+
+            rhoPrime(f, f) += 2 * ratePi * rho(i, i);
+            for (unsigned int j=0; j<dims; j++)
+            {
+                rhoPrime(i, j) -= ratePi * rho(i, j);
+                rhoPrime(j, i) -= ratePi * rho(j, i);
+            }
         }
 
         return rhoPrime;

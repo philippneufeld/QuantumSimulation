@@ -21,7 +21,11 @@ public:
     CNORydEx()
     {
         m_scanLaser = 2; // Red laser
-        m_desiredLevel = 4; // Ion level
+
+        // 
+        constexpr double beamRadius = 1e-3;
+        constexpr double mass = 30.0061 * AtomicMassUnit_v;
+        double meanv = std::sqrt(2*BoltzmannConstant_v*300/mass);
 
         // define parameters
         constexpr double lvlX = 0;
@@ -32,20 +36,24 @@ public:
 
         // dipole matrix elements
         constexpr double dipXA = 0.1595 * Debye_v; // https://doi.org/10.1093/mnras/stx1211
-        constexpr double dipAH = 1e-2 * ElementaryCharge_v * BohrRadius_v;
-        constexpr double dipHR = 5e-3 * ElementaryCharge_v * BohrRadius_v;
+        constexpr double dipAH = 1e-1 * Debye_v;
+        constexpr double dipHR = 5e-1 * Debye_v;
 
         // decay rates
         constexpr double decayAX = 13.8e6; // https://doi.org/10.1063/1.454958
-        constexpr double decayHA = 1.0e6;
-        constexpr double decayRH = 1.0e5;
-        constexpr double decayIonizaion = 2e4;
-        constexpr double decayTransit = 1e4;
+        constexpr double decayHA = 10.0e6;
+        constexpr double decayRH = 100.0e6;
+        constexpr double decayIonizaion = 6e5;
+        double decayTransit = meanv / beamRadius;
 
         // laser intensities
-        double uvInt = NLevelLaser::PowerToIntensity(0.05, 1e-3); // 50mW
-        double greenInt = NLevelLaser::PowerToIntensity(1.0, 1e-3); // 1W
-        double redInt = NLevelLaser::PowerToIntensity(1.0, 1e-3); // 1W
+        double uvInt = NLevelLaser::PowerToIntensity(0.05, beamRadius); // 50mW
+        double greenInt = NLevelLaser::PowerToIntensity(1.0, beamRadius); // 1W
+        double redInt = NLevelLaser::PowerToIntensity(1.0, beamRadius); // 1W
+
+        double rabiUV = NLevelLaser::IntensityToRabi(dipXA, uvInt);
+        double rabiGreen = NLevelLaser::IntensityToRabi(dipAH, greenInt);
+        double rabiRed = NLevelLaser::IntensityToRabi(dipHR, redInt);
 
         m_system.SetLevel(0, lvlX);
         m_system.SetLevel(1, lvlA);
@@ -77,7 +85,7 @@ public:
         constexpr static std::size_t cnt = 501;
         Matrix<double, 3, cnt> detunings;
         detunings.setZero();
-        detunings.row(m_scanLaser) = RowVectorXd::LinSpaced(cnt, -50.0e6, 50.0e6);
+        detunings.row(m_scanLaser) = RowVectorXd::LinSpaced(cnt, -500.0e6, 500.0e6);
 
         simdata.CreateDataset("Detunings", { 3, cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("Population", { 5, cnt });
@@ -95,12 +103,22 @@ public:
         // start calculation
         for (std::size_t i = 0; i < detunings.cols(); i++)
         {
-            pool.Submit([&, i=i](){ 
-                population.col(i) = m_doppler.Integrate([&](double vel)
+            pool.Submit([&, i=i](){
+
+                auto natural = [&](double vel)
                 { 
                     auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
                     return real(rho.diagonal().array()).matrix().eval();
-                });
+                };
+
+                auto naturalT = [&](double vel)
+                {
+                    auto rho0 = m_system.CreateGroundState();
+                    auto rho = m_system.GetDensityMatrix(detunings.col(i), rho0, vel, 0.0, 2.5e-5, 5e-10);
+                    return real(rho.diagonal().array()).matrix().eval();
+                };
+
+                population.col(i) = naturalT(0.0) - natural(0.0); // m_doppler.Integrate(natural);
                 progress.IncrementCount();
             });
         } 
@@ -113,8 +131,8 @@ public:
     virtual void Plot(DataFileGroup& simdata) override
     {
 #ifdef QSIM_PYTHON3
-        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(m_scanLaser).eval();
-        auto populations = simdata.GetDataset("Population").LoadMatrix();
+        VectorXd x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(m_scanLaser) / 1e6;
+        MatrixXd populations = simdata.GetDataset("Population").LoadMatrix();
 
         std::string laserNames[] = {"UV", "Green", "Red"};
         std::string levelNames[] = {"X", "A", "H", "R", "Ion"};
@@ -138,7 +156,6 @@ public:
 
 private:
     unsigned int m_scanLaser;
-    unsigned int m_desiredLevel;
     TNLevelSystemQM<5> m_system;
     TDopplerIntegrator<> m_doppler;
 };
