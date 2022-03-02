@@ -47,7 +47,7 @@ public:
         constexpr static std::size_t cnt = 501;
         Matrix<double, 2, cnt> detunings;
         detunings.setZero();
-        detunings.row(0) = RowVectorXd::LinSpaced(cnt, -100.0e6, 100.0e6);
+        detunings.row(0) = RowVectorXd::LinSpaced(cnt, -125.0e6, 125.0e6);
         
         simdata.CreateDataset("Detunings", { 2, cnt }).StoreMatrix(detunings);
         simdata.CreateDataset("AbsCoeffs", { cnt });
@@ -58,7 +58,11 @@ public:
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
         VectorXd absCoeffs(detunings.cols());
-        
+
+        // get properties of the system and the lasers
+        auto transitions = m_system.GetTransitionFreqs();
+        auto dirs = m_system.GetLaserDirs();
+
         ThreadPool pool; 
         ProgressBar progress(detunings.cols());
 
@@ -68,7 +72,10 @@ public:
             pool.Submit([&, i=i](){ 
                 auto natural = [&](double vel)
                 { 
-                    auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
+                    VectorXd laserFreqs = transitions + detunings.col(i);
+                    laserFreqs = m_doppler.ShiftFrequencies(laserFreqs, dirs, vel);
+                    
+                    auto rho = m_system.GetDensityMatrixSS(laserFreqs);
                     return std::imag(rho(0, 2));
                 };
 

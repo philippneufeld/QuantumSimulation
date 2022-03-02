@@ -51,7 +51,7 @@ namespace QSim
             Eigen::Matrix<double, N, 1>
             >;
 
-        HAuxData GetHamiltonianAux(const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
+        HAuxData GetHamiltonianAux(const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(const HAuxData& auxData, double t) const;   
     };
 
@@ -77,9 +77,9 @@ namespace QSim
 
     template<int N, bool AM>
     typename TNLevelSystemSC<N, AM>::HAuxData TNLevelSystemSC<N, AM>::GetHamiltonianAux(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
     {
-        assert(detunings.size() == this->GetLaserCount());
+        assert(laserFreqs.size() == this->GetLaserCount());
         
         unsigned int dims = this->GetDims();
         Eigen::Matrix<std::complex<double>, N, N> h0(dims, dims);
@@ -87,10 +87,8 @@ namespace QSim
         // Atom hamiltonian
         h0 = TwoPi_v * this->GetLevels().asDiagonal();
 
-        // Calculate doppler shifted laser frequencies and apply 
-        // roatating frame to hamiltonian (additional term that 
+        // Apply rotating frame to hamiltonian (additional term that 
         // comes from the temporal derivative of rho in the rotating frame)
-        auto laserFreqs = this->GetDopplerLaserFreqs(detunings, velocity);
         auto frame = this->CalculateRotatingFrame(laserFreqs);
         h0 -= TwoPi_v * frame.asDiagonal();
 

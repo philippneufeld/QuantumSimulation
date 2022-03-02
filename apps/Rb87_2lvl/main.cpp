@@ -50,13 +50,13 @@ public:
         // Load detuning axis
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
         VectorXd absCoeffs(detunings.cols());
- 
-        ThreadPool pool; 
-        ProgressBar progress(detunings.cols());
 
-        // 
+         // get properties of the system and the lasers
         auto transitions = m_system.GetTransitionFreqs();
         auto dirs = m_system.GetLaserDirs();
+
+        ThreadPool pool; 
+        ProgressBar progress(detunings.cols());
 
         // start calculation
         for (std::size_t i = 0; i < detunings.cols(); i++)
@@ -64,9 +64,10 @@ public:
             pool.Submit([&, i=i](){ 
                 absCoeffs[i] = m_doppler.Integrate([&](double vel)
                 {
-                    VectorXd dets = m_doppler.ShiftFrequencies(transitions + detunings.col(i), dirs, vel) - transitions;
+                    VectorXd laserFreqs = transitions + detunings.col(i);
+                    laserFreqs = m_doppler.ShiftFrequencies(laserFreqs, dirs, vel);
 
-                    auto rho = m_system.GetDensityMatrixSS(dets, 0.0);
+                    auto rho = m_system.GetDensityMatrixSS(laserFreqs);
                     return std::imag(rho(0, 1));
                 });
                 progress.IncrementCount();

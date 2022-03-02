@@ -36,11 +36,11 @@ namespace QSim
         TNLevelSystemQM& operator=(const TNLevelSystemQM&) = default;
 
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianTI(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
 
         // Steady state
         Eigen::Matrix<std::complex<double>, N, N> GetDensityMatrixSS(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
         
     private:
         // Helper methods to prepare the hamiltonian calculation
@@ -54,7 +54,7 @@ namespace QSim
         void OnDipoleOperatorChanged() { PrepareHamiltonian(); }
         
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianAux(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(
             const Eigen::Matrix<std::complex<double>, N, N>& auxData, double t) const;
 
@@ -65,10 +65,8 @@ namespace QSim
  
     template<int N>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianTI(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
-    {
-        auto laserFreqs = this->GetDopplerLaserFreqs(detunings, velocity);
-        
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
+    {        
         Eigen::Matrix<std::complex<double>, N, N> hamiltonian = m_hamiltonianNoLight;
         hamiltonian.diagonal() += TwoPi_v * (m_photonBasis * laserFreqs);
         return hamiltonian;
@@ -76,9 +74,9 @@ namespace QSim
 
     template<int N>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetDensityMatrixSS(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
     {
-        auto h = GetHamiltonianTI(detunings, velocity);
+        auto h = GetHamiltonianTI(laserFreqs);
         
         using ATy = std::conditional_t<TNLevelSystemQM<N>::IsStaticDim(),
             Eigen::Matrix<std::complex<double>, N*N + 1, N*N>, Eigen::MatrixXcd>;
@@ -239,9 +237,9 @@ namespace QSim
 
     template<int N>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianAux(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
     {
-        return GetHamiltonianTI(detunings, velocity);
+        return GetHamiltonianTI(laserFreqs);
     }
 
     template<int N>

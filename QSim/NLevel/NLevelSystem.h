@@ -73,31 +73,26 @@ namespace QSim
         Eigen::VectorXd GetTransitionFreqs() const;
         Eigen::VectorXd GetLaserDirs() const;
 
-        // auxilliary functions
-        Eigen::VectorXd GetDopplerLaserFreqs(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
-
         // hamiltonian
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonian(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings,
-            double velocity, double t) const;
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, double t) const;
 
         // time evolution of density matrix
         Eigen::Matrix<std::complex<double>, N, N> GetDensityMatrix(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, 
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
             const Eigen::Matrix<std::complex<double>, N, N>& rho0,
-            double velocity, double t0, double t, double dt);
+            double t0, double t, double dt);
 
         Eigen::Matrix<std::complex<double>, N, N> GetDensityMatrixAv(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, 
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
             const Eigen::Matrix<std::complex<double>, N, N>& rho0,
-            double velocity, double t0, double t, double tav, double dt);
+            double t0, double t, double tav, double dt);
 
         Eigen::VectorXd GetTrajectoryTimeaxis(double t0, double dt, std::size_t n);
         std::vector<Eigen::Matrix<std::complex<double>, N, N>> GetTrajectory(
-            const Eigen::Ref<const Eigen::VectorXd>& detunings, 
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
             const Eigen::Matrix<std::complex<double>, N, N>& rho0,
-            double velocity, double t0, double t, double dt);
+            double t0, double t, double dt);
         
         // create specific density matrices
         Eigen::Matrix<std::complex<double>, N, N> CreateGroundState() const;
@@ -233,48 +228,33 @@ namespace QSim
     }
 
     template<int N, typename MyT, bool AM>
-    Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetDopplerLaserFreqs(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
-    {
-        assert(detunings.rows() == GetLaserCount()); 
-        Eigen::VectorXd laserFreqs = this->GetTransitionFreqs() + detunings;
-        
-        double doppler = velocity / SpeedOfLight_v;
-        for (unsigned int i = 0; i < m_lasers.size(); i++)
-            laserFreqs[i] *= 1.0 - m_lasers[i].GetPropDirection() * doppler;
-
-        return laserFreqs;
-    }
-
-    template<int N, typename MyT, bool AM>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetHamiltonian(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, 
-        double velocity, double t) const
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, double t) const
     {
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
         return (~(*this)).GetHamiltonianFast(auxData, t);
     }
 
     template<int N, typename MyT, bool AM>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityMatrix(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, 
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
-        double velocity, double t0, double t, double dt)
+        double t0, double t, double dt)
     {
         // calculate appropriate amount of steps to obtain a dt near to the required dt
         unsigned int steps = static_cast<unsigned int>(std::ceil((t-t0) / dt));
         dt = (t-t0) / steps;
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
         return EvolveDensityMatrix(auxData, rho0, t0, dt, steps);
     }
 
     template<int N, typename MyT, bool AM>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityMatrixAv(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, 
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
-        double velocity, double t0, double t, double tav, double dt)
+        double t0, double t, double tav, double dt)
     {
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
         
         // validate averaging time and generate starting and 
         // end time of the averaging process
@@ -311,9 +291,9 @@ namespace QSim
 
     template<int N, typename MyT, bool AM>
     std::vector<Eigen::Matrix<std::complex<double>, N, N>> TNLevelSystemCRTP<N, MyT, AM>::GetTrajectory(
-        const Eigen::Ref<const Eigen::VectorXd>& detunings, 
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
-        double velocity, double t0, double t, double dt)
+        double t0, double t, double dt)
     {
         std::size_t n = static_cast<std::size_t>(std::ceil((t-t0) / dt));
 
@@ -322,7 +302,7 @@ namespace QSim
         trajectory.push_back(rho0);
         
         auto rho = rho0;
-        const auto auxData = (~(*this)).GetHamiltonianAux(detunings, velocity);
+        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
         for (std::size_t i = 0; i < n; i++)
         {
             rho = EvolveDensityMatrix(auxData, rho, t0 + i*dt, dt, 1);

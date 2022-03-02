@@ -55,6 +55,10 @@ public:
         auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
         VectorXd populations(detunings.cols());
 
+        // get properties of the system and the lasers
+        auto transitions = m_system.GetTransitionFreqs();
+        auto dirs = m_system.GetLaserDirs();
+
         ThreadPool pool; 
         ProgressBar progress(detunings.cols());
 
@@ -69,8 +73,11 @@ public:
             pool.Submit([&, i=i](){ 
                 populations[i] = m_doppler.Integrate([&](double vel)
                 { 
-                    auto rho = m_system.GetDensityMatrixAv(detunings.col(i), rho0, vel, 0.0, tint, 0.25*tint, dt);
-                return std::real(rho(1, 1));
+                    VectorXd laserFreqs = transitions + detunings.col(i);
+                    laserFreqs = m_doppler.ShiftFrequencies(laserFreqs, dirs, vel);
+                    
+                    auto rho = m_system.GetDensityMatrixAv(laserFreqs, rho0, 0.0, tint, 0.25*tint, dt);
+                    return std::real(rho(1, 1));
                 });
                 progress.IncrementCount();
             });
