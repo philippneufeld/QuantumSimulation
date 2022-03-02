@@ -68,6 +68,9 @@ namespace QSim
         void SetIntegrationWidth(double sigmas) { m_sigmas = sigmas; }
         double GetIntegrationWidth(double sigmas) const { return m_sigmas; }
 
+        template<typename T1, typename T2>
+        static Eigen::VectorXd ShiftFrequencies(const Eigen::MatrixBase<T1>& freqs, const Eigen::MatrixBase<T2>& dirs, double vel);
+
         double GetDopplerWidth(double frequency) const;
 
         template<typename Lambda, typename=std::enable_if_t<std::is_invocable_v<Lambda, double>>>
@@ -111,6 +114,14 @@ namespace QSim
     {
         constexpr double constants = 8*BoltzmannConstant_v*Ln2_v / (SpeedOfLight_v * SpeedOfLight_v); 
         return std::sqrt(constants * m_temperature / m_mass) * frequency;
+    }
+
+    template<typename QuadPolicy>
+    template<typename T1, typename T2>
+    Eigen::VectorXd TDopplerIntegrator<QuadPolicy>::ShiftFrequencies(
+        const Eigen::MatrixBase<T1>& freqs, const Eigen::MatrixBase<T2>& dirs, double vel)
+    {
+        return freqs - freqs.cwiseProduct((vel / SpeedOfLight_v) * dirs).eval();
     }
 
 }

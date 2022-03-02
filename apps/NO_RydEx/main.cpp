@@ -118,7 +118,7 @@ public:
                     return real(rho.diagonal().array()).matrix().eval();
                 };
 
-                population.col(i) = naturalT(0.0) - natural(0.0); // m_doppler.Integrate(natural);
+                population.col(i) = /*naturalT(0.0) - */natural(0.0); // m_doppler.Integrate(natural);
                 progress.IncrementCount();
             });
         } 

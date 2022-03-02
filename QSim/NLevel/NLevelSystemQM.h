@@ -160,16 +160,13 @@ namespace QSim
     template<int N>
     bool TNLevelSystemQM<N>::PrepareCalculation()
     {
-        // calculate transition splittings
-        auto laserFrequencies = this->GetLaserFrequencies();
-
         // initialize photon basis matrix which can be used for the calculation
         // of the light field contribution to the hamiltonian
-        m_photonBasis.setZero(this->GetDims(), laserFrequencies.size());
+        m_photonBasis.setZero(this->GetDims(), this->GetLaserCount());
 
         std::vector<unsigned int> trans_path;
         std::set<unsigned int> visited_levels;
-        trans_path.reserve(laserFrequencies.size());
+        trans_path.reserve(this->GetLaserCount());
 
         while (visited_levels.size() < this->GetDims())
         {

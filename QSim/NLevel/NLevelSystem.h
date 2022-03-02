@@ -46,6 +46,7 @@ namespace QSim
         TNLevelSystemCRTP& operator=(const TNLevelSystemCRTP&) = default;
         TNLevelSystemCRTP& operator=(TNLevelSystemCRTP&&) = default;
 
+        // dimensionality of the system
         static constexpr bool IsStaticDim() { return (N != DynamicDim_v); }
         unsigned int GetDims() const { return m_levels.size(); }
 
@@ -59,7 +60,7 @@ namespace QSim
         double GetDecay(unsigned int from, unsigned int to) const;
         bool SetDecay(unsigned int from, unsigned int to, double rate);
 
-        // Transition dipole operator
+        // dipole operator
         const Eigen::Matrix<std::complex<double>, N, N>& GetDipoleOperator() const { return m_dipoleOp; }
         std::complex<double> GetDipoleElement(unsigned int from, unsigned int to) const;
         bool SetDipoleElement(unsigned int from, unsigned int to, std::complex<double> dip);
@@ -69,9 +70,10 @@ namespace QSim
         Laser_t& GetLaser(unsigned int idx) { return m_lasers.at(idx); }
         const Laser_t& GetLaser(unsigned int idx) const { return m_lasers.at(idx); }
         bool AddLaser(Laser_t laser);
+        Eigen::VectorXd GetTransitionFreqs() const;
+        Eigen::VectorXd GetLaserDirs() const;
 
         // auxilliary functions
-        const Eigen::VectorXd& GetLaserFrequencies() const { return m_laserFreqs; }
         Eigen::VectorXd GetDopplerLaserFreqs(
             const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const;
 
@@ -97,14 +99,11 @@ namespace QSim
             const Eigen::Matrix<std::complex<double>, N, N>& rho0,
             double velocity, double t0, double t, double dt);
         
-        // create stecific density matrices
+        // create specific density matrices
         Eigen::Matrix<std::complex<double>, N, N> CreateGroundState() const;
         Eigen::Matrix<std::complex<double>, N, N> CreateThermalState(double temperature) const;
         
     private:
-        // auxilliary laser variable update
-        void UpdateLaserFrequencies();
-
         // helper methods for time evolution
         template<typename AuxType>
         Eigen::Matrix<std::complex<double>, N, N> GetDensityOpDerivative(
@@ -118,17 +117,13 @@ namespace QSim
             double t0, double dt, unsigned int steps);
 
     private:
-
         // Properties of the system
         Eigen::Matrix<double, N, 1> m_levels;
         Eigen::Matrix<std::complex<double>, N, N> m_dipoleOp;
         std::map<std::pair<unsigned int, unsigned int>, double> m_decays;
 
         // coupling lasers
-        std::vector<TNLevelLaser<AM>> m_lasers;
-
-        // laser related performance enhancing auxilliary variables 
-        Eigen::VectorXd m_laserFreqs;
+        std::vector<Laser_t> m_lasers;
     };
 
 
@@ -152,7 +147,6 @@ namespace QSim
         if (idx >= GetDims())
             return false;
         m_levels[idx] = level;
-        UpdateLaserFrequencies();
         return true;
     }
 
@@ -169,7 +163,7 @@ namespace QSim
         unsigned int from, unsigned int to, double rate)
     {
         if (from >= GetDims() || to >= GetDims())
-            return false;  // index out of bound
+            return false; // index out of bound
         m_decays[std::make_pair(from, to)] = rate;
         return true;
     }
@@ -189,7 +183,7 @@ namespace QSim
         if (from >= GetDims() || to >= GetDims())
             return false;  // index out of bound
         m_dipoleOp(from, to) = dip;
-        m_dipoleOp(to, from) = dip;
+        m_dipoleOp(to, from) = std::conj(dip);
 
         (~(*this)).OnDipoleOperatorChanged();
 
@@ -204,14 +198,12 @@ namespace QSim
             return false; // invalid levels
 
         m_lasers.push_back(laser);
-        UpdateLaserFrequencies();
         
         // Add laser and remove it again, if OnLaserAdded returns false
         const auto& cLaserRef = laser;
         if (!(~(*this)).OnLaserAdded(cLaserRef))
         {
             m_lasers.pop_back();
-            UpdateLaserFrequencies();
             (~(*this)).OnLaserRemoved();
             return false;
         }
@@ -220,11 +212,32 @@ namespace QSim
     }
 
     template<int N, typename MyT, bool AM>
+    Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetTransitionFreqs() const
+    {
+        Eigen::VectorXd freqs(GetLaserCount());
+        for (unsigned int i = 0; i < freqs.size(); i++)
+        {
+            auto [l1, l2] = m_lasers[i].GetLevels();
+            freqs[i] = std::abs(m_levels[l1] - m_levels[l2]);
+        }
+        return freqs;
+    }
+
+    template<int N, typename MyT, bool AM>
+    Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetLaserDirs() const
+    {
+        Eigen::VectorXd dirs(GetLaserCount());
+        for (unsigned int i = 0; i < dirs.size(); i++)
+            dirs[i] = m_lasers[i].GetPropDirection();
+        return dirs;
+    }
+
+    template<int N, typename MyT, bool AM>
     Eigen::VectorXd TNLevelSystemCRTP<N, MyT, AM>::GetDopplerLaserFreqs(
         const Eigen::Ref<const Eigen::VectorXd>& detunings, double velocity) const
     {
         assert(detunings.rows() == GetLaserCount()); 
-        Eigen::VectorXd laserFreqs = m_laserFreqs + detunings;
+        Eigen::VectorXd laserFreqs = this->GetTransitionFreqs() + detunings;
         
         double doppler = velocity / SpeedOfLight_v;
         for (unsigned int i = 0; i < m_lasers.size(); i++)
@@ -344,17 +357,6 @@ namespace QSim
         
         thermalWeights /= thermalWeights.sum();
         return thermalWeights.matrix().asDiagonal();
-    }
-
-    template<int N, typename MyT, bool AM>
-    void TNLevelSystemCRTP<N, MyT, AM>::UpdateLaserFrequencies()
-    {
-        m_laserFreqs.resize(GetLaserCount());
-        for (unsigned int i = 0; i < m_laserFreqs.size(); i++)
-        {
-            auto [l1, l2] = m_lasers[i].GetLevels();
-            m_laserFreqs[i] = std::abs(m_levels[l1] - m_levels[l2]);
-        }
     }
 
     template<int N, typename MyT, bool AM>

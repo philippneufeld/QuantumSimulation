@@ -54,13 +54,19 @@ public:
         ThreadPool pool; 
         ProgressBar progress(detunings.cols());
 
+        // 
+        auto transitions = m_system.GetTransitionFreqs();
+        auto dirs = m_system.GetLaserDirs();
+
         // start calculation
         for (std::size_t i = 0; i < detunings.cols(); i++)
         {
             pool.Submit([&, i=i](){ 
                 absCoeffs[i] = m_doppler.Integrate([&](double vel)
-                { 
-                    auto rho = m_system.GetDensityMatrixSS(detunings.col(i), vel);
+                {
+                    VectorXd dets = m_doppler.ShiftFrequencies(transitions + detunings.col(i), dirs, vel) - transitions;
+
+                    auto rho = m_system.GetDensityMatrixSS(dets, 0.0);
                     return std::imag(rho(0, 1));
                 });
                 progress.IncrementCount();
