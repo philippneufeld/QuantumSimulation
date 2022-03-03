@@ -1,6 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#include <QSim/Util/SimulationApp.h>
+#include <Eigen/Dense>
+
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
@@ -14,92 +15,59 @@
 using namespace QSim;
 using namespace Eigen;
 
-class CRb87TwoLvlApp : public SimulationApp
-{
-public:
-
-    CRb87TwoLvlApp()
-    {
-        // calculate parameters
-        constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
-        double intProbe = NLevelLaser::RabiToIntensity(dip, 3.5e6);
-        constexpr double freq = SpeedOfLight_v / 780.241e-9;
-
-        // Create system
-        m_system.SetLevel(0, 0.0);
-        m_system.SetLevel(1, freq);
-        m_system.SetDipoleElement(0, 1, dip);
-        m_system.AddLaser(NLevelLaser({0, 1}, intProbe, 1.0));
-        m_system.SetDecay(1, 0, 6.065e6);
-        
-        m_doppler.SetMass(1.44316060e-25);
-    }
-
-    virtual void Init(DataFileGroup& simdata) override
-    {
-        // Generate detuning axis
-        constexpr std::size_t cnt = 501;
-        auto detunings = RowVectorXd::LinSpaced(cnt, -1e9, 1e9);
-        
-        simdata.CreateDataset("Detunings", { 1, cnt }).StoreMatrix(detunings);
-        simdata.CreateDataset("AbsCoeffs", { cnt });
-    }
-
-    virtual void Continue(DataFileGroup& simdata)  override
-    {  
-        // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
-        VectorXd absCoeffs(detunings.cols());
-
-         // get properties of the system and the lasers
-        auto transitions = m_system.GetTransitionFreqs();
-        auto dirs = m_system.GetLaserDirs();
-
-        ThreadPool pool; 
-        ProgressBar progress(detunings.cols());
-
-        // start calculation
-        for (std::size_t i = 0; i < detunings.cols(); i++)
-        {
-            pool.Submit([&, i=i](){ 
-                absCoeffs[i] = m_doppler.Integrate([&](double vel)
-                {
-                    VectorXd laserFreqs = transitions + detunings.col(i);
-                    laserFreqs = m_doppler.ShiftFrequencies(laserFreqs, dirs, vel);
-
-                    auto rho = m_system.GetDensityMatrixSS(laserFreqs);
-                    return std::imag(rho(0, 1));
-                });
-                progress.IncrementCount();
-            });
-        } 
-        progress.WaitUntilFinished();
-
-        simdata.GetDataset("AbsCoeffs").StoreMatrix(absCoeffs);
-        SetFinished(simdata);
-    }
-
-    virtual void Plot(DataFileGroup& simdata) override
-    {
-#ifdef QSIM_PYTHON3
-        auto x_axis = simdata.GetDataset("Detunings").LoadMatrix();
-        auto y_axis = simdata.GetDataset("AbsCoeffs").LoadMatrix();
-
-        PythonMatplotlib matplotlib;
-        auto figure = matplotlib.CreateFigure();
-        auto ax = figure.AddSubplot();
-        ax.Plot(x_axis.data(), y_axis.data(), x_axis.size());
-        matplotlib.RunGUILoop();
-#endif
-    }
-
-private:
-    TNLevelSystemQM<2> m_system;
-    TDopplerIntegrator<> m_doppler;
-};
-
 int main(int argc, const char* argv[])
 {
-    CRb87TwoLvlApp app;
-    return app.Run(argc, argv);
+    // calculate parameters
+    constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
+    double intProbe = NLevelLaser::RabiToIntensity(dip, 3.5e6);
+    constexpr double freq = SpeedOfLight_v / 780.241e-9;
+
+    // create system
+    TNLevelSystemQM<2> system;
+    system.SetLevel(0, 0.0);
+    system.SetLevel(1, freq);
+    system.SetDipoleElement(0, 1, dip);
+    system.AddLaser(NLevelLaser({0, 1}, intProbe, 1.0));
+    system.SetDecay(1, 0, 6.065e6);
+    
+    TDopplerIntegrator<> doppler;
+    doppler.SetMass(1.44316060e-25);
+
+    // Generate detuning axis
+    VectorXd detunings = VectorXd::LinSpaced(501, -1e9, 1e9);
+    VectorXd absCoeffs(detunings.size());
+
+    // get properties of the system and the lasers
+    auto transitions = system.GetTransitionFreqs();
+    auto dirs = system.GetLaserDirs();
+
+    // start calculation
+    ThreadPool pool; 
+    ProgressBar progress(detunings.size());
+    for (std::size_t i = 0; i < detunings.size(); i++)
+    {
+        pool.Submit([&, i=i](){ 
+            absCoeffs[i] = doppler.Integrate([&](double vel)
+            {
+                VectorXd laserFreqs = transitions + Matrix<double, 1, 1>(detunings[i]);
+                laserFreqs = doppler.ShiftFrequencies(laserFreqs, dirs, vel);
+
+                auto rho = system.GetDensityMatrixSS(laserFreqs);
+                return std::imag(rho(0, 1));
+            });
+            progress.IncrementCount();
+        });
+    }
+    progress.WaitUntilFinished();
+
+    // plot data
+#ifdef QSIM_PYTHON3
+    PythonMatplotlib matplotlib;
+    auto figure = matplotlib.CreateFigure();
+    auto ax = figure.AddSubplot();
+    ax.Plot(detunings.data(), absCoeffs.data(), detunings.size());
+    matplotlib.RunGUILoop();
+#endif
+
+    return 0;
 }

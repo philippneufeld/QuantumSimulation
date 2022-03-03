@@ -129,7 +129,7 @@ namespace QSim
         return str;
     }
 
-    std::string ProgressBar::GetTimeText(double elapsedTime, double totalTimeEst, bool finished)
+    std::string ProgressBar::GetTimeText(double elapsedTime, double remainingTime, bool finished)
     {  
         std::string str;
         str.reserve(32);
@@ -139,7 +139,7 @@ namespace QSim
         {
             str.append(TimeToString(elapsedTime, false));
             str.push_back('<');
-            str.append(TimeToString(totalTimeEst, false));
+            str.append(TimeToString(remainingTime, false));
         }
         else
         {
@@ -151,13 +151,13 @@ namespace QSim
     }
 
     std::string ProgressBar::GenerateBar(std::size_t width, std::size_t cnt, std::size_t tot, 
-            double elapsedTime, double totalTimeEst, bool printEst) const
+            double elapsedTime, double remainigTime, bool printEst) const
     {
         std::string str;
         str.reserve(width);
         
         std::string front = m_title;
-        std::string back = GetProgressText(cnt, tot) + GetTimeText(elapsedTime, totalTimeEst, !printEst);
+        std::string back = GetProgressText(cnt, tot) + GetTimeText(elapsedTime, remainigTime, !printEst);
 
         // cutoff front and back string if necessary
         std::size_t minWidth = 5;
@@ -212,7 +212,7 @@ namespace QSim
 
             // generate new bar string and print it if it differs 
             // from the previously printed string
-            std::string bar = GenerateBar(width, cnt, tot, elT, estTot, cnt < tot);
+            std::string bar = GenerateBar(width, cnt, tot, elT, estTot - elT, cnt < tot);
             if (bar != currBar)
             {
                 std::cout << "\u001b[1000D" << bar << std::flush;

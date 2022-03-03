@@ -1,7 +1,5 @@
 // Philipp Neufeld, 2021-2022
 
-#include <iostream>
-#include <random>
 #include <Eigen/Dense>
 
 #include <QSim/NLevel/NLevelSystem.h>
@@ -56,7 +54,6 @@ int main(int argc, const char* argv[])
     });
 
     auto ts = system.GetTrajectoryTimeaxis(0.0, dt, traj.size());
-
 
 #ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;

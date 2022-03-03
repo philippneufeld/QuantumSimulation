@@ -14,6 +14,19 @@
 using namespace QSim;
 using namespace Eigen;
 
+class NOGasSensor
+{
+public:
+
+    
+
+
+private:
+    TNLevelSystemQM<5> m_system;
+};
+
+
+
 class CNORydEx : public SimulationApp
 {
 public:

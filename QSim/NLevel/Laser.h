@@ -4,6 +4,7 @@
 #define QSim_NLevel_Laser_H_
 
 #include <cstdint>
+#include <cmath>
 #include <functional>
 
 #include "../Constants.h"
