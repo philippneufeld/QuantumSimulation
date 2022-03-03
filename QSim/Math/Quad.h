@@ -63,7 +63,7 @@ namespace QSim
             TConstListSizeof_v<WeightList1_t> > 1);
 
         template<typename YTy, typename XTy>
-        using RType_t = TMatrixEvalType_t<decltype(std::declval<YTy>()[0]*std::declval<XTy>())>;
+        using RType_t = TMatrixEvalType_t<decltype(std::declval<YTy>()[0]*std::declval<TMatrixNorm_t<XTy>>())>;
 
         template<typename YTy>
         constexpr static bool IsValidData_v = TIsMatrix_v<YTy> && 
@@ -78,7 +78,7 @@ namespace QSim
     public:
 
         template<typename YTy, typename XTy, typename=std::enable_if_t<IsValidData_v<YTy>>>
-        static auto Integrate(const YTy& y, XTy dx)
+        static RType_t<YTy, XTy> Integrate(const YTy& y, XTy dx)
         {
             constexpr std::size_t wcnt = TConstListSizeof_v<WeightList1_t>;
             
@@ -152,7 +152,7 @@ namespace QSim
             {
                 result += TConstListGet_v<i, CL> * y(Eigen::seq(Eigen::fix<i+1>, y.size()-2, Eigen::fix<ccnt>)).sum();
             });
-            return result * denRcp;
+            return MatrixEval(result * denRcp);
         }
 
     };

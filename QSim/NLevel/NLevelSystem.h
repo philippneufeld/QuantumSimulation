@@ -59,6 +59,7 @@ namespace QSim
         const auto& GetDecays() const { return m_decays; }
         double GetDecay(unsigned int from, unsigned int to) const;
         bool SetDecay(unsigned int from, unsigned int to, double rate);
+        bool AddDecay(unsigned int from, unsigned int to, double rate);
 
         // dipole operator
         const Eigen::Matrix<std::complex<double>, N, N>& GetDipoleOperator() const { return m_dipoleOp; }
@@ -161,6 +162,13 @@ namespace QSim
             return false; // index out of bound
         m_decays[std::make_pair(from, to)] = rate;
         return true;
+    }
+
+    template<int N, typename MyT, bool AM>
+    bool TNLevelSystemCRTP<N, MyT, AM>::AddDecay(
+        unsigned int from, unsigned int to, double rate)
+    {
+        return SetDecay(from, to, GetDecay(from, to) + rate);
     }
 
     template<int N, typename MyT, bool AM>

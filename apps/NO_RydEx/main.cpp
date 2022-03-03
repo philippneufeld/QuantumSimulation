@@ -1,5 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
+#include <Eigen/Dense>
+
 #include <QSim/Util/SimulationApp.h>
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
@@ -16,165 +18,167 @@ using namespace Eigen;
 
 class NOGasSensor
 {
+    constexpr static double xRadius = 115e-12; // bond length NO ground state
+    constexpr static double rydRadius = 1e-9; // estimation of rydberg radius
 public:
 
-    
-
-
-private:
-    TNLevelSystemQM<5> m_system;
-};
-
-
-
-class CNORydEx : public SimulationApp
-{
-public:
-
-    CNORydEx()
+    NOGasSensor() 
+        : m_beamRadius(1e-3), 
+        m_mass(30.0061 * AtomicMassUnit_v), 
+        m_temperature(300), 
+        m_pressure(100.0) // 1e-3 mbar = 100Pa
     {
-        m_scanLaser = 2; // Red laser
+        m_mass = 30.0061 * AtomicMassUnit_v;
+        
+        // setup system levels
+        m_system.SetLevel(0, 0.0);
+        m_system.SetLevel(1, m_system.GetLevel(0) + SpeedOfLight_v / 226.97e-9);
+        m_system.SetLevel(2, m_system.GetLevel(1) + SpeedOfLight_v / 540.0e-9);
+        m_system.SetLevel(3, m_system.GetLevel(2) + SpeedOfLight_v / 834.92e-9);
+        m_system.SetLevel(4, 9.27 * ElementaryCharge_v / PlanckConstant_v);
 
-        // 
-        constexpr double beamRadius = 1e-3;
-        constexpr double mass = 30.0061 * AtomicMassUnit_v;
-        double meanv = std::sqrt(2*BoltzmannConstant_v*300/mass);
+        // add dipole matrix elements
+        m_system.SetDipoleElement(0, 1, 0.1595 * Debye_v); // https://doi.org/10.1093/mnras/stx1211
+        m_system.SetDipoleElement(1, 2, 1e-1 * Debye_v);
+        m_system.SetDipoleElement(2, 3, 5e-1 * Debye_v);
 
-        // define parameters
-        constexpr double lvlX = 0;
-        constexpr double lvlA = lvlX + SpeedOfLight_v / 226.97e-9;
-        constexpr double lvlH = lvlA + SpeedOfLight_v / 540e-9;
-        constexpr double lvlR = lvlH + SpeedOfLight_v / 834.92e-9;
-        constexpr double lvlI = 9.27 * ElementaryCharge_v / PlanckConstant_v;
-
-        // dipole matrix elements
-        constexpr double dipXA = 0.1595 * Debye_v; // https://doi.org/10.1093/mnras/stx1211
-        constexpr double dipAH = 1e-1 * Debye_v;
-        constexpr double dipHR = 5e-1 * Debye_v;
-
-        // decay rates
-        constexpr double decayAX = 13.8e6; // https://doi.org/10.1063/1.454958
-        constexpr double decayHA = 10.0e6;
-        constexpr double decayRH = 100.0e6;
-        constexpr double decayIonizaion = 6e5;
-        double decayTransit = meanv / beamRadius;
-
-        // laser intensities
-        double uvInt = NLevelLaser::PowerToIntensity(0.05, beamRadius); // 50mW
-        double greenInt = NLevelLaser::PowerToIntensity(1.0, beamRadius); // 1W
-        double redInt = NLevelLaser::PowerToIntensity(1.0, beamRadius); // 1W
-
-        double rabiUV = NLevelLaser::IntensityToRabi(dipXA, uvInt);
-        double rabiGreen = NLevelLaser::IntensityToRabi(dipAH, greenInt);
-        double rabiRed = NLevelLaser::IntensityToRabi(dipHR, redInt);
-
-        m_system.SetLevel(0, lvlX);
-        m_system.SetLevel(1, lvlA);
-        m_system.SetLevel(2, lvlH);
-        m_system.SetLevel(3, lvlR);
-        m_system.SetLevel(4, lvlI);
-
-        m_system.SetDipoleElement(0, 1, dipXA);
-        m_system.SetDipoleElement(1, 2, dipAH);
-        m_system.SetDipoleElement(2, 3, dipHR);
+        // add coupling lasers
+        double uvInt = NLevelLaser::PowerToIntensity(0.05, m_beamRadius); // 50mW
+        double greenInt = NLevelLaser::PowerToIntensity(1.0, m_beamRadius); // 1W
+        double redInt = NLevelLaser::PowerToIntensity(1.0, m_beamRadius); // 1W
         m_system.AddLaser(NLevelLaser({0, 1}, uvInt, 1.0));
         m_system.AddLaser(NLevelLaser({1, 2}, greenInt, -1.0));
         m_system.AddLaser(NLevelLaser({2, 3}, redInt, -1.0));
-        
-        m_system.SetDecay(1, 0, decayAX + decayTransit);
-        m_system.SetDecay(2, 1, decayHA);
-        m_system.SetDecay(3, 2, decayRH);
-        m_system.SetDecay(3, 4, decayIonizaion);
-        m_system.SetDecay(2, 0, decayTransit);
-        m_system.SetDecay(3, 0, decayTransit);
-        m_system.SetDecay(4, 0, decayTransit);
 
-        m_doppler.SetMass(30.0061 * AtomicMassUnit_v);
+        // set level decays
+        m_system.AddDecay(1, 0, 13.8e6); // https://doi.org/10.1063/1.454958
+        m_system.AddDecay(2, 1, 10.0e6);
+        m_system.AddDecay(3, 2, 10.0e6);
+
+        // add transit broadening effect
+        double meanVel = std::sqrt(2*BoltzmannConstant_v*300 / m_mass);
+        double decayTransit = meanVel / m_beamRadius;
+        m_system.AddDecay(1, 0, decayTransit);
+        m_system.AddDecay(2, 0, decayTransit);
+        m_system.AddDecay(3, 0, decayTransit);
+        m_system.AddDecay(4, 0, decayTransit);
+
+        // add collisional ionization term
+        // collisions between rydberg and ground state
+        double sigmaRX = Pi_v * (rydRadius + xRadius) * (rydRadius + xRadius);
+        double kT = BoltzmannConstant_v * m_temperature;
+        double n = m_pressure / kT; // number density
+        double rate = n * std::sqrt(8*kT / Pi_v) * sigmaRX * std::sqrt(2 / m_mass);
+        m_system.AddDecay(3, 4, rate);
+
+        // add recombination rate (assume to be the same as ionization term for now)
+        m_system.AddDecay(4, 0, rate);
+
+        // initialize helper variables
+        m_transitions = m_system.GetTransitionFreqs();
+        m_laserDirs = m_system.GetLaserDirs();
     }
 
-    virtual void Init(DataFileGroup& simdata) override
+    Matrix<double, 5, 1> GetPopulations(double uvDet, double greenDet, double redDet) const
     {
-        // Generate detuning axis
-        constexpr static std::size_t cnt = 501;
-        Matrix<double, 3, cnt> detunings;
-        detunings.setZero();
-        detunings.row(m_scanLaser) = RowVectorXd::LinSpaced(cnt, -500.0e6, 500.0e6);
+        // make a local copy of the system (makes concurrent calls to this function possible)
+        auto sys = m_system;
 
-        simdata.CreateDataset("Detunings", { 3, cnt }).StoreMatrix(detunings);
-        simdata.CreateDataset("Population", { 5, cnt });
-    }
-
-    virtual void Continue(DataFileGroup& simdata)  override
-    {
-        // Load detuning axis
-        auto detunings = simdata.GetDataset("Detunings").LoadMatrix();
-        MatrixXd population(5, detunings.cols());
+        // geometric collisional cross-sections
+        double sigmaRe = Pi_v * rydRadius * rydRadius;
         
-        // get properties of the system and the lasers
-        auto transitions = m_system.GetTransitionFreqs();
-        auto dirs = m_system.GetLaserDirs();
+        // calculate ionization rate (rate0 + rate1*rho_ion)
+        double kT = BoltzmannConstant_v * m_temperature;
+        double n = m_pressure / kT; // number density
+        double rate0 = sys.GetDecay(3, 4); // constant term
+        double rate1 = n * std::sqrt(8*kT / Pi_v) * sigmaRe / std::sqrt(ElectronMass_v);
 
-        ThreadPool pool; 
-        ProgressBar progress(detunings.cols());
-
-        // start calculation
-        for (std::size_t i = 0; i < detunings.cols(); i++)
+        // starting point of the calculation
+        auto rho0 = sys.CreateGroundState();
+        
+        TDopplerIntegrator<> doppler(m_mass, m_temperature);
+        auto dopplerCalc = [&](double vel)
         {
-            pool.Submit([&, i=i](){
+            // calculate laser frequencies
+            Vector3d detunings(uvDet, greenDet, redDet);
+            Vector3d laserFreqs = m_transitions + detunings;
+            
+            // adjust laser frequencies for doppler shift
+            laserFreqs = doppler.ShiftFrequencies(laserFreqs, m_laserDirs, vel);
+            
+            // solve Lindblad master equation for the steady state
+            auto rho = rho0;
+            auto rhoPrev = rho;
+            for (int i = 0; i < 10; i++)
+            {
+                double rhoIon = std::real(rho(4, 4));
+                sys.SetDecay(3, 4, rate0 + rate1*rhoIon);
+                
+                rhoPrev = rho;
+                rho = sys.GetDensityMatrixSS(laserFreqs);
 
-                auto natural = [&](double vel)
-                { 
-                    VectorXd laserFreqs = transitions + detunings.col(i);
-                    laserFreqs = m_doppler.ShiftFrequencies(laserFreqs, dirs, vel);
-                    
-                    auto rho = m_system.GetDensityMatrixSS(laserFreqs);
-                    return real(rho.diagonal().array()).matrix().eval();
-                };
+                if (rho.isApprox(rhoPrev))
+                    break;
+            }
 
-                population.col(i) = m_doppler.Integrate(natural);
-                progress.IncrementCount();
-            });
-        } 
-        progress.WaitUntilFinished();
+            // return populations of the levels
+            return real(rho.diagonal().array()).matrix().eval();
+        };
 
-        simdata.GetDataset("Population").StoreMatrix(population);
-        SetFinished(simdata);
+        return doppler.Integrate(dopplerCalc);
     }
 
-    virtual void Plot(DataFileGroup& simdata) override
-    {
-#ifdef QSIM_PYTHON3
-        VectorXd x_axis = simdata.GetDataset("Detunings").LoadMatrix().row(m_scanLaser) / 1e6;
-        MatrixXd populations = simdata.GetDataset("Population").LoadMatrix();
+private:
+    TNLevelSystemQM<5> m_system;
 
-        std::string laserNames[] = {"UV", "Green", "Red"};
+    // environmental parameters
+    double m_temperature;
+    double m_mass;
+    double m_pressure;
+
+    // laser variables
+    double m_beamRadius;
+    Vector3d m_transitions;
+    Vector3d m_laserDirs;
+};
+
+
+int main(int argc, const char* argv[])
+{
+    NOGasSensor gasSensor;
+
+    VectorXd detunings = VectorXd::LinSpaced(501, -2.5e9, 2.5e9);
+    Matrix<double, 5, Dynamic> populations(5, detunings.size());
+
+    // start parallelized calculation
+    ThreadPool pool; 
+    ProgressBar progress(detunings.size());
+    for (std::size_t i = 0; i < detunings.size(); i++)
+    {
+        pool.Submit([&, i=i]{ 
+            populations.col(i) = gasSensor.GetPopulations(0.0, 0.0, detunings[i]);
+            progress.IncrementCount();
+        });
+    }
+    progress.WaitUntilFinished();
+
+
+#ifdef QSIM_PYTHON3
+        PythonMatplotlib matplotlib;
         std::string levelNames[] = {"X", "A", "H", "R", "Ion"};
 
-        PythonMatplotlib matplotlib;
-
         // for (std::size_t i = 0; i < 5; i++)
-        auto i = 4;
+        std::size_t i = 4;
         {
-            VectorXd pop = populations.row(i);
+            VectorXd pops = populations.row(i);
             auto figure = matplotlib.CreateFigure();
             auto ax = figure.AddSubplot();
-            ax.SetXLabel(laserNames[m_scanLaser] + " detuning [MHz]");
+            ax.SetXLabel("Red laser detuning [MHz]");
             ax.SetYLabel(levelNames[i] + " population");
-            ax.Plot(x_axis.data(), pop.data(), x_axis.size());
+            ax.Plot(detunings.data(), pops.data(), detunings.size());
         }
 
         matplotlib.RunGUILoop();
 #endif
-    }
 
-private:
-    unsigned int m_scanLaser;
-    TNLevelSystemQM<5> m_system;
-    TDopplerIntegrator<> m_doppler;
-};
-
-int main(int argc, const char* argv[])
-{
-    CNORydEx app;
-    return app.Run(argc, argv);
 }
