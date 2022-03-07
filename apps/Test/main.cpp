@@ -10,63 +10,28 @@
 #include <QSim/Python/Plotting.h>
 #endif
 
-#include <QSim/Math/Numerov.h>
-
 using namespace QSim;
 using namespace Eigen;
-
-double potential(double r, unsigned int n, unsigned int l)
-{ 
-    double E = -RydbergEnergy_v / (n*n);
-    constexpr double k1 = 2*ElectronMass_v / ConstexprPow(ReducedPlanckConstant_v, 2);
-    constexpr double k2 = ConstexprPow(ElementaryCharge_v, 2) / (4* Pi_v* VacuumPermittivity_v);
-
-    return k1*(E + k2 / (r)) - l*(l+1) / (r*r);
-}
-
-double V(double r, int l)
-{
-    return l * (l + 1.0) / (r * r) - 2 / r;
-}
-
-std::pair<VectorXd, VectorXd> SimulateWavefunction(double dx, double xmax, unsigned int nE, unsigned int l)
-{
-	size_t n = (size_t)std::ceil(xmax / dx);
-
-    auto kfunc = [&](double x){ return potential(x, nE, l); };
-    auto [xs, psis] = Numerov::Integrate(kfunc, xmax, xmax/n, n, 0.01, 0);
-
-    psis = (4*Pi_v*xs.array()*xs.array()*psis.array()*psis.array()).matrix().eval();
-    psis = psis / std::sqrt(psis.sum());
-
-	return std::make_pair(xs, psis);
-}
-
-
 
 int main(int argc, const char* argv[])
 {
     HydrogenicSystem hyd;
 
-    // auto [r, y] = hyd.NumerovWF(potential, 0, 2, 1e-3, 1, 0);
-    
-
-    VectorXd rs = VectorXd::LinSpaced(1000, 0.1*BohrRadius_v, 2.5*BohrRadius_v);
-    VectorXd ys = rs.unaryExpr([](double x){return potential(x, 1, 0);});
-
 #ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;
     auto fig = matplotlib.CreateFigure();
     auto ax = fig.AddSubplot();
-    // ax.Plot(rs.data(), ys.data(), rs.size());
     
-    for (int n=4; n<=15; n++)
+    for (int n=1; n<=10; n++)
     {
         for (int l=0; l < 1; l++)
         {
-            auto [r, psi] = SimulateWavefunction(1e-2*BohrRadius_v, 3*n*n*BohrRadius_v, n, l);
-            VectorXd x = r.cwiseSqrt();
-            ax.Plot(x.data(), psi.data(), r.size());
+            int outerA0 = 2*(n+10)*n;
+            int steps = 100*outerA0;
+            auto [r, psi] = hyd.GetRadialWF(n, l, BohrRadius_v * outerA0 / steps, BohrRadius_v*outerA0, n*100);
+
+            VectorXd prob = 4*Pi_v*(r.array()*r.array()*psi.array()*psi.array());
+            ax.Plot(r.data(), prob.data(), r.size());
         }
     }
 

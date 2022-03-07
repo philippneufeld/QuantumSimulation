@@ -147,7 +147,7 @@ int main(int argc, const char* argv[])
 {
     NOGasSensor gasSensor;
 
-    VectorXd detunings = VectorXd::LinSpaced(501, -2.5e9, 2.5e9);
+    VectorXd detunings = VectorXd::LinSpaced(501, -1e9, 1e9);
     Matrix<double, 5, Dynamic> populations(5, detunings.size());
 
     // start parallelized calculation
@@ -173,9 +173,9 @@ int main(int argc, const char* argv[])
             VectorXd pops = populations.row(i);
             auto figure = matplotlib.CreateFigure();
             auto ax = figure.AddSubplot();
-            ax.SetXLabel("Red laser detuning [MHz]");
+            ax.SetXLabel("Red laser detuning [GHz]");
             ax.SetYLabel(levelNames[i] + " population");
-            ax.Plot(detunings.data(), pops.data(), detunings.size());
+            ax.Plot((detunings / 1e9).eval().data(), pops.data(), detunings.size());
         }
 
         matplotlib.RunGUILoop();

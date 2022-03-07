@@ -7,6 +7,12 @@
 #include <utility>
 #include <cmath>
 
+#include <Eigen/Dense>
+
+#include <iostream>
+#include "../Math/Quad.h"
+#include "../Math/Numerov.h"
+
 namespace QSim
 {
 
@@ -14,64 +20,78 @@ namespace QSim
     {
     public:
 
-        // y''(x) = k(x)*y(x)
-        template<typename Func>
-        static auto NumerovWF(Func&& potential, double rmin, 
-            double rmax, double step, double init1, double init2)
+        double GetEnergy(unsigned int n)
         {
-            assert(rmax > rmin);
-            step = std::abs(step);
-            std::size_t n = static_cast<std::size_t>((rmax - rmin) / step) + 1;
-            
-            // variable transormation:
-            // x = sqrt(r)
-            // y(x) = x^{3/2} * R(x^2)
-
-            auto kfunc = [&potential](double x)
-            {
-                return potential(x);
-                double r = x*x;
-                return 3.0 / (4.0 * r) + 4.0 * r * potential(r);
-            };
-
-            double xmin = rmin;
-            double xmax = rmax;
-            // double h = (xmax - xmin) / (n - 1);
-
-            // double xmin = std::sqrt(rmin);
-            // double xmax = std::sqrt(rmax);
-            double h = (xmax - xmin) / (n - 1);
-            
-            Eigen::VectorXd rs(n);
-            Eigen::VectorXd wfs(n);
-
-            double yprev2 = init2;
-            double yprev1 = init1;
-            double kprev2 = kfunc(xmax + 2*h);
-            double kprev1 = kfunc(xmax + h);
-
-            double h12Div12 = h*h / 12.0;
-            for (int i = 0; i < n; i++)
-            {
-                double x = xmax - i*h;
-                double k = kfunc(x);
-                double y = (2*(1-5*h12Div12*kprev1)*yprev1 - (1+h12Div12*kprev2)*yprev2) / (1+h12Div12*k);
-
-                // double y = ((2 - potential(x) * h * h) * yprev1 - (1 - h / x) * yprev2) / (1 + h / x);
-                
-                double sqrtx = std::sqrt(x);
-                rs[(n-1)-i] = x; //x*x;
-                wfs[(n-1)-i] = x*x*y; //*sqrtx*sqrtx*sqrtx;
-                
-                // shift previous variables
-                kprev2 = kprev1;
-                yprev2 = yprev1;
-                kprev1 = k;
-                yprev1 = y;
-            }
-            
-            return std::make_pair(rs, wfs);
+            return -RydbergEnergy_v / (n*n);
         }
+
+        double CorePotential(double r, unsigned int n, unsigned int l)
+        {
+            // k1 = hbar^2/(2*mu); k2 = e^2/(4*pi*eps0)
+            constexpr double k1 = ConstexprPow(ReducedPlanckConstant_v, 2) / (2*ElectronMass_v);
+            constexpr double k2 = ConstexprPow(ElementaryCharge_v, 2) / (4* Pi_v* VacuumPermittivity_v);
+            return -k2/r - k1 * l*(l+1) / (r*r);
+        }
+
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF_old(unsigned int n, unsigned int l, 
+            double rInner, double rOuter, std::size_t steps)
+        {
+            // P(r) = r*R(r)
+            // Solve P''(r) = (E-V(r))*P(r)
+            constexpr double k1 = -2*ElectronMass_v / ConstexprPow(ReducedPlanckConstant_v, 2);
+            auto kfunc = [&](double r){ return -k1*(GetEnergy(n) - CorePotential(r, n, l)); };
+            auto [rs, rads] = Numerov::Integrate(kfunc, rOuter, rInner, steps, 0.01, 0);
+
+            // Normalization
+            // int_0^\infty r^2 |R(r)|^2 dr = int_0^\infty |P(r)|^2 dr
+            double dr = (rOuter - rInner) / (rs.size() - 1);
+            double tmp = rads.norm() * std::sqrt(dr);
+
+            // P(r) => R(r)
+            rads = rads.cwiseQuotient(tmp * rs); 
+
+            return std::make_pair(rs, rads);
+        }
+
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(unsigned int n, unsigned int l, 
+            double rInner, double rOuter, std::size_t steps)
+        {
+            // Variable transformation:
+            // f(x) = r^(3/4)*R(r)  with  x = sqrt(r)
+            auto [rs, rads] = GetRadialWFTransformed(n, l, std::sqrt(rInner), std::sqrt(rOuter), steps);
+
+            // transform back
+            rads = rads.cwiseQuotient(rs.cwiseProduct(rs.cwiseSqrt()));
+            rs = rs.cwiseProduct(rs);
+
+            return std::make_pair(rs, rads);
+        }
+
+
+    private:
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(unsigned int n, unsigned int l, 
+            double xInner, double xOuter, std::size_t steps)
+        {
+            // Variable transformation:
+            // f(x) = r^(3/4)*R(r)  with  x = sqrt(r)
+            constexpr double k1 = -2*ElectronMass_v / ConstexprPow(ReducedPlanckConstant_v, 2);
+            auto kfunc = [&](double x){ 
+                double r = x*x;
+                return -(0.75/r + 4*r*k1*(GetEnergy(n) - CorePotential(r, n, l))); 
+            };
+            
+            auto [xs, fs] = Numerov::Integrate(kfunc, xOuter, xInner, steps, 0.01, 0);
+
+            // Normalization
+            // int_0^\infty r^2 (R(r))^2 dr = 2 * int_0^infty x^2 (f(x))^2 = 1
+            double dx = (xOuter - xInner) / (xs.size() - 1);
+            double normSq = QuadSimpsonPolicy::Integrate((xs.cwiseProduct(fs)).array().square().matrix(), 2*dx);
+            fs /= std::sqrt(normSq);
+
+            return std::make_pair(xs, fs);
+        }
+
+
     };
     
 }
