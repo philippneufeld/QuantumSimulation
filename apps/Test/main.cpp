@@ -26,33 +26,15 @@ int main(int argc, const char* argv[])
 {
     HydrogenicSystem hyd;
 
-
-    std::cout << sq(ClebshGordan(1, 1, 2, 1, -1, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 2, 0, 0, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 2, -1, 1, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 1, 1, -1, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 1, 0, 0, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 1, -1, 1, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 0, 1, -1, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 0, 0, 0, 0)) << std::endl;
-    std::cout << sq(ClebshGordan(1, 1, 0, -1, 1, 0)) << std::endl;
-    
-    return 0;
-
+    std::cout << hyd.GetDipoleME(1,0,0,2,0,0) << std::endl;
 
 #ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;
     auto fig = matplotlib.CreateFigure();
     auto ax = fig.AddSubplot();
     
-    /*auto dip1 = hyd.GetRadialMatrixElementLinear(1, 0, 1, 0, ax);
-    std::cout << error(dip1, 1.5*BohrRadius_v) << std::endl;
-
-    auto dip2 = hyd.GetRadialMatrixElementLinear(3, 0, 3, 0, ax);
-    std::cout << error(dip2, 27.0/2*BohrRadius_v) << std::endl;*/
-
     double exact = std::pow(2.0, 5.5)/81*BohrRadius_v;
-    auto dip3 = hyd.GetRadialMatrixElement(2, 0, 1, 0);
+    auto dip3 = hyd.GetDipRadialME(2, 0, 1, 0);
     std::cout << error(exact, dip3) << std::endl;
 
     for (int n=1; n<=10; n++)

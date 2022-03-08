@@ -14,6 +14,7 @@
 #include <iostream>
 #include "../Math/Quad.h"
 #include "../Math/Numerov.h"
+#include "../Math/Wigner.h"
 
 namespace QSim
 {
@@ -22,12 +23,12 @@ namespace QSim
     {
     public:
 
-        double GetEnergy(unsigned int n)
+        double GetEnergy(int n)
         {
             return -RydbergEnergy_v / (n*n);
         }
 
-        double CorePotential(double r, unsigned int n, unsigned int l)
+        double CorePotential(double r, int n, int l)
         {
             // k1 = hbar^2/(2*mu); k2 = e^2/(4*pi*eps0)
             constexpr double k1 = ConstexprPow(ReducedPlanckConstant_v, 2) / (2*ElectronMass_v);
@@ -35,7 +36,7 @@ namespace QSim
             return -k2/r - k1 * l*(l+1) / (r*r);
         }
 
-        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFLinear(unsigned int n, unsigned int l, 
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFLinear(int n, int l, 
             double rInner, double rOuter, std::size_t steps)
         {
             // P(r) = r*R(r)
@@ -55,7 +56,7 @@ namespace QSim
             return std::make_pair(rs, rads);
         }
 
-        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(unsigned int n, unsigned int l, 
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(int n, int l, 
             double rInner, double rOuter, std::size_t steps)
         {
             // Variable transformation:
@@ -69,9 +70,16 @@ namespace QSim
             return std::make_pair(rs, rads);
         }
 
+        double GetDipoleME(int n1, int l1, int m1, int n2, int l2, int m2)
+        {
+            double rad = GetDipRadialME(n1, l1, n2, l2);
+            double ang = GetDipAngularME(l1, m1, l2, m2);
+            return rad*ang;
+        }
+
 
     public:
-        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(unsigned int n, unsigned int l, 
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(int n, int l, 
             double xInner, double xOuter, std::size_t steps)
         {
             // Variable transformation:
@@ -93,31 +101,9 @@ namespace QSim
             return std::make_pair(xs, fs);
         }
 
-        /*template<typename T>
-        double GetRadialMatrixElementLinear(unsigned int n1, unsigned int l1, unsigned int n2, unsigned int l2, T& ax)
+        double GetDipRadialME(int n1, int l1, int n2, int l2)
         {
-            if (n1 > n2) return GetRadialMatrixElementLinear(n2, l2, n1, l1, ax);
-            
-            double dr = BohrRadius_v / 100;
-            int cnt1 = static_cast<int>(std::ceil(3.5*(n1+5)*n1*BohrRadius_v / dr));
-            int cnt2 = static_cast<int>(std::ceil(3.5*(n2+5)*n2*BohrRadius_v / dr));
-
-            auto [r1, psi1] = GetRadialWFLinear(n1, l1, dr, cnt1*dr, cnt1);
-            auto [r2, psi2] = GetRadialWFLinear(n2, l2, dr, cnt2*dr, cnt2);
-            
-            auto r1Cb = (r1.cwiseProduct(r1)).cwiseProduct(r1);
-            auto overlap = psi1.cwiseProduct(psi2.tail(cnt1));
-            auto integral = r1Cb.cwiseProduct(overlap);
-
-            ax.Plot(r1.data(), psi1.data(), r1.size());
-            ax.Plot(r2.tail(cnt1).eval().data(), psi2.tail(cnt1).eval().data(), r2.tail(cnt1).size());
-
-            return QuadSimpsonPolicy::Integrate(integral, dr);
-        }*/
-
-        double GetRadialMatrixElement(unsigned int n1, unsigned int l1, unsigned int n2, unsigned int l2)
-        {
-            if (n1 > n2) return GetRadialMatrixElement(n2, l2, n1, l1);
+            if (n1 > n2) return GetDipRadialME(n2, l2, n1, l1);
             
             double dx = std::sqrt(BohrRadius_v / 1000);
             double xmax1 = std::sqrt(3*(n1+15)*n1*BohrRadius_v);
@@ -133,6 +119,23 @@ namespace QSim
             auto integral = overlap.cwiseProduct(x1Quad);
 
             return 2*QuadSimpsonPolicy::Integrate(integral, dx);
+        }
+
+        double GetDipAngularME(int l1, int m1, int l2, int m2)
+        {
+            // sqrt(4pi/3) * int dOm Y_{l1,m1}(Om) * Y_{l2,m2}(Om) * Y_{1,0}(Om)
+
+            // selection rules
+            if (std::abs(l2-l1) != 1 || std::abs(m2-m1) > 1)
+                return 0.0;
+
+            double res = std::sqrt((2*l1+1)*(2*l2+1));
+            res *= Wigner3j(l1, l2, 1, m1, m2, 0);
+
+            if (res != 0.0)
+                res *= Wigner3j(l1, l2, 1, 0, 0, 0);
+                
+            return res;
         }
 
     };
