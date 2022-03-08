@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <utility>
 #include <cmath>
+#include <complex>
+#include <algorithm>
 
 #include <Eigen/Dense>
 
@@ -33,7 +35,7 @@ namespace QSim
             return -k2/r - k1 * l*(l+1) / (r*r);
         }
 
-        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF_old(unsigned int n, unsigned int l, 
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFLinear(unsigned int n, unsigned int l, 
             double rInner, double rOuter, std::size_t steps)
         {
             // P(r) = r*R(r)
@@ -68,7 +70,7 @@ namespace QSim
         }
 
 
-    private:
+    public:
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(unsigned int n, unsigned int l, 
             double xInner, double xOuter, std::size_t steps)
         {
@@ -91,6 +93,47 @@ namespace QSim
             return std::make_pair(xs, fs);
         }
 
+        /*template<typename T>
+        double GetRadialMatrixElementLinear(unsigned int n1, unsigned int l1, unsigned int n2, unsigned int l2, T& ax)
+        {
+            if (n1 > n2) return GetRadialMatrixElementLinear(n2, l2, n1, l1, ax);
+            
+            double dr = BohrRadius_v / 100;
+            int cnt1 = static_cast<int>(std::ceil(3.5*(n1+5)*n1*BohrRadius_v / dr));
+            int cnt2 = static_cast<int>(std::ceil(3.5*(n2+5)*n2*BohrRadius_v / dr));
+
+            auto [r1, psi1] = GetRadialWFLinear(n1, l1, dr, cnt1*dr, cnt1);
+            auto [r2, psi2] = GetRadialWFLinear(n2, l2, dr, cnt2*dr, cnt2);
+            
+            auto r1Cb = (r1.cwiseProduct(r1)).cwiseProduct(r1);
+            auto overlap = psi1.cwiseProduct(psi2.tail(cnt1));
+            auto integral = r1Cb.cwiseProduct(overlap);
+
+            ax.Plot(r1.data(), psi1.data(), r1.size());
+            ax.Plot(r2.tail(cnt1).eval().data(), psi2.tail(cnt1).eval().data(), r2.tail(cnt1).size());
+
+            return QuadSimpsonPolicy::Integrate(integral, dr);
+        }*/
+
+        double GetRadialMatrixElement(unsigned int n1, unsigned int l1, unsigned int n2, unsigned int l2)
+        {
+            if (n1 > n2) return GetRadialMatrixElement(n2, l2, n1, l1);
+            
+            double dx = std::sqrt(BohrRadius_v / 1000);
+            double xmax1 = std::sqrt(3*(n1+15)*n1*BohrRadius_v);
+            double xmax2 = std::sqrt(3*(n2+15)*n2*BohrRadius_v);
+            int cnt1 = static_cast<int>(std::ceil(xmax1 / dx));
+            int cnt2 = static_cast<int>(std::ceil(xmax2 / dx));
+
+            auto [x1, f1] = GetRadialWFTransformed(n1, l1, dx, cnt1*dx, cnt1);
+            auto [x2, f2] = GetRadialWFTransformed(n2, l2, dx, cnt2*dx, cnt2);
+            
+            auto x1Quad = x1.array().square().square().matrix();
+            auto overlap = f1.cwiseProduct(f2.tail(cnt1));
+            auto integral = overlap.cwiseProduct(x1Quad);
+
+            return 2*QuadSimpsonPolicy::Integrate(integral, dx);
+        }
 
     };
     

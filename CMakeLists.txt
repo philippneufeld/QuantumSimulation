@@ -17,6 +17,7 @@ set(QSIM_INCLUDE_DIR "${CMAKE_SOURCE_DIR}")
 set(QSIM_LIB_TARGET "${CMAKE_PROJECT_NAME}")
 set(QSIM_SOURCE_DIR "${CMAKE_SOURCE_DIR}/QSim")
 set(QSIM_SOURCES
+    "${QSIM_SOURCE_DIR}/Math/Wigner.cpp"
     "${QSIM_SOURCE_DIR}/Execution/Progress.cpp"
     "${QSIM_SOURCE_DIR}/Execution/ThreadPool.cpp"
     "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
