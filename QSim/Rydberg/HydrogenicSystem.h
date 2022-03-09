@@ -33,7 +33,7 @@ namespace QSim
             // k1 = hbar^2/(2*mu); k2 = e^2/(4*pi*eps0)
             constexpr double k1 = ConstexprPow(ReducedPlanckConstant_v, 2) / (2*ElectronMass_v);
             constexpr double k2 = ConstexprPow(ElementaryCharge_v, 2) / (4* Pi_v* VacuumPermittivity_v);
-            return -k2/r - k1 * l*(l+1) / (r*r);
+            return -k2/r + k1 * l*(l+1) / (r*r);
         }
 
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFLinear(int n, int l, 
@@ -116,9 +116,9 @@ namespace QSim
             
             auto x1Quad = x1.array().square().square().matrix();
             auto overlap = f1.cwiseProduct(f2.tail(cnt1));
-            auto integral = overlap.cwiseProduct(x1Quad);
+            auto integrand = overlap.cwiseProduct(x1Quad);
 
-            return 2*QuadSimpsonPolicy::Integrate(integral, dx);
+            return 2*QuadSimpsonPolicy::Integrate(integrand, dx);
         }
 
         double GetDipAngularME(int l1, int m1, int l2, int m2)
