@@ -23,12 +23,12 @@ namespace QSim
     {
     public:
 
-        double GetEnergy(int n)
+        double GetEnergy(int n) const
         {
             return -RydbergEnergy_v / (n*n);
         }
 
-        double CorePotential(double r, int n, int l)
+        double CorePotential(double r, int n, int l) const
         {
             // k1 = hbar^2/(2*mu); k2 = e^2/(4*pi*eps0)
             constexpr double k1 = ConstexprPow(ReducedPlanckConstant_v, 2) / (2*ElectronMass_v);
@@ -37,7 +37,7 @@ namespace QSim
         }
 
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFLinear(int n, int l, 
-            double rInner, double rOuter, std::size_t steps)
+            double rInner, double rOuter, std::size_t steps) const
         {
             // P(r) = r*R(r)
             // Solve P''(r) = (E-V(r))*P(r)
@@ -57,7 +57,7 @@ namespace QSim
         }
 
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(int n, int l, 
-            double rInner, double rOuter, std::size_t steps)
+            double rInner, double rOuter, std::size_t steps) const
         {
             // Variable transformation:
             // f(x) = r^(3/4)*R(r)  with  x = sqrt(r)
@@ -70,17 +70,18 @@ namespace QSim
             return std::make_pair(rs, rads);
         }
 
-        double GetDipoleME(int n1, int l1, int m1, int n2, int l2, int m2)
+        double GetDipoleME(int n1, int l1, int m1, int n2, int l2, int m2) const
         {
-            double rad = GetDipRadialME(n1, l1, n2, l2);
-            double ang = GetDipAngularME(l1, m1, l2, m2);
-            return rad*ang;
+            double res = GetDipAngularME(l1, m1, l2, m2);
+            if (res != 0)
+                res *= GetDipRadialME(n1, l1, n2, l2);
+            return res * ElementaryCharge_v;
         }
 
 
     public:
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(int n, int l, 
-            double xInner, double xOuter, std::size_t steps)
+            double xInner, double xOuter, std::size_t steps) const
         {
             // Variable transformation:
             // f(x) = r^(3/4)*R(r)  with  x = sqrt(r)
@@ -101,7 +102,7 @@ namespace QSim
             return std::make_pair(xs, fs);
         }
 
-        double GetDipRadialME(int n1, int l1, int n2, int l2)
+        double GetDipRadialME(int n1, int l1, int n2, int l2) const
         {
             if (n1 > n2) return GetDipRadialME(n2, l2, n1, l1);
             
@@ -121,7 +122,7 @@ namespace QSim
             return 2*QuadSimpsonPolicy::Integrate(integrand, dx);
         }
 
-        double GetDipAngularME(int l1, int m1, int l2, int m2)
+        double GetDipAngularME(int l1, int m1, int l2, int m2) const
         {
             // sqrt(4pi/3) * int dOm Y_{l1,m1}(Om) * Y_{l2,m2}(Om) * Y_{1,0}(Om)
 
