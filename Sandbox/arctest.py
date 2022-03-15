@@ -29,9 +29,9 @@ if __name__ == "__main__":
     # plt.plot(a2, a2**2*b2**2)
     # plt.show()
 
-    print(calc.basisStates)
-    for row in calc.mat2:
-        print("\t".join(f"{el:.3e}" for el in row * 1e9 * 6.62607004e-34))
+    # print(calc.basisStates)
+    # for row in calc.mat2:
+    #     print("\t".join(f"{el:.3e}" for el in row * 1e9 * 6.62607004e-34))
 
     calc.diagonalise(np.linspace(00.,60000,600))
     calc.plotLevelDiagram()
