@@ -38,6 +38,8 @@ namespace QSim
     constexpr static double RydbergConstant_v = ElectronMass_v*ConstexprPow(ElementaryCharge_v, 4) /
         (8*ConstexprPow(VacuumPermittivity_v, 2)*ConstexprPow(PlanckConstant_v, 3)*SpeedOfLight_v);
     constexpr static double RydbergEnergy_v = PlanckConstant_v*SpeedOfLight_v*RydbergConstant_v;
+    constexpr static double FineStructureConstant_v = ConstexprPow(ElementaryCharge_v, 2) / 
+        (4*Pi_v*VacuumPermittivity_v*ReducedPlanckConstant_v*SpeedOfLight_v);
 
 }
 

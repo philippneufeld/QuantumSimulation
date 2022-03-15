@@ -82,7 +82,7 @@ namespace QSim
     double ClebshGordan(double j1, double j2, double j3, double m1, double m2, double m3)
     {
         double phase = static_cast<int>(j2-j1-m3) % 2 == 0 ? 1.0 : -1.0;
-        return phase * std::sqrt(2*j3+1) * Wigner3j(j1, j2, j3, m1, m2, m3);
+        return phase * std::sqrt(2*j3+1) * Wigner3j(j1, j2, j3, m1, m2, -m3);
     }
 
 }
