@@ -10,7 +10,7 @@
 #include <exception>
 #include <vector>
 #include <tuple>
-#include "HydrogenicSystem.h"
+#include "RydbergSystem.h"
 
 #include <iostream>
 
@@ -20,7 +20,7 @@ namespace QSim
     class StarkMap
     {
     public:
-        StarkMap(const HydrogenicSystem& system, int n, int l, double j, 
+        StarkMap(const RydbergSystem& system, int n, int l, double j, 
             double mj, int nMin, int nMax, int lMax);
         // getter
         const std::vector<std::tuple<int, int, double, double>>& GetBasis() const { return m_basis; }

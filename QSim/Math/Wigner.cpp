@@ -74,9 +74,16 @@ namespace QSim
 
     double Wigner3j(double j1, double j2, double j3, double m1, double m2, double m3)
     {
-        return Wigner3jInt(
-            static_cast<int>(2*j1), static_cast<int>(2*j2), static_cast<int>(2*j3),
-            static_cast<int>(2*m1), static_cast<int>(2*m2), static_cast<int>(2*m3));
+        // round because of inprecise floating point arithmetic
+        // angular momenta can only be an integer or half-integer
+        int twoJ1 = static_cast<int>(std::round(2*j1));
+        int twoJ2 = static_cast<int>(std::round(2*j2));
+        int twoJ3 = static_cast<int>(std::round(2*j3));
+        int twoM1 = static_cast<int>(std::round(2*m1));
+        int twoM2 = static_cast<int>(std::round(2*m2));
+        int twoM3 = static_cast<int>(std::round(2*m3));
+
+        return Wigner3jInt(twoJ1, twoJ2, twoJ3, twoM1, twoM2, twoM3);
     }
 
     double ClebshGordan(double j1, double j2, double j3, double m1, double m2, double m3)

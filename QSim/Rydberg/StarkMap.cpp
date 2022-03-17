@@ -4,7 +4,7 @@
 
 namespace QSim
 {
-    StarkMap::StarkMap(const HydrogenicSystem& system, int n, int l, 
+    StarkMap::StarkMap(const RydbergSystem& system, int n, int l, 
         double j, double mj, int nMin, int nMax, int lMax)
         : m_n(n), m_l(l), m_j(j), m_mj(mj), m_nMin(nMin), m_nMax(nMax), m_lMax(lMax)
     {
@@ -13,13 +13,6 @@ namespace QSim
             throw std::runtime_error("Invalid quantum numbers");
 
         // generate basis
-        /*for (int n = m_nMin; n < m_nMax; n++)
-        {
-            for (int l = 0; l <= n && l <= m_lMax; l++)
-            {
-                m_basis.emplace_back(n, l, m);
-            }
-        }*/
         for (int n = m_nMin; n <= m_nMax; n++)
         {
             for (int l = 0; l <= n && l <= m_lMax; l++)
@@ -41,7 +34,7 @@ namespace QSim
         for (int i=0; i<stateCnt; i++)
         {
             auto [n, l, j, m] = m_basis[i];
-            m_energies[i] = system.GetEnergy(n);
+            m_energies[i] = system.GetEnergy(n, l, j);
         }
 
         // calculate dipole operator
@@ -53,7 +46,7 @@ namespace QSim
                 auto [n1, l1, j1, m1] = m_basis[i1];
                 auto [n2, l2, j2, m2] = m_basis[i2];
 
-                double dip = system.GetDipoleME2(n1, l1, j1, m1, n2, l2, j2, m2);
+                double dip = system.GetDipoleME(n1, l1, j1, m1, n2, l2, j2, m2);
                 m_dipoleOperator(i1, i2) = dip;
                 m_dipoleOperator(i2, i1) = dip;
             }

@@ -7,7 +7,7 @@ import arc
 
 if __name__ == "__main__":
     
-    atom = arc.Hydrogen()
+    atom = arc.Rubidium()
     
     # levels = arc.LevelPlot(atom)
     # levels.makeLevels(23,32,0,20)
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     # plt.plot(a1, a1**2*b1**2)
     # plt.plot(a2, a2**2*b2**2)
     # plt.show()
-
+ 
     # print(calc.basisStates)
     # for row in calc.mat2:
     #     print("\t".join(f"{el:.3e}" for el in row * 1e9 * 6.62607004e-34))
