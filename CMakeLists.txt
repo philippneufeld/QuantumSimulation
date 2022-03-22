@@ -27,7 +27,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
     "${QSIM_SOURCE_DIR}/Util/ProgressBar.cpp"
-    "${QSIM_SOURCE_DIR}/Rydberg/RydbergSystem.cpp"
+    "${QSIM_SOURCE_DIR}/Rydberg/RydbergAtom.cpp"
     "${QSIM_SOURCE_DIR}/Rydberg/StarkMap.cpp"
     )
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")

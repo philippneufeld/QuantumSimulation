@@ -4,9 +4,11 @@
 
 namespace QSim
 {
-    StarkMap::StarkMap(const RydbergSystem& system, int n, int l, 
-        double j, double mj, int nMin, int nMax, int lMax)
-        : m_n(n), m_l(l), m_j(j), m_mj(mj), m_nMin(nMin), m_nMax(nMax), m_lMax(lMax)
+    AtomStarkMap::AtomStarkMap(
+        const TRydbergSystem<RydbergAtomState_t>& system, 
+        int n, int l, double j, double mj, int nMin, int nMax, int lMax)
+        : m_n(n), m_l(l), m_j(j), m_mj(mj), 
+        m_nMin(nMin), m_nMax(nMax), m_lMax(lMax)
     {
         if (m_nMin > m_n || m_nMax < m_n || m_l > m_n || 
             std::abs(m_mj) > m_j || m_n < 1 || m_nMin < 1 || m_l < 0)
@@ -32,10 +34,7 @@ namespace QSim
         // get energies
         m_energies = Eigen::VectorXd(stateCnt);
         for (int i=0; i<stateCnt; i++)
-        {
-            auto [n, l, j, m] = m_basis[i];
-            m_energies[i] = system.GetEnergy(n, l, j);
-        }
+            m_energies[i] = system.GetEnergy(m_basis[i]);
 
         // calculate dipole operator
         m_dipoleOperator = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
@@ -43,17 +42,14 @@ namespace QSim
         {
             for (int i2 = 0; i2 < i1; i2++)
             {
-                auto [n1, l1, j1, m1] = m_basis[i1];
-                auto [n2, l2, j2, m2] = m_basis[i2];
-
-                double dip = system.GetDipoleME(n1, l1, j1, m1, n2, l2, j2, m2);
+                double dip = system.GetDipoleME(m_basis[i1], m_basis[i2]);
                 m_dipoleOperator(i1, i2) = dip;
                 m_dipoleOperator(i2, i1) = dip;
             }
         }
     }
 
-    Eigen::VectorXd StarkMap::GetEnergies(double electricField)
+    Eigen::VectorXd AtomStarkMap::GetEnergies(double electricField)
     {
         Eigen::MatrixXd hamiltonian = electricField * m_dipoleOperator;
         hamiltonian += m_energies.asDiagonal();

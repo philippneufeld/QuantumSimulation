@@ -4,24 +4,23 @@
 #define QSim_Rydberg_StarkMap_H_
 
 #include <Eigen/Dense>
-#include <Eigen/Sparse>
 
-#include <iostream>
-#include <exception>
 #include <vector>
-#include <tuple>
-#include "RydbergSystem.h"
 
-#include <iostream>
+#include "RydbergAtom.h"
+
 
 namespace QSim
 {
 
-    class StarkMap
+    class AtomStarkMap
     {
     public:
-        StarkMap(const RydbergSystem& system, int n, int l, double j, 
-            double mj, int nMin, int nMax, int lMax);
+        AtomStarkMap(
+            const TRydbergSystem<RydbergAtomState_t>& system, 
+            int n, int l, double j, double mj, 
+            int nMin, int nMax, int lMax);
+        
         // getter
         const std::vector<std::tuple<int, int, double, double>>& GetBasis() const { return m_basis; }
         const Eigen::MatrixXd& GetDipoleOperator() const { return m_dipoleOperator; }
@@ -33,7 +32,7 @@ namespace QSim
         int m_n, m_l;
         double m_j, m_mj;
         int m_nMin, m_nMax, m_lMax;
-        std::vector<std::tuple<int, int, double, double>> m_basis;
+        std::vector<RydbergAtomState_t> m_basis;
 
         Eigen::VectorXd m_energies;
         Eigen::MatrixXd m_dipoleOperator;
