@@ -60,34 +60,43 @@ namespace QSim
         }
     };
 
-    
-    // Runge-Kutta 6th order ode integrator
-    class ODERK6Policy
+    // Heun-Euler adaptive integrator
+    class ODEAd21HEPolicy
     {
     protected:
-        ~ODERK6Policy() = default;
+        ~ODEAd21HEPolicy() = default;
 
-    public:
+    public:      
+        public:      
+        
         template<typename Func, typename YTy, typename XTy, typename DXTy>
         static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
             Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
         {
-            auto k1 = func(x, y);
-            auto k2 = func(x + dx/3, y + (dx/3)*k1);
-            auto k3 = func(x + 2*dx/3, y + (2*dx/3)*k2);
-            auto k4 = func(x + dx/3, y + (dx/12)*k1 + (dx/3)*k2 - (dx/12)*k3);
-            auto k5 = func(x + 5*dx/6, y + (25*dx/48)*k1 - (55*dx/24)*k2 + (35*dx/48)*k3 + (15*dx/8)*k4);
-            auto k6 = func(x + dx/6, y + (3*dx/20)*k1 - (11*dx/20)*k2 - (1*dx/8)*k3 + (dx/2)*k4 + (dx/10)*k5);
-            auto k7 = func(x + dx, y - (261*dx/260)*k1 + (33*dx/13)*k2 + (43*dx/156)*k3 - (118*dx/39)*k4 + (32*dx/195)*k5 + (80*dx/39)*k6);
-            return (13*dx/200)*k1 + (11*dx/40)*k3 + (11*dx/40)*k4 + (4*dx/25)*k5 + (4*dx/25)*k6 + (13*dx/200)*k7;
+            return StepWithErrorEst(func, y, x, dx).first;
         }
+
+       template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        {
+            auto k1 = func(x, y);
+            auto k2 = func(x + dx, y + dx*k1);
+
+            using RTy = Internal::TODEResultType_t<Func, YTy, XTy, DXTy>;
+            RTy dy1 = dx*k1;
+            RTy dy2 = (dx/2) * (k1 + k2);
+            RTy err = dy2 - dy1;
+
+            return std::make_pair(dy2, err);
+        }
+
     };
 
     // Bogacki–Shampine ode integrator
-    class ODEBS32Policy
+    class ODEAd32BSPolicy
     {
     protected:
-        ~ODEBS32Policy() = default;
+        ~ODEAd32BSPolicy() = default;
 
     public:      
         
@@ -99,16 +108,55 @@ namespace QSim
         }
 
        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
-            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
         {
+            using RTy = Internal::TODEResultType_t<Func, YTy, XTy, DXTy>;
+            
             auto k1 = func(x, y);
             auto k2 = func(x + (dx/2), y + (dx/2)*k1);
-            auto k3 = func(x + (3*dx/4), y + (3*dx/4)*k2);
-            auto dy1 = (2*dx/9)*k1 + (1*dx/9)*k2 + (4*dx/9)*k3;
+            auto k3 = func(x + (3*dx/4), y + (3*dx/4)*k2); 
+            RTy dy1 = (2*dx/9)*k1 + (1*dx/3)*k2 + (4*dx/9)*k3;
+
             auto k4 = func(x + dx, y + dy1);
-            auto dy2 = (7*dx/24)*k1 + (dx/4)*k2 + (dx/3)*k3 + (dx/8)*k4;  
-            auto err = dy2 - dy1;
+            RTy dy2 = (7*dx/24)*k1 + (dx/4)*k2 + (dx/3)*k3 + (dx/8)*k4;  
+            RTy err = dy2 - dy1;
+
+            return std::make_pair(dy2, err);
+        }
+    };
+
+    // Dormand–Prince ode integrator
+    class ODEAd54DPPolicy
+    {
+    protected:
+        ~ODEAd54DPPolicy() = default;
+
+    public:      
+        
+        template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
+            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+        {
+            return StepWithErrorEst(func, y, x, dx).first;
+        }
+
+       template<typename Func, typename YTy, typename XTy, typename DXTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        {
+            using RTy = Internal::TODEResultType_t<Func, YTy, XTy, DXTy>;
+            
+            auto k1 = func(x, y);
+            auto k2 = func(x + (dx/5), y + (dx/5)*k1);
+            auto k3 = func(x + (3*dx/10), y + (3*dx/40)*k1 + (9*dx/40)*k2); 
+            auto k4 = func(x + (4*dx/5), y + (44*dx/45)*k1 - (56*dx/15)*k2 + (32*dx/9)*k3); 
+            auto k5 = func(x + (8*dx/9), y + (19372*dx/6561)*k1 - (25360*dx/2187)*k2 + (64448*dx/6561)*k3 - (212*dx/729)*k4); 
+            auto k6 = func(x + dx, y + (9017*dx/3168)*k1 - (355*dx/33)*k2 + (46732*dx/5247)*k3 + (49*dx/176)*k4 - (5103*dx/18656)*k5); 
+            RTy dy1 = (35*dx/384)*k1 + (500*dx/1113)*k3 + (125*dx/192)*k4 - (2187*dx/6784)*k5 + (11*dx/84)*k6;
+
+            auto k7 = func(x + dx, y + dy1); 
+            RTy dy2 = (5179*dx/57600)*k1 + (7571*dx/16695)*k3 + (393*dx/640)*k4 - (92097*dx/339200)*k5 + (187*dx/2100)*k6 + (1*dx/40)*k6;  
+            RTy err = dy2 - dy1;
+
             return std::make_pair(dy2, err);
         }
     };

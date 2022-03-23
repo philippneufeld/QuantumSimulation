@@ -8,7 +8,9 @@
 namespace QSim
 {
 
+    // n, l, j, mj
     using RydbergAtomState_t = std::tuple<int, int, double, double>;
+    
     class RydbergAtom : public TRydbergSystem<RydbergAtomState_t>
     {
     public:

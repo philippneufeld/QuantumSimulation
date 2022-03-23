@@ -3,6 +3,8 @@
 #include <iostream>
 #include <Eigen/Dense>
 
+#include <QSim/Math/Ode.h>
+
 #include <QSim/Constants.h>
 #include <QSim/Rydberg/RydbergAtom.h>
 #include <QSim/Rydberg/StarkMap.h>
@@ -17,46 +19,62 @@
 using namespace QSim;
 using namespace Eigen;
 
-int main(int argc, const char* argv[])
+int fevs = 0;
+
+double func(double x, double y)
 {
-    Rubidium atom;
-    AtomStarkMap starkMap(atom, 28, 0, 0.5, 0.5, 23, 31, 20);
+    fevs++;
+    return -x*y*y;
+}
 
-    int cnt = starkMap.GetBasis().size();
-    std::cout << "Basis size: " << cnt << std::endl;
 
-    VectorXd eField = VectorXd::LinSpaced(600, 0.0, 60000.0);
-    MatrixXd energies(eField.size(), cnt);
+int main(int argc, const char* argv[])
+{    
+    std::vector<double> xs;
+    std::vector<double> ys;
 
-    ThreadPool pool; 
-    ProgressBar progress(eField.size());
+    xs.push_back(0.0);
+    ys.push_back(1.0);
     
-    for (int i=0; i<eField.size(); i++)
+    double dx = 0.01;
+    
+    TODEStepper<ODEAd54DPPolicy> stepper;
+
+    for(; xs.back() <= 200.0;)
     {
-        pool.Submit([&,i=i](){
-            energies.row(i) = starkMap.GetEnergies(eField[i]) / (PlanckConstant_v*SpeedOfLight_v) / 100;
-            progress.IncrementCount();
-        });
+        auto [dy, err] = stepper.StepWithErrorEst(func, ys.back(), xs.back(), dx);
+        if (std::abs(err) < 1e-7)
+        {
+            xs.push_back(xs.back() + dx);
+            ys.push_back(ys.back() + dy);
+
+            if (std::abs(err) < 1e-8)
+            {
+                dx *= 1.5;
+            }
+        }
+        else
+        {
+            dx /= 1.5;
+        }
     }
-    progress.WaitUntilFinished();
+
+    std::cout << "Steps: " << fevs << std::endl;
+
+    std::vector<double> ysErr;
+    for (int i = 0; i < xs.size(); i++)
+        ysErr.push_back(std::abs(ys[i] - (2.0/(xs[i]*xs[i]+2))));
 
 #ifdef QSIM_PYTHON3
     PythonMatplotlib matplotlib;
     auto fig = matplotlib.CreateFigure();
     auto ax = fig.AddSubplot();
 
-    for (int i=0; i < cnt; i++)
-        ax.Plot((eField / 100).eval().data(), energies.col(i).eval().data(), eField.size(), "", ".C0");
-
-    ax.SetYLimits(-188.0, -167.5);
-    // ax.SetYLimits(-150.0, -130.0);
-    ax.SetXLimits(0, 600);
-    ax.SetXLabel("Electric Field (V/cm)");
-    ax.SetYLabel("Energy $\\frac{E}{hc}$ (cm$^{-1}$)");    
+    // ax.Plot(xs.data(), ys.data(), xs.size(), "", "-C0");
+    ax.Plot(xs.data(), ysErr.data(), xs.size(), "", "-C1");
 
     matplotlib.RunGUILoop();
 #endif
-
-
+    
     return 0;
 }
