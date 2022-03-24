@@ -2,6 +2,8 @@
 
 #include <Eigen/Dense>
 
+#include <fstream>
+
 #include <QSim/NLevel/Laser.h>
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
@@ -25,8 +27,9 @@ int main(int argc, const char* argv[])
     constexpr double freq = SpeedOfLight_v / 780.241e-9;
 
     // dt << Rabi^-1, Doppler^-1, detuning^-1
-    double dt = 1e-10;
-    constexpr double tint = 1.0 / decay;
+    constexpr double decayTime = 1.0 / decay;
+    constexpr double tint = 10.0 * decayTime;
+    constexpr double dt = decayTime / 250.0;
     
     // create system
     TNLevelSystemSC<2> system;
@@ -42,6 +45,7 @@ int main(int argc, const char* argv[])
 
     // Generate detuning axis
     VectorXd detunings = VectorXd::LinSpaced(501, -1e9, 1e9);
+    // VectorXd detunings = VectorXd::LinSpaced(51, -10.5e7, 10.5e7);
     VectorXd absCoeffs(detunings.size());
 
     // get properties of the system and the lasers
@@ -67,6 +71,16 @@ int main(int argc, const char* argv[])
         });
     }
     progress.WaitUntilFinished();
+
+    std::ofstream file;
+    std::string home = getenv("HOME");
+    file.open(home + "/data.txt");
+    for (int i = 0; i < detunings.size(); i++)
+    {
+        file << detunings[i] << " " << absCoeffs[i] << std::endl;
+    }
+    file.close();
+
 
     // plot data
 #ifdef QSIM_PYTHON3

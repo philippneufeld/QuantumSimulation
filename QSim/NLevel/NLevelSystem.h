@@ -252,8 +252,15 @@ namespace QSim
         // calculate appropriate amount of steps to obtain a dt near to the required dt
         unsigned int steps = static_cast<unsigned int>(std::ceil((t-t0) / dt));
         dt = (t-t0) / steps;
+
         const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
-        return EvolveDensityMatrix(auxData, rho0, t0, dt, steps);
+
+        // define integrator and function to be integrated
+        TODEIntegrator<ODERK4Policy> integrator;
+        using YType = Eigen::Matrix<std::complex<double>, N, N>;
+        auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
+
+        return integrator.IntegrateTo(func, rho0, t0, t, dt);
     }
 
     template<int N, typename MyT, bool AM>
@@ -264,28 +271,34 @@ namespace QSim
     {
         const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
         
+        // define integrator and function to be integrated
+        TODEIntegrator<ODEAd54DPPolicy> integrator;
+        using YType = Eigen::Matrix<std::complex<double>, N, N>;
+        auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
+        
         // validate averaging time and generate starting and 
         // end time of the averaging process
         tav = tav > t - t0 ? t - t0 : tav;
         double t1 = t - tav / 2;
-        double t2 = t1 + tav;
 
         // evolve up to the starting point of the averaging
-        unsigned int steps1 = static_cast<unsigned int>(std::ceil((t1-t0) / dt));
-        double dt1 = (t1 - t0) / steps1;
-        auto rho = EvolveDensityMatrix(auxData, rho0, t0, dt1, steps1);
+        double dt1 = dt;
+        auto rho = integrator.IntegrateTo(func, rho0, t0, t1, dt1);
 
         // continue evolving while averaging the newly calculated density matrices
-        unsigned int steps2 = static_cast<unsigned int>(std::ceil((t2-t1) / dt));
-        double dt2 = (t2 - t1) / steps2;
-
+        double dtAvStep = dt; // std::min(dt1, dt);
+        double dtAv = dt1;
+        
         auto rhoAv = rho;
-        for (unsigned int i = 0; i < steps2; i++)
+        unsigned int i = 0;
+        for (; i*dtAvStep < tav; i++)
         {
-            rho = EvolveDensityMatrix(auxData, rho, t1 + i*dt2, dt2, 1);
+            double t0av = t1 + i*dtAvStep;
+            double t1av = t1 + (i+1)*dtAvStep;
+            rho = integrator.IntegrateTo(func, rho0, t0av, t1av, dtAv);
             rhoAv += rho;
         }
-        rhoAv *= 1.0 / (steps2 + 1);
+        rhoAv *= 1.0 / (1 + i);
 
         return rhoAv;
     }
@@ -303,20 +316,27 @@ namespace QSim
         const Eigen::Matrix<std::complex<double>, N, N>& rho0,
         double t0, double t, double dt)
     {
+        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
+        
+        // allocate memory for the trajectory data
         std::size_t n = static_cast<std::size_t>(std::ceil((t-t0) / dt));
-
         std::vector<Eigen::Matrix<std::complex<double>, N, N>> trajectory;
         trajectory.reserve(n + 1);
         trajectory.push_back(rho0);
+
+        // define integrator and function to be integrated
+        TODEIntegrator<ODEAd54DPPolicy> integrator;
+        using YType = Eigen::Matrix<std::complex<double>, N, N>;
+        auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
         
         auto rho = rho0;
-        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
+        double dtInner = dt;
         for (std::size_t i = 0; i < n; i++)
         {
-            rho = EvolveDensityMatrix(auxData, rho, t0 + i*dt, dt, 1);
+            rho = integrator.IntegrateTo(func, rho, t0+i*dt, t0+(i+1)*dt, dtInner);
             trajectory.push_back(rho);
-        }
-        
+        };
+
         return trajectory;
     }
 

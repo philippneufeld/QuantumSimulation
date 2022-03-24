@@ -43,6 +43,9 @@ int main(int argc, const char* argv[])
     // TODEIntegrator<ODEAd32BSPolicy> integrator;
     TODEIntegrator<ODEAd54DPPolicy> integrator;
     
+    using YTy = Matrix<std::complex<double>, 4, 4>;
+    using YTyAbs = decltype(TMatrixCwiseAbs<YTy>::Get(std::declval<YTy>()));
+
     for(; xs.back() < 200.0;)
     {
         double x = xs.back();

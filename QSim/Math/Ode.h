@@ -181,12 +181,12 @@ namespace QSim
     namespace Internal
     {
         // Non-adaptive implementation
-        template<typename ODEStepperPolicy, bool isAdaptive>
-        class TODEIntegratorHelper : public ODEStepperPolicy
+        template<typename ODEStepperPolicy>
+        class TODEIntegratorHelperFixed : public ODEStepperPolicy
         {
         public:
             template<typename Func, typename Y0Ty>
-            auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double dx)
+            auto IntegrateToFixed(Func&& func, Y0Ty&& y0, double x, double x1, double dx)
             {
                 using YTy = TMatrixMulResultFP_t<Y0Ty, double>;
                 YTy y = std::forward<Y0Ty>(y0);
@@ -202,20 +202,36 @@ namespace QSim
             }
         };
 
-        // Adaptive implementation
-        template<typename ODEStepperPolicy>
-        class TODEIntegratorHelper<ODEStepperPolicy, true> : public ODEStepperPolicy
+        // Non-adaptive implementation
+        template<typename ODEStepperPolicy, bool isAdaptive>
+        class TODEIntegratorHelper 
+            : public TODEIntegratorHelperFixed<ODEStepperPolicy>
         {
         public:
+            template<typename Func, typename Y0Ty>
+            auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double dx)
+            {
+                return TODEIntegratorHelperFixed<ODEStepperPolicy>::IntegrateToFixed(func, y0, x, x1, dx);
+            }
+        };
+
+        // Adaptive implementation
+        template<typename ODEStepperPolicy>
+        class TODEIntegratorHelper<ODEStepperPolicy, true> 
+            : public TODEIntegratorHelperFixed<ODEStepperPolicy>
+        {
+        public:
+
             template<typename Func, typename Y0Ty>
             auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double& dx)
             {
                 using YTy = TMatrixMulResultFP_t<Y0Ty, double>;
+                using YTyAbs = decltype(TMatrixCwiseAbs<YTy>::Get(std::declval<YTy>()));
                 
                 // bounds
-                YTy ones = TMatrixOnesLike<YTy>::Get(y0);
-                YTy maxError = ones * 1e-7;
-                YTy minError = ones * 1e-8;
+                YTyAbs ones = TMatrixOnesLike<YTyAbs>::Get(TMatrixCwiseAbs<YTy>::Get(y0));
+                YTyAbs maxError = ones * 1e-4;
+                YTyAbs minError = ones * 1e-8;
 
                 YTy y = std::forward<Y0Ty>(y0);
                 
@@ -223,11 +239,11 @@ namespace QSim
                 {
                     double dxEff = std::min(x1 - x, dx);
                     auto [dy, err] = ODEStepperPolicy::StepWithErrorEst(func, y, x, dxEff);
-                    YTy absErr = TMatrixCwiseAbs<YTy>::Get(err);
+                    YTyAbs absErr = TMatrixCwiseAbs<YTy>::Get(err);
                     
-                    if (TMatrixAnyCwiseLess<YTy>::Get(maxError, absErr))
+                    if (TMatrixAnyCwiseLess<YTyAbs>::Get(maxError, absErr))
                     {
-                        dx = dxEff / 1.5;
+                        dx = dxEff / 2;
                     }
                     else
                     {
@@ -235,8 +251,8 @@ namespace QSim
                         x += dxEff;
                         y += dy;
 
-                        if (TMatrixAnyCwiseLess<YTy>::Get(absErr, minError) && !(dxEff < dx))
-                            dx *= 1.5;
+                        if (TMatrixAnyCwiseLess<YTyAbs>::Get(absErr, minError) && !(dxEff < dx))
+                            dx *= 2;
                     }
                 }
 
