@@ -36,30 +36,37 @@ int main(int argc, const char* argv[])
     xs.push_back(0.0);
     ys.push_back(1.0);
     
+    double plotSteps = 200.0;
     double dx = 0.01;
     
-    TODEStepper<ODEAd54DPPolicy> stepper;
-
-    for(; xs.back() <= 200.0;)
+    // TODEIntegrator<ODEAd21HEPolicy> integrator;
+    // TODEIntegrator<ODEAd32BSPolicy> integrator;
+    TODEIntegrator<ODEAd54DPPolicy> integrator;
+    
+    for(; xs.back() < 200.0;)
     {
-        auto [dy, err] = stepper.StepWithErrorEst(func, ys.back(), xs.back(), dx);
-        if (std::abs(err) < 1e-7)
-        {
-            xs.push_back(xs.back() + dx);
-            ys.push_back(ys.back() + dy);
+        double x = xs.back();
+        auto y = integrator.IntegrateTo(func, ys.back(), xs.back(), xs.back() + plotSteps, dx);
+        xs.push_back(xs.back() + plotSteps);
+        ys.push_back(y);
 
-            if (std::abs(err) < 1e-8)
-            {
-                dx *= 1.5;
-            }
-        }
-        else
-        {
-            dx /= 1.5;
-        }
+        // auto [dy, err] = integrator.StepWithErrorEst(func, ys.back(), xs.back(), dx);
+        // if (std::abs(err) < 1e-7)
+        // {
+        //     xs.push_back(xs.back() + dx);
+        //     ys.push_back(ys.back() + dy);
+        //     if (std::abs(err) < 1e-8)
+        //     {
+        //         dx *= 1.5;
+        //     }
+        // }
+        // else
+        // {
+        //     dx /= 1.5;
+        // }
     }
 
-    std::cout << "Steps: " << fevs << std::endl;
+    std::cout << "Steps: " << fevs << " " << xs.size() << std::endl;
 
     std::vector<double> ysErr;
     for (int i = 0; i < xs.size(); i++)

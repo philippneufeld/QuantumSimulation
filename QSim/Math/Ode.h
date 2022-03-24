@@ -12,6 +12,8 @@ namespace QSim
     // Implements at least the following functions:
     // 1) Calculate evolution step of func from x to x+dx:
     //      auto Step(func, y, x, dx)
+    // Additionally a static constexpr boolean member 
+    // "IsAdaptive_v" must be present
 
     namespace Internal
     {
@@ -32,9 +34,11 @@ namespace QSim
         ~ODEEulerPolicy() = default;
 
     public:
-        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
-            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+        constexpr static bool IsAdaptive_v = false;
+
+        template<typename Func, typename YTy>
+        static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
+            TMatrixMulResultFP_t<YTy, double>
         {
             return func(x, y) * dx;
         }
@@ -47,9 +51,11 @@ namespace QSim
         ~ODERK4Policy() = default;
 
     public:
-        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
-            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+        constexpr static bool IsAdaptive_v = false;
+
+        template<typename Func, typename YTy>
+        static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
+            TMatrixMulResultFP_t<YTy, double>
         {
             auto dx2 = dx/2;
             auto k1 = func(x, y);
@@ -66,23 +72,23 @@ namespace QSim
     protected:
         ~ODEAd21HEPolicy() = default;
 
-    public:      
-        public:      
-        
-        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
-            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+    public:
+        constexpr static bool IsAdaptive_v = true;
+    
+        template<typename Func, typename YTy>
+        static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
+            TMatrixMulResultFP_t<YTy, double>
         {
             return StepWithErrorEst(func, y, x, dx).first;
         }
 
-       template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        template<typename Func, typename YTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, double x, double dx)
         {
             auto k1 = func(x, y);
             auto k2 = func(x + dx, y + dx*k1);
 
-            using RTy = Internal::TODEResultType_t<Func, YTy, XTy, DXTy>;
+            using RTy = TMatrixMulResultFP_t<YTy, double>;
             RTy dy1 = dx*k1;
             RTy dy2 = (dx/2) * (k1 + k2);
             RTy err = dy2 - dy1;
@@ -91,26 +97,28 @@ namespace QSim
         }
 
     };
-
+    
     // Bogacki–Shampine ode integrator
+    // https://doi.org/10.1016/0893-9659(89)90079-7
     class ODEAd32BSPolicy
     {
     protected:
         ~ODEAd32BSPolicy() = default;
 
-    public:      
-        
-        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
-            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+    public:
+        constexpr static bool IsAdaptive_v = true;
+    
+        template<typename Func, typename YTy>
+        static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
+            TMatrixMulResultFP_t<YTy, double>
         {
             return StepWithErrorEst(func, y, x, dx).first;
         }
 
-       template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        template<typename Func, typename YTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, double x, double dx)
         {
-            using RTy = Internal::TODEResultType_t<Func, YTy, XTy, DXTy>;
+            using RTy = TMatrixMulResultFP_t<YTy, double>;
             
             auto k1 = func(x, y);
             auto k2 = func(x + (dx/2), y + (dx/2)*k1);
@@ -126,24 +134,26 @@ namespace QSim
     };
 
     // Dormand–Prince ode integrator
+    // see https://doi.org/10.1016/0771-050X(80)90013-3
     class ODEAd54DPPolicy
     {
     protected:
         ~ODEAd54DPPolicy() = default;
 
-    public:      
-        
-        template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto Step(Func&& func, YTy&& y, XTy&& x, DXTy&& dx) ->
-            Internal::TODEResultType_t<Func, YTy, XTy, DXTy>
+    public:
+        constexpr static bool IsAdaptive_v = true;
+    
+        template<typename Func, typename YTy>
+        static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
+            TMatrixMulResultFP_t<YTy, double>
         {
             return StepWithErrorEst(func, y, x, dx).first;
         }
 
-       template<typename Func, typename YTy, typename XTy, typename DXTy>
-        static auto StepWithErrorEst(Func&& func, YTy&& y, XTy&& x, DXTy&& dx)
+        template<typename Func, typename YTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, double x, double dx)
         {
-            using RTy = Internal::TODEResultType_t<Func, YTy, XTy, DXTy>;
+            using RTy = TMatrixMulResultFP_t<YTy, double>;
             
             auto k1 = func(x, y);
             auto k2 = func(x + (dx/5), y + (dx/5)*k1);
@@ -161,9 +171,85 @@ namespace QSim
         }
     };
 
+    template<typename ODEStepperPolicy>
+    class TODEStepperPolicyIsAdaptive : public std::integral_constant<bool, ODEStepperPolicy::IsAdaptive_v> {};
+    template<typename ODEStepperPolicy>
+    constexpr static bool TODEStepperPolicyIsAdaptive_v 
+        = TODEStepperPolicyIsAdaptive<ODEStepperPolicy>::value;
+
+    // 
+    namespace Internal
+    {
+        // Non-adaptive implementation
+        template<typename ODEStepperPolicy, bool isAdaptive>
+        class TODEIntegratorHelper : public ODEStepperPolicy
+        {
+        public:
+            template<typename Func, typename Y0Ty>
+            auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double dx)
+            {
+                using YTy = TMatrixMulResultFP_t<Y0Ty, double>;
+                YTy y = std::forward<Y0Ty>(y0);
+                
+                while (x < x1)
+                {
+                    double dxEff = std::min(x1 - x, dx);
+                    x += dxEff;
+                    y += ODEStepperPolicy::Step(func, y, x, dxEff);
+                }
+                
+                return y;
+            }
+        };
+
+        // Adaptive implementation
+        template<typename ODEStepperPolicy>
+        class TODEIntegratorHelper<ODEStepperPolicy, true> : public ODEStepperPolicy
+        {
+        public:
+            template<typename Func, typename Y0Ty>
+            auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double& dx)
+            {
+                using YTy = TMatrixMulResultFP_t<Y0Ty, double>;
+                
+                // bounds
+                YTy ones = TMatrixOnesLike<YTy>::Get(y0);
+                YTy maxError = ones * 1e-7;
+                YTy minError = ones * 1e-8;
+
+                YTy y = std::forward<Y0Ty>(y0);
+                
+                while (x < x1)
+                {
+                    double dxEff = std::min(x1 - x, dx);
+                    auto [dy, err] = ODEStepperPolicy::StepWithErrorEst(func, y, x, dxEff);
+                    YTy absErr = TMatrixCwiseAbs<YTy>::Get(err);
+                    
+                    if (TMatrixAnyCwiseLess<YTy>::Get(maxError, absErr))
+                    {
+                        dx = dxEff / 1.5;
+                    }
+                    else
+                    {
+                        // accept update update
+                        x += dxEff;
+                        y += dy;
+
+                        if (TMatrixAnyCwiseLess<YTy>::Get(absErr, minError) && !(dxEff < dx))
+                            dx *= 1.5;
+                    }
+                }
+
+                return y;
+            }
+        };
+    }
+
     // Helper class for usecases where inheritance from the policy is not desired
     template<typename ODEStepperPolicy=ODERK4Policy>
-    class TODEStepper : public ODEStepperPolicy {};
+    class TODEIntegrator : public Internal::TODEIntegratorHelper<
+        ODEStepperPolicy, TODEStepperPolicyIsAdaptive_v<ODEStepperPolicy>> {};
+
 
 }
 

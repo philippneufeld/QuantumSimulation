@@ -384,7 +384,7 @@ namespace QSim
         double t0, double dt, unsigned int steps)
     {
         using YType = Eigen::Matrix<std::complex<double>, N, N>;
-        TODEStepper<ODERK4Policy> integrator;
+        TODEIntegrator<ODERK4Policy> integrator;
         YType rho = rho0;
 
         for (unsigned int i = 0; i < steps; i++)
