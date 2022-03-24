@@ -97,8 +97,17 @@ namespace QSim
             }
             else if(y.size() - 1 > wcnt*rem)
             {
-                return (IntegrateHelper<Den1, WeightList1_t>(y(Eigen::seqN(Eigen::fix<0>, y.size() - rem*wcnt, Eigen::fix<1>))) 
-                    + IntegrateHelper<Den2, WeightList2_t>(y(Eigen::lastN(rem*wcnt + Eigen::fix<1>, Eigen::fix<1>)))) 
+#if (EIGEN_WORLD_VERSION > 3 || (EIGEN_WORLD_VERSION == 3 && EIGEN_MAJOR_VERSION >= 4)) // at least eigen 3.4.x
+                auto yslice1 = y(Eigen::seqN(Eigen::fix<0>, y.size() - rem*wcnt, Eigen::fix<1>));
+                auto yslice2 = y(Eigen::lastN(rem*wcnt + 1, Eigen::fix<1>));
+#else
+                using YSliceInnerTy = Eigen::Matrix<TMatrixElementType_t<YTy>, Eigen::Dynamic, 1>;
+                auto yslice1 = Eigen::Map<YSliceInnerTy>(y.data(), y.size() - rem*wcnt);
+                auto yslice2 = Eigen::Map<YSliceInnerTy>(y.data() + y.size() - rem*wcnt - 1, rem*wcnt + 1);
+#endif
+
+                // Eigen 3.4 code
+                return (IntegrateHelper<Den1, WeightList1_t>(yslice1) + IntegrateHelper<Den2, WeightList2_t>(yslice2)) 
                     * TMatrixNorm<XTy>::Get(dx);
             }
             else if(y.size() - 1 == wcnt*rem)
