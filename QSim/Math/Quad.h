@@ -97,12 +97,13 @@ namespace QSim
             }
             else if(y.size() - 1 > wcnt*rem)
             {
-#if (EIGEN_WORLD_VERSION > 3 || (EIGEN_WORLD_VERSION == 3 && EIGEN_MAJOR_VERSION >= 4)) // at least eigen 3.4.x
+#if (EIGEN_WORLD_VERSION > 3 || (EIGEN_WORLD_VERSION == 3 && EIGEN_MAJOR_VERSION >= 4))
+                // Eigen 3.4
                 auto yslice1 = y(Eigen::seqN(Eigen::fix<0>, y.size() - rem*wcnt, Eigen::fix<1>));
                 auto yslice2 = y(Eigen::lastN(rem*wcnt + 1, Eigen::fix<1>));
 #else
                 using YSliceInnerTy = Eigen::Matrix<TMatrixElementType_t<YTy>, Eigen::Dynamic, 1>;
-		const YSliceInnerTy& ytmp = y;
+		        const YSliceInnerTy& ytmp = y;
                 Eigen::Map<const YSliceInnerTy> yslice1(&ytmp[0], y.size() - rem*wcnt, 1);
                 Eigen::Map<const YSliceInnerTy> yslice2(&ytmp[y.size() - rem*wcnt - 1], rem*wcnt + 1, 1);
 #endif
