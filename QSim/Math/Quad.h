@@ -102,8 +102,9 @@ namespace QSim
                 auto yslice2 = y(Eigen::lastN(rem*wcnt + 1, Eigen::fix<1>));
 #else
                 using YSliceInnerTy = Eigen::Matrix<TMatrixElementType_t<YTy>, Eigen::Dynamic, 1>;
-                auto yslice1 = Eigen::Map<YSliceInnerTy>(y.data(), y.size() - rem*wcnt);
-                auto yslice2 = Eigen::Map<YSliceInnerTy>(y.data() + y.size() - rem*wcnt - 1, rem*wcnt + 1);
+		const YSliceInnerTy& ytmp = y;
+                Eigen::Map<const YSliceInnerTy> yslice1(&ytmp[0], y.size() - rem*wcnt, 1);
+                Eigen::Map<const YSliceInnerTy> yslice2(&ytmp[y.size() - rem*wcnt - 1], rem*wcnt + 1, 1);
 #endif
 
                 // Eigen 3.4 code
