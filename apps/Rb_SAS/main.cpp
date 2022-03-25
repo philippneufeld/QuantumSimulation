@@ -28,8 +28,9 @@ int main(int argc, const char* argv[])
 
     // dt << Rabi^-1, Doppler^-1, detuning^-1
     constexpr double decayTime = 1.0 / decay;
-    constexpr double tint = 10.0 * decayTime;
-    constexpr double dt = decayTime / 250.0;
+    constexpr double tint = 5.0 * decayTime;
+    constexpr double tav = decayTime;
+    constexpr double dt = decayTime / 1000.0;
     
     // create system
     TNLevelSystemSC<2> system;
@@ -64,7 +65,7 @@ int main(int argc, const char* argv[])
                 VectorXd laserFreqs = transitions + Vector2d(0.0, detunings[i]);
                 laserFreqs = doppler.ShiftFrequencies(laserFreqs, dirs, vel);
 
-                auto rho = system.GetDensityMatrixAv(laserFreqs, rho0, 0.0, tint, 0.25*tint, dt);
+                auto rho = system.GetDensityMatrixAv(laserFreqs, rho0, 0.0, tint, tav, dt);
                 return std::real(rho(1, 1));
             });
             progress.IncrementCount();

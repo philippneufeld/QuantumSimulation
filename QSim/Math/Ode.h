@@ -230,11 +230,13 @@ namespace QSim
                 
                 // bounds
                 YTyAbs ones = TMatrixOnesLike<YTyAbs>::Get(TMatrixCwiseAbs<YTy>::Get(y0));
-                YTyAbs maxError = ones * 1e-4;
-                YTyAbs minError = ones * 1e-8;
+                YTyAbs maxError = ones * 1e-8;
+                YTyAbs minError = ones * 1e-10;
 
                 YTy y = std::forward<Y0Ty>(y0);
                 
+		double adjustment = 1.41421356237; // sqrt(2)
+
                 while (x < x1)
                 {
                     double dxEff = std::min(x1 - x, dx);
@@ -243,7 +245,7 @@ namespace QSim
                     
                     if (TMatrixAnyCwiseLess<YTyAbs>::Get(maxError, absErr))
                     {
-                        dx = dxEff / 2;
+                        dx = dxEff / adjustment;
                     }
                     else
                     {
@@ -252,7 +254,7 @@ namespace QSim
                         y += dy;
 
                         if (TMatrixAnyCwiseLess<YTyAbs>::Get(absErr, minError) && !(dxEff < dx))
-                            dx *= 2;
+                            dx *= adjustment;
                     }
                 }
 
