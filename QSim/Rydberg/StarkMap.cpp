@@ -7,28 +7,40 @@ namespace QSim
     AtomStarkMap::AtomStarkMap(
         const TRydbergSystem<RydbergAtomState_t>& system, 
         int n, int l, double j, double mj, int nMin, int nMax, int lMax)
-        : m_n(n), m_l(l), m_j(j), m_mj(mj), 
-        m_nMin(nMin), m_nMax(nMax), m_lMax(lMax)
     {
-        if (m_nMin > m_n || m_nMax < m_n || m_l > m_n || 
-            std::abs(m_mj) > m_j || m_n < 1 || m_nMin < 1 || m_l < 0)
+        if (nMin > n || nMax < n || l > n || 
+            std::abs(mj) > j || n < 1 || nMin < 1 || l < 0)
             throw std::runtime_error("Invalid quantum numbers");
 
+        m_referenceStateIdx = -1;
+        RydbergAtomState_t referenceState(n, l, j, mj);
+
         // generate basis
-        for (int n = m_nMin; n <= m_nMax; n++)
+        for (int n = nMin; n <= nMax; n++)
         {
-            for (int l = 0; l <= n && l <= m_lMax; l++)
+            for (int l = 0; l <= n && l <= lMax; l++)
             {
                 int jmult = 2;
                 for (int i=0; i<jmult; i++)
                 {
                     double j = double(l) - 0.5 + i;
                     if (std::abs(mj) - 0.1 < j)
+                    {
                         m_basis.emplace_back(n, l, j, mj);
+                        if (m_basis.back() == referenceState)
+                            m_referenceStateIdx = m_basis.size() - 1;
+                    }
                 }
                 
             }
         }
+
+        if (m_referenceStateIdx < 0)
+        {
+            m_basis.push_back(referenceState);
+            m_referenceStateIdx = m_basis.size() - 1;
+        }
+
         int stateCnt = m_basis.size();
 
         // get energies
@@ -49,13 +61,24 @@ namespace QSim
         }
     }
 
-    Eigen::VectorXd AtomStarkMap::GetEnergies(double electricField)
+    std::pair<Eigen::VectorXd, Eigen::VectorXd> AtomStarkMap::GetEnergies(double electricField)
     {
         Eigen::MatrixXd hamiltonian = electricField * m_dipoleOperator;
         hamiltonian += m_energies.asDiagonal();
 
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver;
         solver.compute(hamiltonian);
-        return solver.eigenvalues();
+
+        Eigen::VectorXd energies = solver.eigenvalues();
+        Eigen::MatrixXd states = solver.eigenvectors();
+        Eigen::VectorXd overlaps(energies.size());
+
+        // column k of states is the k-th eigen-vector
+        // the l-th element of the eigen vector is the amount of 
+        // overlap of the eigen vector and the l-th basis state
+        for (int i = 0; i < overlaps.size(); i++)
+            overlaps[i] = std::abs(states(m_referenceStateIdx, i));
+
+        return std::make_pair(energies, overlaps);
     }
 }

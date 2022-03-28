@@ -27,6 +27,10 @@ namespace QSim
         void Plot(const double* xdata, const double* ydata, std::size_t n, 
             const std::string& label="", const std::string& fmt="", const std::string& color=""); 
 
+        void ColoredScatter(const double* xdata, const double* ydata, 
+            const double* cdata, std::size_t n, double vmin=0.0, double vmax=1.0,
+            const std::string& colorBar="", const std::string& label="", const std::string& marker="."); 
+
         void FillBetween(const double* xdata, double y1data, 
             double y2data, std::size_t n, const std::string& label="", 
             const std::string& color="", double alpha=1.0);

@@ -26,12 +26,11 @@ namespace QSim
         const Eigen::MatrixXd& GetDipoleOperator() const { return m_dipoleOperator; }
 
         // eigen-energy calculator
-        Eigen::VectorXd GetEnergies(double electricField);
+        // Eigen::VectorXd GetEnergies(double electricField);
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetEnergies(double electricField);
 
     private:
-        int m_n, m_l;
-        double m_j, m_mj;
-        int m_nMin, m_nMax, m_lMax;
+        int m_referenceStateIdx;
         std::vector<RydbergAtomState_t> m_basis;
 
         Eigen::VectorXd m_energies;

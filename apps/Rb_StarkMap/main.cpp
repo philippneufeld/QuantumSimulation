@@ -27,6 +27,7 @@ int main(int argc, const char* argv[])
 
     VectorXd eField = VectorXd::LinSpaced(600, 0.0, 60000.0);
     MatrixXd energies(eField.size(), cnt);
+    MatrixXd overlaps(eField.size(), cnt);
 
     ThreadPool pool; 
     ProgressBar progress(eField.size());
@@ -34,7 +35,9 @@ int main(int argc, const char* argv[])
     for (int i=0; i<eField.size(); i++)
     {
         pool.Submit([&,i=i](){
-            energies.row(i) = starkMap.GetEnergies(eField[i]) / (PlanckConstant_v*SpeedOfLight_v) / 100;
+            auto [ens, ovs] = starkMap.GetEnergies(eField[i]);
+            energies.row(i) = ens / (PlanckConstant_v*SpeedOfLight_v) / 100;
+            overlaps.row(i) = ovs;
             progress.IncrementCount();
         });
     }
@@ -46,7 +49,8 @@ int main(int argc, const char* argv[])
     auto ax = fig.AddSubplot();
 
     for (int i=0; i < cnt; i++)
-        ax.Plot((eField / 100).eval().data(), energies.col(i).eval().data(), eField.size(), "", ".C0");
+        ax.ColoredScatter((eField / 100).eval().data(), energies.col(i).eval().data(), 
+            overlaps.col(i).eval().data(), eField.size(), -0.1, 1.0, "Blues");
 
     ax.SetYLimits(-188.0, -167.5);
     // ax.SetYLimits(-150.0, -130.0);

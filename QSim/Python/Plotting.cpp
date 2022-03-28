@@ -47,6 +47,27 @@ namespace QSim
         CallAttributeKwargs("plot", kwargs, x, y, fmtObj);
     }
 
+    void PythonPlotAxis::ColoredScatter(const double* xdata, const double* ydata, 
+        const double* cdata, std::size_t n, double vmin, double vmax, const std::string& colorBar, 
+        const std::string& label, const std::string& marker)
+    {
+        PythonInterpreter python;
+        auto x = python.CreateNumpyArray(xdata, static_cast<npy_intp>(n));
+        auto y = python.CreateNumpyArray(ydata, static_cast<npy_intp>(n));
+        auto c = python.CreateNumpyArray(cdata, static_cast<npy_intp>(n));
+
+        std::map<std::string, PythonObject> kwargs;
+        kwargs["c"] = c;
+        kwargs["vmin"] = python.CreateObject(vmin);
+        kwargs["vmax"] = python.CreateObject(vmax);
+        if (!marker.empty())
+            kwargs["marker"] = python.CreateObject(marker);
+        if (!colorBar.empty())
+            kwargs["cmap"] = python.CreateObject(colorBar);
+
+        CallAttributeKwargs("scatter", kwargs, x, y);
+    }
+
     void PythonPlotAxis::FillBetween(const double* xdata, double y1data, 
         double y2data, std::size_t n, const std::string& label, const std::string& color, double alpha)
     {
