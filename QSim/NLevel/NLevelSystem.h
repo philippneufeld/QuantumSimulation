@@ -107,11 +107,6 @@ namespace QSim
             const Eigen::Matrix<std::complex<double>, N, N>& rho,
             double t) const;
 
-        template<typename AuxType>
-        Eigen::Matrix<std::complex<double>, N, N> EvolveDensityMatrix(
-            const AuxType& auxData, const Eigen::Matrix<std::complex<double>, N, N>& rho0, 
-            double t0, double dt, unsigned int steps);
-
     private:
         // Properties of the system
         Eigen::Matrix<double, N, 1> m_levels;
@@ -256,7 +251,7 @@ namespace QSim
         const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
 
         // define integrator and function to be integrated
-        TODEIntegrator<ODERK4Policy> integrator;
+        TODEIntegrator<ODEAd54DPPolicy> integrator;
         using YType = Eigen::Matrix<std::complex<double>, N, N>;
         auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
 
@@ -397,27 +392,6 @@ namespace QSim
         return rhoPrime;
     }
 
-    template<int N, typename MyT, bool AM>
-    template<typename AuxType>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::EvolveDensityMatrix(
-        const AuxType& auxData, const Eigen::Matrix<std::complex<double>, N, N>& rho0, 
-        double t0, double dt, unsigned int steps)
-    {
-        using YType = Eigen::Matrix<std::complex<double>, N, N>;
-        TODEIntegrator<ODERK4Policy> integrator;
-        YType rho = rho0;
-
-        for (unsigned int i = 0; i < steps; i++)
-        {
-            auto func = [&](double x, const YType& y) 
-            { 
-                return GetDensityOpDerivative(auxData, y, x);
-            };
-            rho += integrator.Step(func, rho, t0 + i * dt, dt);       
-        }
-
-        return rho;
-    }
 }
 
 // Include specific implementations

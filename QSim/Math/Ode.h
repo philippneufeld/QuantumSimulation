@@ -221,6 +221,16 @@ namespace QSim
             : public TODEIntegratorHelperFixed<ODEStepperPolicy>
         {
         public:
+            TODEIntegratorHelper() : m_adjust(std::sqrt(2.0)), 
+                m_lowerThreshold(1e-10), m_upperThreshold(1e-8) {}
+
+            void SetAdjustmentFactor(double adjust) { m_adjust = adjust; }
+            void SetLowerThreshold(double lower) { m_lowerThreshold = lower; }
+            void SetUpperThreshold(double upper) { m_upperThreshold = upper; }
+
+            double GetAdjustmentFactor() const { return m_adjust; }
+            double GetLowerThreshold() const { return m_lowerThreshold; }
+            double GetUpperThreshold() const { return m_upperThreshold; }
 
             template<typename Func, typename Y0Ty>
             auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double& dx)
@@ -230,13 +240,11 @@ namespace QSim
                 
                 // bounds
                 YTyAbs ones = TMatrixOnesLike<YTyAbs>::Get(TMatrixCwiseAbs<YTy>::Get(y0));
-                YTyAbs maxError = ones * 1e-8;
-                YTyAbs minError = ones * 1e-10;
+                YTyAbs maxError = ones * m_upperThreshold;
+                YTyAbs minError = ones * m_lowerThreshold;
 
                 YTy y = std::forward<Y0Ty>(y0);
                 
-		double adjustment = 1.41421356237; // sqrt(2)
-
                 while (x < x1)
                 {
                     double dxEff = std::min(x1 - x, dx);
@@ -245,7 +253,7 @@ namespace QSim
                     
                     if (TMatrixAnyCwiseLess<YTyAbs>::Get(maxError, absErr))
                     {
-                        dx = dxEff / adjustment;
+                        dx = dxEff / m_adjust;
                     }
                     else
                     {
@@ -254,12 +262,17 @@ namespace QSim
                         y += dy;
 
                         if (TMatrixAnyCwiseLess<YTyAbs>::Get(absErr, minError) && !(dxEff < dx))
-                            dx *= adjustment;
+                            dx *= m_adjust;
                     }
                 }
 
                 return y;
             }
+
+        private:
+            double m_adjust;
+            double m_lowerThreshold;
+            double m_upperThreshold;
         };
     }
 
