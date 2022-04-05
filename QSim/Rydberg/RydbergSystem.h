@@ -22,6 +22,7 @@ namespace QSim
         TRydbergSystem(double mass);
         virtual ~TRydbergSystem();
 
+        virtual double GetScaledRydbergConstant() const;
         virtual double GetQuantumDefect(const State& state) const = 0;
 
         virtual double GetEnergy(const State& state) const = 0;
@@ -32,7 +33,9 @@ namespace QSim
         // std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(const State& state, std::size_t steps) const;
 
     protected:
-        double GetAtomicPotential(double r, int n, int l, double j) const;
+        double GetCoulombPotential(double r, int n, int l) const;
+        double GetAtomicPotential(double r, int n, int l) const;
+        double GetAtomicPotentialFS(double r, int n, int l, double j) const;
 
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(
             const State& state, double xInner, double xOuter, 
@@ -42,7 +45,8 @@ namespace QSim
             const State& state1, const State& state2,
             double rmax1, double rmax2, std::size_t stepsPerOscillation) const;
 
-        double GetDipMEAngHelper(
+        double GetDipMEAngHelper(int l1, double ml1, int l2, double ml2) const;
+        double GetDipMEAngFSHelper(
             int l1, double j1, double mj1, 
             int l2, double j2, double mj2) const;
 
@@ -84,11 +88,16 @@ namespace QSim
     TRydbergSystem<State>::~TRydbergSystem() { }
     
     template<typename State>
-    double TRydbergSystem<State>::GetAtomicPotential(double r, int n, int l, double j) const
+    double TRydbergSystem<State>::GetScaledRydbergConstant() const
+    {
+        return RydbergConstant_v * (m_reducedMass / ElectronMass_v);
+    }
+
+    template<typename State>
+    double TRydbergSystem<State>::GetAtomicPotential(double r, int n, int l) const
     {
         double potential = 0.0;
         double r2 = r * r;
-        double r3 = r * r2;
 
         // Electrostatic potential
         // k1 = e^2/(4*pi*eps0)
@@ -100,6 +109,16 @@ namespace QSim
         constexpr double ck2 = ConstexprPow(ReducedPlanckConstant_v, 2) / 2;
         const double k2 = ck2 / m_reducedMass;
         potential += k2 * l*(l+1) / r2;
+
+        return potential;
+    }
+
+    template<typename State>
+    double TRydbergSystem<State>::GetAtomicPotentialFS(double r, int n, int l, double j) const
+    {
+        // Atomic potential (electrostatic and orbital term)
+        double potential = GetAtomicPotential(r, n, l);
+        double r3 = r * r * r;
 
         // Fine-structure (L-S coupling term)
         // k3 = alpha * hbar^3 / (4*me^2*c) = e^2 / (4 pi eps0) * (gs-1) / (4*me^2*c^2)
@@ -165,11 +184,25 @@ namespace QSim
     }
 
     template<typename State>
-    double TRydbergSystem<State>::GetDipMEAngHelper(
+    double TRydbergSystem<State>::GetDipMEAngHelper(int l1, double ml1, int l2, double ml2) const
+    {
+        // PRA 20.6 (1979)
+        // <l,m| cos \Theta |l-1, m> = sqrt((l^2-m^2)/((2*l+1)*(2*l-1)))
+
+        if (std::round(std::abs(2*(l1 - l2))) != 1.0 || std::round(2*(ml1 - ml2)) != 0.0)
+            return 0.0;
+
+        double lmax = std::max(l1, l2);
+        return std::sqrt((lmax*lmax - ml1*ml1) / ((2*lmax+1)*(2*lmax-1)));      
+    }
+
+    template<typename State>
+    double TRydbergSystem<State>::GetDipMEAngFSHelper(
         int l1, double j1, double mj1, int l2, double j2, double mj2) const
     {
         // PRA 20.6 (1979)
         // <l,m| cos \Theta |l-1, m> = sqrt((l^2-m^2)/((2*l+1)*(2*l-1)))
+        // Then summation over the clebsch gordan coefficients
 
         if (std::round(2*mj1) != std::round(2*mj2))
             return 0.0;

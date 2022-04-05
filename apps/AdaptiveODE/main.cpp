@@ -7,7 +7,7 @@
 
 #include <QSim/Constants.h>
 #include <QSim/Rydberg/RydbergAtom.h>
-#include <QSim/Rydberg/StarkMap.h>
+#include <QSim/Rydberg/AtomStarkMap.h>
 
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/ProgressBar.h>

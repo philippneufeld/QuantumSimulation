@@ -28,7 +28,9 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
     "${QSIM_SOURCE_DIR}/Util/ProgressBar.cpp"
     "${QSIM_SOURCE_DIR}/Rydberg/RydbergAtom.cpp"
-    "${QSIM_SOURCE_DIR}/Rydberg/StarkMap.cpp"
+    "${QSIM_SOURCE_DIR}/Rydberg/RydbergDiatomic.cpp"
+    "${QSIM_SOURCE_DIR}/Rydberg/AtomStarkMap.cpp"
+    "${QSIM_SOURCE_DIR}/Rydberg/DiatomicStarkMap.cpp"
     )
 add_library("${QSIM_LIB_TARGET}" STATIC "${QSIM_SOURCES}")
 
@@ -103,4 +105,5 @@ qsim_add_app("Rb_EIT")
 qsim_add_app("Rb_SAS")
 qsim_add_app("NO_RydEx")
 qsim_add_app("Rb_StarkMap")
+qsim_add_app("NO_StarkMap")
 qsim_add_app("AdaptiveODE")

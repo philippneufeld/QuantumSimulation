@@ -16,14 +16,16 @@ namespace QSim
     double RydbergAtom::GetEnergy(const RydbergAtomState_t& state) const
     {
         const auto [n, l, j, mj] = state;
+        constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
         double nAdj = n - this->GetQuantumDefect(state);
-        return -RydbergEnergy_v / (nAdj*nAdj);
+        double R = hc * this->GetScaledRydbergConstant();
+        return -R / (nAdj*nAdj);
     }
 
     double RydbergAtom::GetPotential(double r, const RydbergAtomState_t& state) const
     {
         const auto [n, l, j, mj] = state;
-        return this->GetAtomicPotential(r, n, l, j);
+        return this->GetAtomicPotentialFS(r, n, l, j);
     }
 
     double RydbergAtom::GetDipoleME(const RydbergAtomState_t& state1, const RydbergAtomState_t& state2) const
@@ -31,7 +33,7 @@ namespace QSim
         const auto [n1, l1, j1, mj1] = state1;
         const auto [n2, l2, j2, mj2] = state2;
         
-        double dip = this->GetDipMEAngHelper(l1, j1, mj1, l2, j2, mj2);
+        double dip = this->GetDipMEAngFSHelper(l1, j1, mj1, l2, j2, mj2);
         
         if (dip != 0)
         {

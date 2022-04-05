@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Rydberg_StarkMap_H_
-#define QSim_Rydberg_StarkMap_H_
+#ifndef QSim_Rydberg_AtomStarkMap_H_
+#define QSim_Rydberg_AtomStarkMap_H_
 
 #include <Eigen/Dense>
 

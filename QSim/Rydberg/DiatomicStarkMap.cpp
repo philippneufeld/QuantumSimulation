@@ -1,10 +1,10 @@
 // Philipp Neufeld, 2021-2022
 
-#include "StarkMap.h"
+#include "DiatomicStarkMap.h"
 
 namespace QSim
 {
-    AtomStarkMap::AtomStarkMap(
+    /*AtomStarkMap::AtomStarkMap(
         const TRydbergSystem<RydbergAtomState_t>& system, 
         int n, int l, double j, double mj, int nMin, int nMax, int lMax)
     {
@@ -80,5 +80,5 @@ namespace QSim
             overlaps[i] = std::abs(states(m_referenceStateIdx, i));
 
         return std::make_pair(energies, overlaps);
-    }
+    }*/
 }
