@@ -17,11 +17,15 @@ namespace QSim
     public:
         RydbergAtom(double mass);
 
-        virtual double GetQuantumDefect(const RydbergAtomState_t& state) const override = 0;
-
         virtual double GetEnergy(const RydbergAtomState_t& state) const override;
         virtual double GetPotential(double r, const RydbergAtomState_t& state) const override;
-        virtual double GetDipoleME(const RydbergAtomState_t& state1, const RydbergAtomState_t& state2) const override;
+
+        virtual double GetDipoleME(const RydbergAtomState_t& state1, 
+            const RydbergAtomState_t& state2) const override;
+
+    protected:    
+        double GetDipMEAngular(int l1, double j1, double mj1, 
+            int l2, double j2, double mj2) const;
     };
 
     class Hydrogen : public RydbergAtom

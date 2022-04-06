@@ -12,16 +12,16 @@ namespace QSim
     double RydbergDiatomic::GetEnergy(const RydbergDiatomicState_t& state) const
     {
         double energy = 0.0;
-        const auto [n, l, ml, N, mN] = state;
+        const auto [n, l, R, N, mN] = state;
         
         // rotational term
         constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
-        energy += hc * this->GetRotationalConstant() * N*(N+1);
+        double rotTerm = R*(R+1);
+        energy += hc * this->GetRotationalConstant() * rotTerm;
+        energy += hc * this->GetCentrifugalDistConstant() * rotTerm*rotTerm;
 
         // rydberg term
-        double nAdj = n - this->GetQuantumDefect(state);
-        double R = hc * this->GetScaledRydbergConstant();
-        energy -= R / (nAdj*nAdj);
+        energy += this->GetRydbergEnergy(n, state);
 
         return energy;
     }
@@ -29,11 +29,13 @@ namespace QSim
     double RydbergDiatomic::GetPotential(double r, const RydbergDiatomicState_t& state) const
     {
         double potential = 0.0;
-        const auto [n, l, ml, N, mN] = state;
+        const auto [n, l, R, N, mN] = state;
         
         // rotational term
         constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
-        potential += hc * this->GetRotationalConstant() * N*(N+1);
+        double rotTerm = R*(R+1);
+        potential += hc * this->GetRotationalConstant() * rotTerm;
+        potential += hc * this->GetCentrifugalDistConstant() * rotTerm*rotTerm;
 
         // atomic potential term
         potential += this->GetAtomicPotential(r, n, l);
@@ -50,10 +52,10 @@ namespace QSim
         if (N1 != N2 || mN1 != mN2)
             return 0.0;
 
-        // angular integral (rydberg wavefunction)
-        double dip = this->GetDipMEAngHelper(l1, ml1, l2, ml2);
+        // TODO: angular part
+        double dip = 0.0;
         
-        // radial part (rydberg wavefunction)
+        // radial part
         if (dip != 0)
         {
             double rmax1 = 3*(n1+15)*n1*BohrRadius_v;
@@ -71,13 +73,6 @@ namespace QSim
     NitricOxide::NitricOxide() 
         : RydbergDiatomic(30.006 * AtomicMassUnit_v) {}
 
-
-    double NitricOxide::GetScaledRydbergConstant() const
-    {
-        // J. Chem. Phys. 152, 144305 (2020); doi: 10.1063/5.0003092
-        return 109735.31;
-    }
-
     double NitricOxide::GetQuantumDefect(const RydbergDiatomicState_t& state) const
     {
         return 0.0;
@@ -85,8 +80,14 @@ namespace QSim
 
     double NitricOxide::GetRotationalConstant() const
     {
-        // J. Chem. Phys. 152, 144305 (2020); doi: 10.1063/5.0003092
-        return 1.9842;
+        // Phys. Chem. Chem. Phys., 2021, 23, 18806; doi: 10.1039/d1cp01930a
+        return 198.7825; // m^-1
+    }
+
+    double NitricOxide::GetCentrifugalDistConstant() const
+    {
+        // Phys. Chem. Chem. Phys., 2021, 23, 18806; doi: 10.1039/d1cp01930a
+        return 5.64e-4; // m^-1
     }
 
 

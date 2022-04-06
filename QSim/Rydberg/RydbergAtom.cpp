@@ -16,10 +16,7 @@ namespace QSim
     double RydbergAtom::GetEnergy(const RydbergAtomState_t& state) const
     {
         const auto [n, l, j, mj] = state;
-        constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
-        double nAdj = n - this->GetQuantumDefect(state);
-        double R = hc * this->GetScaledRydbergConstant();
-        return -R / (nAdj*nAdj);
+        return this->GetRydbergEnergy(n, state);
     }
 
     double RydbergAtom::GetPotential(double r, const RydbergAtomState_t& state) const
@@ -33,16 +30,50 @@ namespace QSim
         const auto [n1, l1, j1, mj1] = state1;
         const auto [n2, l2, j2, mj2] = state2;
         
-        double dip = this->GetDipMEAngFSHelper(l1, j1, mj1, l2, j2, mj2);
+        double dip = this->GetDipMEAngular(l1, j1, mj1, l2, j2, mj2);
         
         if (dip != 0)
         {
+            // radial dipole matrix element
             double rmax1 = 3*(n1+15)*n1*BohrRadius_v;
             double rmax2 = 3*(n2+15)*n2*BohrRadius_v;
             dip *= this->GetDipMeRadHelper(state1, state2, rmax1, rmax2, 50);
         }
 
         return dip * ElementaryCharge_v;
+    }
+
+    double RydbergAtom::GetDipMEAngular(
+        int l1, double j1, double mj1, int l2, double j2, double mj2) const
+    {
+        // PRA 20.6 (1979)
+        // <l,m| cos \Theta |l-1, m> = sqrt((l^2-m^2)/((2*l+1)*(2*l-1)))
+        // Then summation over the clebsch gordan coefficients
+
+        if (std::round(2*mj1) != std::round(2*mj2))
+            return 0.0;
+
+        double result = 0.0;
+        double s = 0.5;
+        for(int i = 0; i<static_cast<int>(std::round(2*s+1)); i++)
+        {
+            double ml = mj1 - s + i;
+            if (std::abs(ml)-0.1 < l1 && std::abs(ml)-0.1 < l2)
+            {
+                int twoL1 = static_cast<int>(std::round(2*l1));
+                int twoL2 = static_cast<int>(std::round(2*l2));
+                if (std::abs(twoL1 - twoL2) == 2)
+                {
+                    double lmax = std::max(l1, l2);
+                    double ang = std::sqrt((lmax*lmax - ml*ml) / ((2*lmax+1)*(2*lmax-1)));
+                    double cg1 = ClebshGordan(l1, s, j1, ml, mj1 - ml, mj1);
+                    double cg2 = ClebshGordan(l2, s, j2, ml, mj2 - ml, mj2);
+                    result += cg1 * cg2 * ang;
+                }
+            }
+        }
+
+        return result;
     }
 
     //

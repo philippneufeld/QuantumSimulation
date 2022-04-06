@@ -22,33 +22,31 @@ namespace QSim
         TRydbergSystem(double mass);
         virtual ~TRydbergSystem();
 
-        virtual double GetScaledRydbergConstant() const;
+        // Public interface -> functions must be overwritten by child class
         virtual double GetQuantumDefect(const State& state) const = 0;
-
         virtual double GetEnergy(const State& state) const = 0;
         virtual double GetPotential(double r, const State& state) const = 0;
-
         virtual double GetDipoleME(const State& state1, const State& state2) const = 0;
 
-        // std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(const State& state, std::size_t steps) const;
-
     protected:
+        // Rydberg energy helpers
+        double GetScaledRydbergConstant() const;
+        double GetRydbergEnergy(int n, const State& state) const;
+
+        // potential helpers
         double GetCoulombPotential(double r, int n, int l) const;
         double GetAtomicPotential(double r, int n, int l) const;
         double GetAtomicPotentialFS(double r, int n, int l, double j) const;
 
+        // wavefunction in transformed variables (see function definition)
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(
             const State& state, double xInner, double xOuter, 
             std::size_t steps, std::size_t peakStepThreshold) const;
 
+        // Helper for the calculation of the radial dipole matrix elements
         double GetDipMeRadHelper(
             const State& state1, const State& state2,
             double rmax1, double rmax2, std::size_t stepsPerOscillation) const;
-
-        double GetDipMEAngHelper(int l1, double ml1, int l2, double ml2) const;
-        double GetDipMEAngFSHelper(
-            int l1, double j1, double mj1, 
-            int l2, double j2, double mj2) const;
 
     private:
         double m_reducedMass;
@@ -91,6 +89,14 @@ namespace QSim
     double TRydbergSystem<State>::GetScaledRydbergConstant() const
     {
         return RydbergConstant_v * (m_reducedMass / ElectronMass_v);
+    }
+
+    template<typename State>
+    double TRydbergSystem<State>::GetRydbergEnergy(int n, const State& state) const
+    {
+        constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
+        double nAdj = n - this->GetQuantumDefect(state);
+        return -hc * this->GetScaledRydbergConstant() / (nAdj*nAdj);
     }
 
     template<typename State>
@@ -182,54 +188,6 @@ namespace QSim
 
         return 2 * QuadSimpsonPolicy::Integrate(integrand, dx);
     }
-
-    template<typename State>
-    double TRydbergSystem<State>::GetDipMEAngHelper(int l1, double ml1, int l2, double ml2) const
-    {
-        // PRA 20.6 (1979)
-        // <l,m| cos \Theta |l-1, m> = sqrt((l^2-m^2)/((2*l+1)*(2*l-1)))
-
-        if (std::round(std::abs(2*(l1 - l2))) != 1.0 || std::round(2*(ml1 - ml2)) != 0.0)
-            return 0.0;
-
-        double lmax = std::max(l1, l2);
-        return std::sqrt((lmax*lmax - ml1*ml1) / ((2*lmax+1)*(2*lmax-1)));      
-    }
-
-    template<typename State>
-    double TRydbergSystem<State>::GetDipMEAngFSHelper(
-        int l1, double j1, double mj1, int l2, double j2, double mj2) const
-    {
-        // PRA 20.6 (1979)
-        // <l,m| cos \Theta |l-1, m> = sqrt((l^2-m^2)/((2*l+1)*(2*l-1)))
-        // Then summation over the clebsch gordan coefficients
-
-        if (std::round(2*mj1) != std::round(2*mj2))
-            return 0.0;
-
-        double result = 0.0;
-        double s = 0.5;
-        for(int i = 0; i<static_cast<int>(std::round(2*s+1)); i++)
-        {
-            double ml = mj1 - s + i;
-            if (std::abs(ml)-0.1 < l1 && std::abs(ml)-0.1 < l2)
-            {
-                int twoL1 = static_cast<int>(std::round(2*l1));
-                int twoL2 = static_cast<int>(std::round(2*l2));
-                if (std::abs(twoL1 - twoL2) == 2)
-                {
-                    double lmax = std::max(l1, l2);
-                    double ang = std::sqrt((lmax*lmax - ml*ml) / ((2*lmax+1)*(2*lmax-1)));
-                    double cg1 = ClebshGordan(l1, s, j1, ml, mj1 - ml, mj1);
-                    double cg2 = ClebshGordan(l2, s, j2, ml, mj2 - ml, mj2);
-                    result += cg1 * cg2 * ang;
-                }
-            }
-        }
-
-        return result;
-    }
-
 
     namespace Internal
     {
