@@ -18,21 +18,21 @@ def vterm(j1, j2, j3, m1, m2, m3, v):
 
 def wigner3j(j1, j2, j3, m1, m2, m3):
     res = sqrt(fac(j3-m3)*fac(j3+m3)/(fac(j2+m2)*fac(j2-m2)*fac(j1-m2-m3)*fac(j1+m2+m3)))
-    
-    print(res)
-    
     res *= delta(j1, j2, j3)
-    
-    print(delta(j1, j2, j3))
-    print(res)
-
     sumTerm = 0
     for i in range(min(j3-m3, j2-j1+j3) + 1):
         sumTerm += vterm(j1, j2, j3, m1, m2, m3, i)
-
-    print(sumTerm)
-
     return res * sumTerm
+
+def wigner6j(e, a, f, b, d, c):
+    pre = delta(a,b,c)*delta(a,e,f)*delta(c,d,e)*delta(b,d,f)*fac(a+b+c+1)*fac(b+d+f+1)/(fac(a+b-c)*fac(c-d+e)*fac(c+d-e)*fac(c+d-e)*fac(a-e+f)*fac(-a+e+f)*fac(b+d-f))
+
+    sumPart = 0
+    for z in range(min([2*b,-a+b+c, b-d+f]) + 1):
+        tmp = fac(2*b-z)*fac(b+c-e+f-z)*fac(b+c+e+f+1-z) / (fac(z)*fac(-a+b+c-z)*fac(b-d+f-z)*fac(a+b+c+1-z)*fac(b+d+f+1-z))
+        sumPart += (1 if z%2==0 else -1) * tmp
+
+    return (1 if (b+c+e+f)%2==0 else -1) * pre * sumPart
 
 def cg(j1, j2, j3, m1, m2, m3):
     phase = 1 if int(-j1+j2-m3) % 2 == 0 else -1
@@ -41,5 +41,8 @@ def cg(j1, j2, j3, m1, m2, m3):
 if __name__ == '__main__':
     print("Hello")
 
-    c = cg(1, 1, 2, 0, 0, 0)
-    print(c*c)
+    # c = cg(1, 1, 2, 0, 0, 0)
+    # print(c*c)
+
+    # print(wigner6j(2, 1, 1, 2, 1, 1) * 30)
+    print(wigner6j(9, 15, 21, 21, 21, 21))
