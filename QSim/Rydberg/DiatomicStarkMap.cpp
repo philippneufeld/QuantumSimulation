@@ -4,42 +4,40 @@
 
 namespace QSim
 {
-    /*AtomStarkMap::AtomStarkMap(
-        const TRydbergSystem<RydbergAtomState_t>& system, 
-        int n, int l, double j, double mj, int nMin, int nMax, int lMax)
+    DiatomicStarkMap::DiatomicStarkMap(
+        const TRydbergSystem<RydbergDiatomicState_t>& system, 
+        const RydbergDiatomicState_t& state, int nMin, int nMax, int RMax, double maxEnergyDist)
     {
-        if (nMin > n || nMax < n || l > n || 
-            std::abs(mj) > j || n < 1 || nMin < 1 || l < 0)
-            throw std::runtime_error("Invalid quantum numbers");
-
         m_referenceStateIdx = -1;
-        RydbergAtomState_t referenceState(n, l, j, mj);
+
+        auto [n, l, R, N, mN] = state;
+        double energy = system.GetEnergy(state);
 
         // generate basis
         for (int n = nMin; n <= nMax; n++)
         {
-            for (int l = 0; l <= n && l <= lMax; l++)
+            for (int l = 0; l <= n; l++)
             {
-                int jmult = 2;
-                for (int i=0; i<jmult; i++)
+                for (int R = 0; R <= RMax; R++)
                 {
-                    double j = double(l) - 0.5 + i;
-                    if (std::abs(mj) - 0.1 < j)
+                    for (int N = std::abs(R-l); N <= R+l; N++)
                     {
-                        m_basis.emplace_back(n, l, j, mj);
-                        if (m_basis.back() == referenceState)
-                            m_referenceStateIdx = m_basis.size() - 1;
+                        // only add states with same mN as reference state
+                        if (std::abs(mN) <= N)
+                        {
+                            RydbergDiatomicState_t s(n, l, R, N, mN);
+                            
+                            if (std::abs(system.GetEnergy(s) - energy) <= maxEnergyDist)
+                                m_basis.emplace_back(s);
+                        }
                     }
                 }
-                
             }
         }
 
-        if (m_referenceStateIdx < 0)
-        {
-            m_basis.push_back(referenceState);
-            m_referenceStateIdx = m_basis.size() - 1;
-        }
+        auto it = std::find(m_basis.begin(), m_basis.end(), state);
+        if (it == m_basis.end()) m_basis.push_back(state);
+        m_referenceStateIdx = it - m_basis.begin();
 
         int stateCnt = m_basis.size();
 
@@ -61,7 +59,12 @@ namespace QSim
         }
     }
 
-    std::pair<Eigen::VectorXd, Eigen::VectorXd> AtomStarkMap::GetEnergies(double electricField)
+    Eigen::VectorXd DiatomicStarkMap::GetEnergies(double electricField)
+    {
+        return GetEnergiesAndStates(electricField).first;
+    }
+
+    std::pair<Eigen::VectorXd, Eigen::MatrixXd> DiatomicStarkMap::GetEnergiesAndStates(double electricField)
     {
         Eigen::MatrixXd hamiltonian = electricField * m_dipoleOperator;
         hamiltonian += m_energies.asDiagonal();
@@ -71,14 +74,8 @@ namespace QSim
 
         Eigen::VectorXd energies = solver.eigenvalues();
         Eigen::MatrixXd states = solver.eigenvectors();
-        Eigen::VectorXd overlaps(energies.size());
-
+        
         // column k of states is the k-th eigen-vector
-        // the l-th element of the eigen vector is the amount of 
-        // overlap of the eigen vector and the l-th basis state
-        for (int i = 0; i < overlaps.size(); i++)
-            overlaps[i] = std::abs(states(m_referenceStateIdx, i));
-
-        return std::make_pair(energies, overlaps);
-    }*/
+        return std::make_pair(energies, states);
+    }
 }

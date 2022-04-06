@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_QSim_Constants_H_
-#define QSim_QSim_Constants_H_
+#ifndef QSim_Constants_H_
+#define QSim_Constants_H_
 
 #include "Platform.h"
 
@@ -38,6 +38,9 @@ namespace QSim
     constexpr static double RydbergConstant_v = 10973731.568; // m^-1
     constexpr static double RydbergEnergy_v = 2.17987236110353e-18; // J
     constexpr static double FineStructureConstant_v = 0.0072973525693; // 1
+
+    // Unit conversions
+    constexpr static double EnergyInverseCm_v = 100 * PlanckConstant_v * SpeedOfLight_v; // cm^-1 -> J
 
 }
 

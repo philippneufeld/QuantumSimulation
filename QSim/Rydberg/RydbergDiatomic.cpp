@@ -1,7 +1,10 @@
 // Philipp Neufeld, 2021-2022
 
-#include "../Constants.h"
 #include "RydbergDiatomic.h"
+
+#include "../Constants.h"
+#include "QuantumDefects.h"
+
 
 namespace QSim
 {
@@ -45,23 +48,29 @@ namespace QSim
 
     double RydbergDiatomic::GetDipoleME(const RydbergDiatomicState_t& state1, const RydbergDiatomicState_t& state2) const
     {
-        const auto [n1, l1, ml1, N1, mN1] = state1;
-        const auto [n2, l2, ml2, N2, mN2] = state2;
+        const auto [n1, l1, R1, N1, mN1] = state1;
+        const auto [n2, l2, R2, N2, mN2] = state2;
         
-        // rotational wavefunction integral
-        if (N1 != N2 || mN1 != mN2)
+        // selection rules
+        if (std::abs(l1-l2) != 1 || R1 != R2)
             return 0.0;
 
-        // TODO: angular part
-        double dip = 0.0;
-        
-        // radial part
-        if (dip != 0)
-        {
-            double rmax1 = 3*(n1+15)*n1*BohrRadius_v;
-            double rmax2 = 3*(n2+15)*n2*BohrRadius_v;
-            dip *= this->GetDipMeRadHelper(state1, state2, rmax1, rmax2, 50);
-        }
+        // angular part
+        double dip = std::sqrt((2*N1+1)*(2*N2+1));
+        dip *= Wigner3j(N1, 1, N2, -mN1, 0, mN2);
+        dip *= Wigner6j(l1, N1, R1, N2, l2, 1);
+        dip *= (N1-mN1+N2+R1+l1+1) % 2 == 0 ? 1.0 : -1.0;
+
+        // check if angular momentum algebra already results 
+        // in a vanishing matrix element
+        if (dip == 0) 
+            return 0.0;
+
+        // radial rydberg matrix element
+        double rmax1 = 3*(n1+15)*n1*BohrRadius_v;
+        double rmax2 = 3*(n2+15)*n2*BohrRadius_v;
+        dip *= this->GetDipMeRadHelper(state1, state2, rmax1, rmax2, 50);
+        dip *= std::sqrt(std::max(l1, l2)) * (l2 > l1 ? -1 : 1);
 
         return dip * ElementaryCharge_v;
     }
@@ -75,7 +84,38 @@ namespace QSim
 
     double NitricOxide::GetQuantumDefect(const RydbergDiatomicState_t& state) const
     {
-        return 0.0;
+        const auto [n, l, R, N, mN] = state;
+
+        // DOI: 10.1039/d1cp01930a
+        std::array<double, 1> l0quantumDefects = { 0.210 };
+        std::array<double, 2> l1quantumDefects = { 0.7038, 0.7410 };
+        std::array<double, 3> l2quantumDefects = { 0.050, -0.053, 0.089 };
+        std::array<double, 4> l3quantumDefects = { 0.0182, 0.0172, 0.00128, 0.0057 };
+
+        std::array<double*, 4> quantumDefects = {
+            l0quantumDefects.data(), l1quantumDefects.data(),
+            l2quantumDefects.data(), l3quantumDefects.data()
+        };
+
+        constexpr int lmax = quantumDefects.size() - 1;
+        int l0 = std::min(l, lmax);
+
+        double defect = 0;
+        for (int Lambda=0; Lambda <= l0; Lambda++)
+        {
+            // projection coefficient
+            double kronL0 = (Lambda == 0 ? 1 : 0);
+            double aCoeff = std::sqrt((2*R + 1) * 2.0 / (1 + kronL0));
+            aCoeff *= Wigner3j(l0, N, R, -Lambda, Lambda, 0);
+            aCoeff *= (l0+Lambda-R) % 2 == 0 ? 1 : -1;
+
+            defect += aCoeff*aCoeff*quantumDefects[l0][Lambda];
+        }
+
+        if (l0 < l)
+            defect = 0.0; // ExtrapolateQuantumDefect(defect, l0, l);
+
+        return defect;
     }
 
     double NitricOxide::GetRotationalConstant() const

@@ -20,7 +20,7 @@ using namespace Eigen;
 int main(int argc, const char* argv[])
 {
     Rubidium atom;
-    AtomStarkMap starkMap(atom, 28, 0, 0.5, 0.5, 23, 31, 20);
+    AtomStarkMap starkMap(atom, RydbergAtomState_t(28, 0, 0.5, 0.5), 23, 31, 20);
 
     int cnt = starkMap.GetBasis().size();
     std::cout << "Basis size: " << cnt << std::endl;
@@ -60,7 +60,6 @@ int main(int argc, const char* argv[])
 
     matplotlib.RunGUILoop();
 #endif
-
 
     return 0;
 }

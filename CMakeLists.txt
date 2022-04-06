@@ -27,6 +27,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
     "${QSIM_SOURCE_DIR}/Util/DataFile.cpp"
     "${QSIM_SOURCE_DIR}/Util/ProgressBar.cpp"
+    "${QSIM_SOURCE_DIR}/Util/PathUtil.cpp"
     "${QSIM_SOURCE_DIR}/Rydberg/RydbergAtom.cpp"
     "${QSIM_SOURCE_DIR}/Rydberg/RydbergDiatomic.cpp"
     "${QSIM_SOURCE_DIR}/Rydberg/AtomStarkMap.cpp"

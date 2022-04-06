@@ -26,8 +26,6 @@ namespace QSim
         return result;
     }
 
-    
-
     double Wigner3jInt(int twoJ1, int twoJ2, int twoJ3, int twoM1, int twoM2, int twoM3)
     {
         

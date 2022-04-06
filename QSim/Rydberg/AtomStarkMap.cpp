@@ -6,14 +6,13 @@ namespace QSim
 {
     AtomStarkMap::AtomStarkMap(
         const TRydbergSystem<RydbergAtomState_t>& system, 
-        int n, int l, double j, double mj, int nMin, int nMax, int lMax)
+        const RydbergAtomState_t& state, int nMin, int nMax, int lMax)
     {
+        auto [n, l, j, mj] = state;
+
         if (nMin > n || nMax < n || l > n || 
             std::abs(mj) > j || n < 1 || nMin < 1 || l < 0)
             throw std::runtime_error("Invalid quantum numbers");
-
-        m_referenceStateIdx = -1;
-        RydbergAtomState_t referenceState(n, l, j, mj);
 
         // generate basis
         for (int n = nMin; n <= nMax; n++)
@@ -27,19 +26,15 @@ namespace QSim
                     if (std::abs(mj) - 0.1 < j)
                     {
                         m_basis.emplace_back(n, l, j, mj);
-                        if (m_basis.back() == referenceState)
-                            m_referenceStateIdx = m_basis.size() - 1;
                     }
                 }
                 
             }
         }
 
-        if (m_referenceStateIdx < 0)
-        {
-            m_basis.push_back(referenceState);
-            m_referenceStateIdx = m_basis.size() - 1;
-        }
+        auto it = std::find(m_basis.begin(), m_basis.end(), state);
+        if (it == m_basis.end()) m_basis.push_back(state);
+        m_referenceStateIdx = it - m_basis.begin();
 
         int stateCnt = m_basis.size();
 

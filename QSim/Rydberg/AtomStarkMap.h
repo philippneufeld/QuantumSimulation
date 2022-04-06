@@ -18,15 +18,13 @@ namespace QSim
     public:
         AtomStarkMap(
             const TRydbergSystem<RydbergAtomState_t>& system, 
-            int n, int l, double j, double mj, 
-            int nMin, int nMax, int lMax);
+            const RydbergAtomState_t& state, int nMin, int nMax, int lMax);
         
         // getter
-        const std::vector<std::tuple<int, int, double, double>>& GetBasis() const { return m_basis; }
+        const std::vector<RydbergAtomState_t>& GetBasis() const { return m_basis; }
         const Eigen::MatrixXd& GetDipoleOperator() const { return m_dipoleOperator; }
 
         // eigen-energy calculator
-        // Eigen::VectorXd GetEnergies(double electricField);
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetEnergies(double electricField);
 
     private:
