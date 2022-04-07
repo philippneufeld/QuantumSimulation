@@ -14,7 +14,7 @@ def unitVec(i, n):
 
 if __name__ == '__main__':
 
-    filename = "NOStarkMap_20220407-142624_ludwigsburg"
+    filename = "NOStarkMap_20220407-162632_calcc"
     dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
     fig = plt.figure()

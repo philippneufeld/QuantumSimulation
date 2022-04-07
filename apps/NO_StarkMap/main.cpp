@@ -1,6 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
 #include <iostream>
+#include <algorithm>
 #include <Eigen/Dense>
 
 #include <QSim/Constants.h>
@@ -22,7 +23,7 @@ unsigned int GetNumberOfCalcThreads()
     unsigned int logical = std::thread::hardware_concurrency();
 
     // use only half the cores on the calc* machines (hyperthreading)
-    if (std::find(hostname.begin(), hostname.end(), "calc") != hostname.end())
+    if (hostname.find("calc") != hostname.npos)
         return (logical / 2) - 1;
     else
         return logical;
