@@ -16,6 +16,18 @@
 using namespace QSim;
 using namespace Eigen;
 
+unsigned int GetNumberOfCalcThreads()
+{
+    std::string hostname = GetHostname();
+    unsigned int logical = std::thread::hardware_concurrency();
+
+    // use only half the cores on the calc* machines (hyperthreading)
+    if (std::find(hostname.begin(), hostname.end(), "calc") != hostname.end())
+        return (logical / 2) - 1;
+    else
+        return logical;
+}
+
 int main(int argc, const char* argv[])
 {
     constexpr double dE = 3.5 * EnergyInverseCm_v;
@@ -34,7 +46,7 @@ int main(int argc, const char* argv[])
     path += GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/06_StarkMap/03_NO/";
     path += GenerateFilename("NOStarkMap") + ".h5";
     
-    ThreadPool pool;
+    ThreadPool pool(GetNumberOfCalcThreads());
     StorageThread storageThread(path, state, starkMap.GetBasis(), dE, eField.size());
     ProgressBar progress(eField.size());
 
