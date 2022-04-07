@@ -50,7 +50,7 @@ namespace QSim
         tm* ptime = std::localtime(&now);
         std::size_t datestamp = (1900 + ptime->tm_year) * 10000 + (ptime->tm_mon + 1) * 100 + ptime->tm_mday;
         std::size_t timestamp = (ptime->tm_hour * 100 + ptime->tm_min) * 100 + ptime->tm_sec;
-        return std::to_string(datestamp) + '-' + std::to_string(timestamp);
+        return std::to_string(datestamp) + (ptime->tm_hour < 10 ? "-0" : "-") + std::to_string(timestamp);
     }
 
     std::string GenerateFilename(const std::string& baseName)
