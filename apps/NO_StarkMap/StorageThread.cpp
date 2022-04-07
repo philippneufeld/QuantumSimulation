@@ -12,7 +12,9 @@ std::array<double, 5> StateToArray(const RydbergDiatomicState_t& state)
     return std::apply(createArray, state);
 }
 
-StorageThread::StorageThread(const std::string& path, const RydbergDiatomicState_t& state, const std::vector<RydbergDiatomicState_t>& basis, double dE, std::size_t cnt)
+StorageThread::StorageThread(const std::string& path, 
+    const RydbergDiatomicState_t& state, const std::vector<RydbergDiatomicState_t>& basis, 
+    double dE, std::size_t cnt)
     : m_totalCnt(cnt)
 {
     m_file.Open(path, DataFile_MUST_NOT_EXIST);
@@ -25,10 +27,10 @@ StorageThread::StorageThread(const std::string& path, const RydbergDiatomicState
     root.StoreAttribute("Energy_Range", &dE);
 
     // store basis
-    auto basisStorage = root.CreateDataset("basis", {basis.size(), 5});
+    auto basisStorage = root.CreateDataset("Basis", {basis.size(), 5});
     MatrixXd basisMat(basis.size(), 5);
     for (int i = 0; i < basis.size(); i++)
-        basisMat.row(i) = Map<Matrix<double, 5, 1>>(StateToArray(state).data());
+        basisMat.row(i) = Map<Matrix<double, 5, 1>>(StateToArray(basis[i]).data());
     basisStorage.StoreMatrix(basisMat);
 
     m_thread = std::thread([&](){ this->ThreadProc(); });

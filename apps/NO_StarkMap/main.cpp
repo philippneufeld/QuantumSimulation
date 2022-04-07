@@ -27,11 +27,11 @@ int main(int argc, const char* argv[])
     int cnt = starkMap.GetBasis().size();
     std::cout << "Basis size: " << cnt << std::endl;
 
-    auto eField = VectorXd::LinSpaced(2500, 0.0, 25.0); // V cm^-1
+    auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
 
     // generate filename
-    std::string path = GetHomeDirSubfolderPath("remote_home");
-    path += "/Masterarbeit/06_StarkMap/03_NO/";
+    std::string path;
+    path += GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/06_StarkMap/03_NO/";
     path += GenerateFilename("NOStarkMap") + ".h5";
     
     ThreadPool pool;
