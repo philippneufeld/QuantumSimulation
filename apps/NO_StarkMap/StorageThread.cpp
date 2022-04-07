@@ -1,5 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
+#include <array>
 #include "StorageThread.h"
 
 using namespace QSim;
@@ -27,7 +28,7 @@ StorageThread::StorageThread(const std::string& path, const RydbergDiatomicState
     auto basisStorage = root.CreateDataset("basis", {basis.size(), 5});
     MatrixXd basisMat(basis.size(), 5);
     for (int i = 0; i < basis.size(); i++)
-        basisMat.row(i) = std::apply([](auto... x){ return Matrix<double, 5, 1>{ static_cast<double>(x)... }; }, basis[i]);
+        basisMat.row(i) = Map<Matrix<double, 5, 1>>(StateToArray(state).data());
     basisStorage.StoreMatrix(basisMat);
 
     m_thread = std::thread([&](){ this->ThreadProc(); });

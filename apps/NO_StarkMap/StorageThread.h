@@ -1,7 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
 #include <iostream>
-#include <array>
 #include <thread>
 #include <queue>
 #include <condition_variable>
