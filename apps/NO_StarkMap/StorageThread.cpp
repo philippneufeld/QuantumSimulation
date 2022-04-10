@@ -42,10 +42,11 @@ StorageThread::~StorageThread()
     m_file.Close(); 
 }
 
-void StorageThread::AddData(int i, double eField, const VectorXd& energies, const MatrixXd& states)
+void StorageThread::AddData(int i, double eField, const VectorXd& energies, 
+    const MatrixXd& states, const Matrix<double, Dynamic, 4>& character)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
-    m_dataQueue.emplace(i, eField, energies, states);
+    m_dataQueue.emplace(i, eField, energies, states, character);
     m_cond.notify_all();
 }
 
@@ -80,7 +81,7 @@ void StorageThread::ThreadProc()
         // store data to file
         for (const Data_t& dat : data)
         {
-            const auto& [i, eField, energies, states] = dat;
+            const auto& [i, eField, energies, states, character] = dat;
 
             // create data group
             std::string groupName = std::to_string(i);
@@ -92,11 +93,14 @@ void StorageThread::ThreadProc()
             auto energyStorage = group.CreateDataset("Energies", { static_cast<std::size_t>(energies.size()) });
             auto stateStorage = group.CreateDataset("States", { static_cast<std::size_t>(states.rows()), 
                 static_cast<std::size_t>(states.cols()) });
+            auto charStorage = group.CreateDataset("Character", { static_cast<std::size_t>(character.rows()), 
+                static_cast<std::size_t>(character.cols()) });
 
             // store data
             group.StoreAttribute("Electric_Field", &eField);
             energyStorage.Store(energies.data());
             stateStorage.StoreMatrix(states);
+            charStorage.StoreMatrix(character);
 
             cnt++;
         }

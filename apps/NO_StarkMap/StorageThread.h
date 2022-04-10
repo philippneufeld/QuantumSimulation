@@ -12,7 +12,9 @@
 
 class StorageThread
 {
-    using Data_t = std::tuple<int, double, Eigen::VectorXd, Eigen::MatrixXd>;
+    using Data_t = std::tuple<int, double, 
+        Eigen::VectorXd, Eigen::MatrixXd, 
+        Eigen::Matrix<double, Eigen::Dynamic, 4>>;
 public:
     StorageThread(const std::string& path, 
         const QSim::RydbergDiatomicState_t& state, 
@@ -20,7 +22,10 @@ public:
         double dE, std::size_t cnt);
     ~StorageThread();
 
-    void AddData(int i, double eField, const Eigen::VectorXd& energies, const Eigen::MatrixXd& states);
+    void AddData(int i, double eField, 
+        const Eigen::VectorXd& energies, 
+        const Eigen::MatrixXd& states, 
+        const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
     void WaitUntilFinished();
 
 private:

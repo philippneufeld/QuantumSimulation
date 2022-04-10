@@ -80,10 +80,35 @@ class NOStarkMap:
 
 if __name__ == '__main__':
 
-    filename = "NOStarkMap_20220407-162632_calcc"
-    dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
+    # filename = "NOStarkMap_20220407-162632_calcc"
+    # dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
-    stark_map = NOStarkMap(os.path.join(dir_path, filename + ".h5"))
-    stark_map.plot()
+    filename = "NOStarkMap_20220410-201736_philtower"
+    dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
+    path = os.path.join(dir_path, filename + ".h5")
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    color_palette = np.array([col.to_rgb(f"C{i}") for i in range(10)])
+            
+    with h5py.File(path) as file:
+        for datagroup in tqdm.tqdm([file[k] for k in file.keys() if k.isdecimal()]):
+
+            energies = np.array(datagroup["Energies"][::])
+            eField = np.ones_like(energies) * float(datagroup.attrs["Electric_Field"])
+            character = np.array(datagroup["Character"][::])
+
+            colors = color_palette[np.mod(character[:, 2].astype(int), 10), :]
+            
+            ax.scatter(eField, energies, 0.5, colors)
+    
+    ax.set_xlim((0, 25))
+    ax.set_ylim((-66.5, -61.5))
+    ax.set_xlabel("Electric field (V / cm)")
+    ax.set_ylabel("Energy / $hc$ (cm${}^{-1}$)")       
+
+    # stark_map = NOStarkMap(os.path.join(dir_path, filename + ".h5"))
+    # stark_map.plot()
 
     plt.show()
