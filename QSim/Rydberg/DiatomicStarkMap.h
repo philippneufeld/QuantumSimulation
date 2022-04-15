@@ -17,7 +17,7 @@ namespace QSim
     {
     public:
         DiatomicStarkMap(
-            const TRydbergSystem<RydbergDiatomicState_t>& system, 
+            const RydbergDiatomic& system, 
             const RydbergDiatomicState_t& state, 
             int nMin, int nMax, int RMax, double maxEnergyDist);
         
@@ -29,12 +29,13 @@ namespace QSim
         // eigen-energy calculator
         Eigen::VectorXd GetEnergies(double electricField);
         std::pair<Eigen::VectorXd, Eigen::MatrixXd> GetEnergiesAndStates(double electricField);
-        
+    
     private:
         int m_referenceStateIdx;
         std::vector<RydbergDiatomicState_t> m_basis;
 
         Eigen::VectorXd m_energies;
+        Eigen::MatrixXd m_hamiltonian0;
         Eigen::MatrixXd m_dipoleOperator;
     };
     

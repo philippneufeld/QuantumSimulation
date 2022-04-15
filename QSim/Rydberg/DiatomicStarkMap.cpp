@@ -5,7 +5,7 @@
 namespace QSim
 {
     DiatomicStarkMap::DiatomicStarkMap(
-        const TRydbergSystem<RydbergDiatomicState_t>& system, 
+        const RydbergDiatomic& system, 
         const RydbergDiatomicState_t& state, int nMin, int nMax, int RMax, double maxEnergyDist)
     {
         m_referenceStateIdx = -1;
@@ -42,19 +42,25 @@ namespace QSim
         int stateCnt = m_basis.size();
 
         // get energies
-        m_energies = Eigen::VectorXd(stateCnt);
+        m_hamiltonian0 = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
         for (int i=0; i<stateCnt; i++)
-            m_energies[i] = system.GetEnergy(m_basis[i]);
+            m_hamiltonian0(i, i) = system.GetEnergy(m_basis[i]);
 
-        // calculate dipole operator
+        // calculate dipole operator (and self-interaction operator)
         m_dipoleOperator = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
         for (int i1 = 0; i1 < stateCnt; i1++)
         {
             for (int i2 = 0; i2 < i1; i2++)
             {
+                // self dipole interaction
+                double selfDip = system.GetSelfDipoleME(m_basis[i1], m_basis[i2]);
+                m_hamiltonian0(i1, i2) += selfDip;
+                m_hamiltonian0(i2, i1) += selfDip;
+
+                // stark operator
                 double dip = system.GetDipoleME(m_basis[i1], m_basis[i2]);
-                m_dipoleOperator(i1, i2) = dip;
-                m_dipoleOperator(i2, i1) = dip;
+                m_dipoleOperator(i1, i2) += dip;
+                m_dipoleOperator(i2, i1) += dip;
             }
         }
     }
@@ -66,8 +72,7 @@ namespace QSim
 
     std::pair<Eigen::VectorXd, Eigen::MatrixXd> DiatomicStarkMap::GetEnergiesAndStates(double electricField)
     {
-        Eigen::MatrixXd hamiltonian = electricField * m_dipoleOperator;
-        hamiltonian += m_energies.asDiagonal();
+        Eigen::MatrixXd hamiltonian = m_hamiltonian0 + electricField * m_dipoleOperator;
 
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver;
         solver.compute(hamiltonian);

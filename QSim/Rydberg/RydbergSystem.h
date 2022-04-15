@@ -22,6 +22,8 @@ namespace QSim
         TRydbergSystem(double mass);
         virtual ~TRydbergSystem();
 
+        double GetReducedMass() const;
+
         // Public interface -> functions must be overwritten by child class
         virtual double GetQuantumDefect(const State& state) const = 0;
         virtual double GetEnergy(const State& state) const = 0;
@@ -89,6 +91,12 @@ namespace QSim
     double TRydbergSystem<State>::GetScaledRydbergConstant() const
     {
         return RydbergConstant_v * (m_reducedMass / ElectronMass_v);
+    }
+
+    template<typename State>
+    double TRydbergSystem<State>::GetReducedMass() const
+    {
+        return m_reducedMass;
     }
 
     template<typename State>

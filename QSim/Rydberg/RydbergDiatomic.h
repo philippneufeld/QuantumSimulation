@@ -26,12 +26,16 @@ namespace QSim
         // Retrieve molecule specific constants
         virtual double GetRotationalConstant() const = 0;
         virtual double GetCentrifugalDistConstant() const = 0;
+        virtual double GetCoreDipoleMoment() const = 0;
 
         virtual double GetEnergy(const RydbergDiatomicState_t& state) const override;
         virtual double GetPotential(double r, const RydbergDiatomicState_t& state) const override;
         
         virtual double GetDipoleME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const override;
+
+        double GetSelfDipoleME(const RydbergDiatomicState_t& state1, 
+            const RydbergDiatomicState_t& state2) const;
     };
 
     class NitricOxide : public RydbergDiatomic
@@ -42,6 +46,7 @@ namespace QSim
         virtual double GetQuantumDefect(const RydbergDiatomicState_t& state) const override;
         virtual double GetRotationalConstant() const override;
         virtual double GetCentrifugalDistConstant() const override;
+        virtual double GetCoreDipoleMoment() const override;
     };
 
 }

@@ -75,6 +75,40 @@ namespace QSim
         return dip * ElementaryCharge_v;
     }
 
+    double RydbergDiatomic::GetSelfDipoleME(const RydbergDiatomicState_t& state1, 
+        const RydbergDiatomicState_t& state2) const
+    {
+        const auto [n1, l1, R1, N1, mN1] = state1;
+        const auto [n2, l2, R2, N2, mN2] = state2;
+
+        // selection rules
+        if (N1 != N2 || mN1 != mN2 || std::abs(l2-l1) != 1 || std::abs(R2-R1) != 1)
+            return 0.0;
+
+        double f = ((l1 + l2 + N2) % 2 == 0 ? 1.0 : -1.0);
+        f *= Wigner6j(N2, R1, l1, 1, l2, R2);
+        f *= std::sqrt((2*R1+1)*(2*R2+1)) * Wigner3j(R1, 1, R2, 0, 0, 0);
+        f *= std::sqrt((2*l1+1)*(2*l2+1)) * Wigner3j(l1, 1, l2, 0, 0, 0);
+
+        constexpr double k = -ElementaryCharge_v / (4*Pi_v*VacuumPermittivity_v);
+        double mu = this->GetCoreDipoleMoment();
+        double a0 = BohrRadius_v * ElectronMass_v / this->GetReducedMass();
+            
+        // adjusted quantum numbers l and n
+        double mu1 = this->GetQuantumDefect(state1);
+        double mu2 = this->GetQuantumDefect(state1);
+        double nu1 = n1 - mu1;
+        double nu2 = n1 - mu2;
+        double lambda1 = l1 - mu1;
+        double lambda2 = l1 - mu2;
+
+        // approximation: see Phys. Chem. Chem. Phys.,2021, 23, 18806
+        double rad = 2 / (a0*a0 * std::pow(nu1*nu2, 1.5) * (lambda1 + lambda2 + 1));
+        rad *= std::sin(Pi_v * (lambda1 - lambda2)) / (Pi_v*(lambda1 - lambda2));
+
+        return k * mu * rad * f;
+    }
+
     //
     // NitricOxide
     //
@@ -128,6 +162,12 @@ namespace QSim
     {
         // Phys. Chem. Chem. Phys., 2021, 23, 18806; doi: 10.1039/d1cp01930a
         return 5.64e-4; // m^-1
+    }
+
+    double NitricOxide::GetCoreDipoleMoment() const
+    {
+        // Phys. Chem. Chem. Phys., 2021, 23, 18806; doi: 10.1039/d1cp01930a
+        return 0.4 * Debye_v;
     }
 
 
