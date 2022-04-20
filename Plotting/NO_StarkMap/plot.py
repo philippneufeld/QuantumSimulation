@@ -80,11 +80,11 @@ class NOStarkMap:
 
 if __name__ == '__main__':
 
-    # filename = "NOStarkMap_20220407-162632_calcc"
-    # dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
+    filename = "NOStarkMap_20220419-180645_calcc"
+    dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
-    filename = "NOStarkMap_20220410-201736_philtower"
-    dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
+    # filename = "NOStarkMap_20220410-201736_philtower"
+    # dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
     path = os.path.join(dir_path, filename + ".h5")
 
     fig = plt.figure()
@@ -111,4 +111,7 @@ if __name__ == '__main__':
     # stark_map = NOStarkMap(os.path.join(dir_path, filename + ".h5"))
     # stark_map.plot()
 
-    plt.show()
+    fig.savefig(os.path.join(dir_path, filename + ".pdf"))
+    fig.savefig(os.path.join(dir_path, filename + ".png"))
+
+    # plt.show()

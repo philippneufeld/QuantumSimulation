@@ -96,11 +96,11 @@ namespace QSim
             
         // adjusted quantum numbers l and n
         double mu1 = this->GetQuantumDefect(state1);
-        double mu2 = this->GetQuantumDefect(state1);
+        double mu2 = this->GetQuantumDefect(state2);
         double nu1 = n1 - mu1;
-        double nu2 = n1 - mu2;
+        double nu2 = n2 - mu2;
         double lambda1 = l1 - mu1;
-        double lambda2 = l1 - mu2;
+        double lambda2 = l2 - mu2;
 
         // approximation: see Phys. Chem. Chem. Phys.,2021, 23, 18806
         double rad = 2 / (a0*a0 * std::pow(nu1*nu2, 1.5) * (lambda1 + lambda2 + 1));
