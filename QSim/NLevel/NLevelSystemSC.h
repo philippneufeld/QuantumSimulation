@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <iostream>
 
 #include <Eigen/Dense>
 #include "NLevelSystem.h"
@@ -32,7 +33,21 @@ namespace QSim
         TNLevelSystemSC(const TNLevelSystemSC&) = default;
         TNLevelSystemSC& operator=(const TNLevelSystemSC&) = default;  
 
-    private:
+        // auxilliary data that can be prepared once during a time series and be reused later
+        using HAuxData = std::tuple<
+            // hamiltonian without time-dependent terms
+            Eigen::Matrix<std::complex<double>, N, N>,
+            // doppler shifted laser frequencies
+            Eigen::VectorXd,
+            // rotating frame frequencies
+            Eigen::Matrix<double, N, 1>
+            >;
+
+        // hamiltonian
+        HAuxData GetHamiltonianAux(const Eigen::VectorXd& laserFreqs) const;
+        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(const HAuxData& auxData, double t) const;
+
+    protected:
         // Allow every possible laser configuration
         bool OnLaserAdded(const Laser_t&) { return true; }
         void OnLaserRemoved() { }
@@ -40,44 +55,11 @@ namespace QSim
 
         Eigen::Matrix<double, N, 1> CalculateRotatingFrame(
             const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
-
-        // auxilliary data that can be prepared once during a time series and be reused later
-        using HAuxData = std::tuple<
-            // hamiltonian without time-dependent terms
-            Eigen::Matrix<std::complex<double>, N, N>,
-            // doppler shifted laser frequencies
-            Eigen::Matrix<double, N, 1>,
-            // rotating frame frequencies
-            Eigen::Matrix<double, N, 1>
-            >;
-
-        HAuxData GetHamiltonianAux(const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
-        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(const HAuxData& auxData, double t) const;   
     };
 
     template<int N, bool AM>
-    Eigen::Matrix<double, N, 1> TNLevelSystemSC<N, AM>::CalculateRotatingFrame(
-        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
-    {
-        auto levels = this->GetLevels();
-        Eigen::Matrix<double, N, 1> frame(this->GetDims());
-        
-        frame[0] = levels[0];
-        for (std::size_t i = 1; i < this->GetDims(); i++)
-        {
-            // find closest matching laser frequency
-            int idx = 0;
-            auto freqDiff = (laserFreqs.array() - levels[i]).abs().minCoeff(&idx);
-            double offset = freqDiff < std::abs(levels[i]) ? laserFreqs[idx] : 0.0;
-            frame[i] = frame[i-1] + offset;    
-        }
-
-        return frame;
-    }
-
-    template<int N, bool AM>
     typename TNLevelSystemSC<N, AM>::HAuxData TNLevelSystemSC<N, AM>::GetHamiltonianAux(
-        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
+        const Eigen::VectorXd& laserFreqs) const
     {
         assert(laserFreqs.size() == this->GetLaserCount());
         
@@ -127,7 +109,8 @@ namespace QSim
                     double smallerFreq = std::min(std::abs(freqs[0]), std::abs(freqs[1]));
                     for (double freq: freqs)
                     {
-                        if (std::abs(freq) > smallerFreq)
+                        // don't care about frequencies over 1 GHz
+                        if (std::abs(freq) > std::min(smallerFreq, 1e9))
                             continue;
 
                         // add coupling to the hamiltonian
@@ -142,6 +125,36 @@ namespace QSim
         }
 
         return h;
+    }
+
+    template<int N, bool AM>
+    Eigen::Matrix<double, N, 1> TNLevelSystemSC<N, AM>::CalculateRotatingFrame(
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
+    {
+        auto levels = this->GetLevels();
+        Eigen::Matrix<double, N, 1> frame(this->GetDims());
+        
+        frame[0] = levels[0];
+        for (std::size_t i = 1; i < this->GetDims(); i++) // for every frame frequency
+        {
+            double minFreqDiff = levels[i] - frame[0];
+            frame[i] = frame[0];
+
+            for (std::size_t j = 0; j < i; j++)
+            {
+                int laserIdx = 0;
+                double freq = levels[i] - levels[j];
+                auto freqDiff = (laserFreqs.array() - freq).abs().minCoeff(&laserIdx);
+
+                if (freqDiff < minFreqDiff)
+                {
+                    minFreqDiff = freqDiff;
+                    frame[i] = frame[j] + laserFreqs[laserIdx];
+                }
+            }
+        }
+
+        return frame;
     }
 
 }

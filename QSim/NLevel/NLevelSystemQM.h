@@ -35,6 +35,11 @@ namespace QSim
         TNLevelSystemQM(const TNLevelSystemQM&) = default;
         TNLevelSystemQM& operator=(const TNLevelSystemQM&) = default;
 
+        // hamiltonian
+        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianAux(
+            const Eigen::VectorXd& laserFreqs) const;
+        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(
+            const Eigen::Matrix<std::complex<double>, N, N>& auxData, double t) const;
         Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianTI(
             const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
 
@@ -53,16 +58,26 @@ namespace QSim
         void OnLaserRemoved() { PrepareCalculation(); }
         void OnDipoleOperatorChanged() { PrepareHamiltonian(); }
         
-        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianAux(
-            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const;
-        Eigen::Matrix<std::complex<double>, N, N> GetHamiltonianFast(
-            const Eigen::Matrix<std::complex<double>, N, N>& auxData, double t) const;
-
     private:
         Eigen::Matrix<double, N, Eigen::Dynamic> m_photonBasis;
         Eigen::Matrix<std::complex<double>, N, N> m_hamiltonianNoLight;
     };
  
+
+    template<int N>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianAux(
+        const Eigen::VectorXd& laserFreqs) const
+    {
+        return GetHamiltonianTI(laserFreqs);
+    }
+
+    template<int N>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianFast(
+        const Eigen::Matrix<std::complex<double>, N, N>& auxData, double t) const 
+    { 
+        return auxData; 
+    }
+
     template<int N>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianTI(
         const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
@@ -233,20 +248,6 @@ namespace QSim
         }
 
         return true;
-    }
-
-    template<int N>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianAux(
-        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs) const
-    {
-        return GetHamiltonianTI(laserFreqs);
-    }
-
-    template<int N>
-    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemQM<N>::GetHamiltonianFast(
-        const Eigen::Matrix<std::complex<double>, N, N>& auxData, double t) const 
-    { 
-        return auxData; 
     }
 
 }

@@ -58,4 +58,26 @@ namespace QSim
         return baseName + (baseName.empty() ? "" : "_") + GetTimestampString() + "_" + GetHostname();
     }
 
+    bool MoveFile(const std::string& from, const std::string& to)
+    {
+        try 
+        {
+            std::filesystem::rename(from, to);
+        } 
+        catch (std::filesystem::filesystem_error&)
+        {
+            try 
+            {
+                std::filesystem::copy(from, to);
+                std::filesystem::remove(from);
+            }
+            catch (std::filesystem::filesystem_error&)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 }

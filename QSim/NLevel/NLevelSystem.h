@@ -98,11 +98,14 @@ namespace QSim
         // create specific density matrices
         Eigen::Matrix<std::complex<double>, N, N> CreateGroundState() const;
         Eigen::Matrix<std::complex<double>, N, N> CreateThermalState(double temperature) const;
-        
-    private:
-        // helper methods for time evolution
-        template<typename AuxType>
+       
+        // get temporal derivative of the density operator
         Eigen::Matrix<std::complex<double>, N, N> GetDensityOpDerivative(
+            const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
+            const Eigen::Matrix<std::complex<double>, N, N>& rho, double t) const;
+        
+        template<typename AuxType>
+        Eigen::Matrix<std::complex<double>, N, N> GetDensityOpDerivativeFast(
             const AuxType& auxData, 
             const Eigen::Matrix<std::complex<double>, N, N>& rho,
             double t) const;
@@ -253,7 +256,7 @@ namespace QSim
         // define integrator and function to be integrated
         TODEIntegrator<ODEAd54DPPolicy> integrator;
         using YType = Eigen::Matrix<std::complex<double>, N, N>;
-        auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
+        auto func = [&](double x, const YType& y) { return GetDensityOpDerivativeFast(auxData, y, x); };
 
         return integrator.IntegrateTo(func, rho0, t0, t, dt);
     }
@@ -269,7 +272,7 @@ namespace QSim
         // define integrator and function to be integrated
         TODEIntegrator<ODEAd54DPPolicy> integrator;
         using YType = Eigen::Matrix<std::complex<double>, N, N>;
-        auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
+        auto func = [&](double x, const YType& y) { return GetDensityOpDerivativeFast(auxData, y, x); };
         
         // validate averaging time and generate starting and 
         // end time of the averaging process
@@ -322,7 +325,7 @@ namespace QSim
         // define integrator and function to be integrated
         TODEIntegrator<ODEAd54DPPolicy> integrator;
         using YType = Eigen::Matrix<std::complex<double>, N, N>;
-        auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(auxData, y, x); };
+        auto func = [&](double x, const YType& y) { return GetDensityOpDerivativeFast(auxData, y, x); };
         
         auto rho = rho0;
         double dtInner = dt;
@@ -363,8 +366,18 @@ namespace QSim
     }
 
     template<int N, typename MyT, bool AM>
-    template<typename AuxType>
     Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityOpDerivative(
+        const Eigen::Ref<const Eigen::VectorXd>& laserFreqs, 
+        const Eigen::Matrix<std::complex<double>, N, N>& rho, 
+        double t) const
+    {
+        const auto auxData = (~(*this)).GetHamiltonianAux(laserFreqs);
+        return this->GetDensityOpDerivativeFast(auxData, rho, t);
+    }
+
+    template<int N, typename MyT, bool AM>
+    template<typename AuxType>
+    Eigen::Matrix<std::complex<double>, N, N> TNLevelSystemCRTP<N, MyT, AM>::GetDensityOpDerivativeFast(
         const AuxType& auxData, 
         const Eigen::Matrix<std::complex<double>, N, N>& rho, 
         double t) const

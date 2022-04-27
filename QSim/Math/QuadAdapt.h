@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <numeric>
 
 #include "MatrixTraits.h"
 #include "Quad.h"
@@ -60,13 +61,15 @@ namespace QSim
             auto dxlen = TMatrixNorm<XTy>::Get(dx);
 
             std::size_t fsCnt = 1+2*sections;
-            Eigen::Matrix<YTy, Eigen::Dynamic, 1> fs(fsCnt);
+            std::vector<YTy> fs;
+            fs.reserve(fsCnt);
             for (size_t i = 0; i < fsCnt; i++)
-                fs[i] = std::invoke(func, a+i*0.5*dx);
+                fs.emplace_back(std::invoke(func, a+i*0.5*dx));
+            YTy fsSum = std::accumulate(fs.begin() + 1, fs.end(), fs[0]);
             std::size_t fevs = fsCnt;
 
             // estimate using the trapezoid rule (divided by section count)
-            YTy IestSec = (fs.sum() - 0.5*(fs[0]-fs[fsCnt-1])) * (0.5* dxlen / sections);
+            YTy IestSec = (fsSum - 0.5*(fs[0]-fs[fsCnt-1])) * (0.5* dxlen / sections);
 
             // first iteration
             auto [res, sub_fevs] = IntegrateHelper(func, a, dx, dxlen, 

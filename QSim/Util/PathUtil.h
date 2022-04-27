@@ -16,6 +16,8 @@ namespace QSim
     std::string GetTimestampString();
 
     std::string GenerateFilename(const std::string& baseName);
+
+    bool MoveFile(const std::string& from, const std::string& to);
 }
 
 #endif

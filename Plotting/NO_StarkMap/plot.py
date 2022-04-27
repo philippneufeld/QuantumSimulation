@@ -80,7 +80,7 @@ class NOStarkMap:
 
 if __name__ == '__main__':
 
-    filename = "NOStarkMap_20220419-180645_calcc"
+    filename = "NOStarkMap_20220420-102157_calcc"
     dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
     # filename = "NOStarkMap_20220410-201736_philtower"
@@ -111,7 +111,9 @@ if __name__ == '__main__':
     # stark_map = NOStarkMap(os.path.join(dir_path, filename + ".h5"))
     # stark_map.plot()
 
-    fig.savefig(os.path.join(dir_path, filename + ".pdf"))
-    fig.savefig(os.path.join(dir_path, filename + ".png"))
+    fig.tight_layout()
 
-    # plt.show()
+    # fig.savefig(os.path.join(dir_path, filename + ".pdf"))
+    # fig.savefig(os.path.join(dir_path, filename + ".png"))
+
+    plt.show()

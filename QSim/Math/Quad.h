@@ -161,11 +161,6 @@ namespace QSim
             TMatrixElementType_t<YTy> result = wFirst*y[0] + wLast*y[y.size()-1];
             ConstexprFor<std::size_t, 0, ccnt, 1>([=, &result, &y](auto i)
             {
-#if (EIGEN_WORLD_VERSION > 3 || (EIGEN_WORLD_VERSION == 3 && EIGEN_MAJOR_VERSION >= 4)) // at least eigen 3.4.x
-                // Eigen 3.4 code
-                result += TConstListGet_v<i, CL> * y(Eigen::seq(Eigen::fix<i+1>, y.size()-2, Eigen::fix<ccnt>)).sum();
-#else
-                // pre Eigen 3.4 code
                 auto from = i+1;
                 auto to = y.size() - 2;
 
@@ -176,7 +171,6 @@ namespace QSim
                         resultInner += y[j];
                     result += TConstListGet_v<i, CL> * resultInner;
                 }
-#endif
             });
             return MatrixEval(result * denRcp);
         }
