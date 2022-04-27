@@ -190,13 +190,13 @@ int main(int argc, const char* argv[])
 {
     NOGasSensorTD gasSensor;
 
-    double fmin = 1e6;
-    double fmax = 1e8;
-    VectorXd freqs = ArrayXd::LinSpaced(50, std::log(fmin), std::log(fmax)).exp();
+    double fmin = 1e5;
+    double fmax = 1e9;
+    VectorXd freqs = ArrayXd::LinSpaced(1000, std::log(fmin), std::log(fmax)).exp();
     VectorXd populations = VectorXd::Zero(freqs.size());
 
     double dt = 1e-9;
-    double tmax = 5.0 / fmin;
+    double tmin = 5e-6;
 
     // data storage
     // generate filename (first store locally and then move to desired location)
@@ -217,8 +217,9 @@ int main(int argc, const char* argv[])
         {
             threadPool.Submit([&, i=i]()
             {
-                auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tmax, dt, freqs[i]);
-                populations[i] = pops.sum() / tmax;
+	    	double tsim = std::max(500.0 / freqs[i], tmin);
+                auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tsim, dt, freqs[i]);
+                populations[i] = pops.sum() / tsim;
 
                 // store trajectory
                 std::unique_lock lock(file_mutex);
