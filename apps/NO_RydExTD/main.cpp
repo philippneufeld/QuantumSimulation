@@ -192,7 +192,7 @@ int main(int argc, const char* argv[])
 
     double fmin = 1e6;
     double fmax = 1e8;
-    VectorXd freqs = ArrayXd::LinSpaced(500, std::log(fmin), std::log(fmax)).exp();
+    VectorXd freqs = ArrayXd::LinSpaced(50, std::log(fmin), std::log(fmax)).exp();
     VectorXd populations = VectorXd::Zero(freqs.size());
 
     double dt = 1e-9;
@@ -203,45 +203,48 @@ int main(int argc, const char* argv[])
     std::string filename = GenerateFilename("NORydExTD") + ".h5";
     std::string dstPath = GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/07_TimeDependence/01_Ion_modG/" + filename;
 
-    DataFile file;
-    file.Open(filename, DataFile_MUST_NOT_EXIST);
-    auto root = file.OpenRootGroup();
-    auto groupNameLen = std::to_string(freqs.size()).size();
-    std::mutex file_mutex;
-
-    ThreadPool threadPool;
-    ProgressBar progressBar(freqs.size());
-
-    for (int i = 0; i < freqs.size(); i++)
     {
-        threadPool.Submit([&, i=i]()
+        DataFile file;
+        file.Open(filename, DataFile_MUST_NOT_EXIST);
+        auto root = file.OpenRootGroup();
+        auto groupNameLen = std::to_string(freqs.size()).size();
+        std::mutex file_mutex;
+
+        ThreadPool threadPool;
+        ProgressBar progressBar(freqs.size());
+
+        for (int i = 0; i < freqs.size(); i++)
         {
-            auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tmax, dt, freqs[i]);
-            populations[i] = pops.sum() / tmax;
+            threadPool.Submit([&, i=i]()
+            {
+                auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tmax, dt, freqs[i]);
+                populations[i] = pops.sum() / tmax;
 
-            // store trajectory
-            std::unique_lock lock(file_mutex);
-            std::string groupName = std::to_string(i);
-            groupName.insert(groupName.begin(), groupNameLen - groupName.size(), '0');
-            auto group = root.CreateSubgroup(groupName);
-            group.CreateAttribute("frequency", { 1 });
-            group.StoreAttribute("frequency", &freqs[i]);
-            auto tStorage = group.CreateDataset("t", { static_cast<std::size_t>(ts.size()) });
-            auto pStorage = group.CreateDataset("populations", { static_cast<std::size_t>(pops.size()) });
-            tStorage.StoreMatrix(ts);
-            pStorage.StoreMatrix(pops);
+                // store trajectory
+                std::unique_lock lock(file_mutex);
+                std::string groupName = std::to_string(i);
+                groupName.insert(groupName.begin(), groupNameLen - groupName.size(), '0');
+                auto group = root.CreateSubgroup(groupName);
+                group.CreateAttribute("frequency", { 1 });
+                group.StoreAttribute("frequency", &freqs[i]);
+                auto tStorage = group.CreateDataset("t", { static_cast<std::size_t>(ts.size()) });
+                auto pStorage = group.CreateDataset("populations", { static_cast<std::size_t>(pops.size()) });
+                tStorage.StoreMatrix(ts);
+                pStorage.StoreMatrix(pops);
 
-            progressBar.IncrementCount();
-        });
+                progressBar.IncrementCount();
+            });
+        }
+
+        progressBar.WaitUntilFinished();
+
+        // store overall
+        auto fStorage = root.CreateDataset("frequencies", { static_cast<std::size_t>(freqs.size()) });
+        auto pStorage = root.CreateDataset("populations", { static_cast<std::size_t>(populations.size()) });
+        fStorage.Store(freqs.data());
+        pStorage.Store(populations.data());
+
     }
-
-    progressBar.WaitUntilFinished();
-
-    // store overall
-    auto fStorage = root.CreateDataset("frequencies", { static_cast<std::size_t>(freqs.size()) });
-    auto pStorage = root.CreateDataset("populations", { static_cast<std::size_t>(populations.size()) });
-    fStorage.StoreMatrix(freqs);
-    pStorage.StoreMatrix(populations);
 
     if (MoveFile(filename, dstPath))
         std::cout << "Finished. Data saved to " << dstPath << std::endl;
