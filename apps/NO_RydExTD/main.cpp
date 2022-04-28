@@ -192,11 +192,11 @@ int main(int argc, const char* argv[])
 
     double fmin = 1e5;
     double fmax = 1e9;
-    VectorXd freqs = ArrayXd::LinSpaced(1000, std::log(fmin), std::log(fmax)).exp();
+    VectorXd freqs = ArrayXd::LinSpaced(500, std::log(fmin), std::log(fmax)).exp();
     VectorXd populations = VectorXd::Zero(freqs.size());
 
     double dt = 1e-9;
-    double tmin = 5e-6;
+    double tmin = 2e-6;
 
     // data storage
     // generate filename (first store locally and then move to desired location)
@@ -217,7 +217,7 @@ int main(int argc, const char* argv[])
         {
             threadPool.Submit([&, i=i]()
             {
-	    	double tsim = std::max(500.0 / freqs[i], tmin);
+	    	double tsim = std::max(50.0 / freqs[i], tmin);
                 auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tsim, dt, freqs[i]);
                 populations[i] = pops.sum() / tsim;
 
