@@ -28,6 +28,9 @@ namespace QSim
         virtual double GetCentrifugalDistConstant() const = 0;
         virtual double GetCoreDipoleMoment() const = 0;
 
+        // coefficients needed for the multielectron correction
+        virtual double GetConfigurationMixingCoeff(int l1, int R1, int l2, int R2, int N) const = 0;
+
         virtual double GetEnergy(const RydbergDiatomicState_t& state) const override;
         virtual double GetPotential(double r, const RydbergDiatomicState_t& state) const override;
         
@@ -36,10 +39,21 @@ namespace QSim
 
         double GetSelfDipoleME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const;
+        double GetSelfMultiElectronME(const RydbergDiatomicState_t& state1, 
+            const RydbergDiatomicState_t& state2) const;
+
+    protected:
+        double GetHcbToHcdCoeff(int N, int l, int R, int lambda) const;
     };
 
     class NitricOxide : public RydbergDiatomic
     {
+    private:
+        // DOI: 10.1039/d1cp01930a
+        constexpr static std::array<double, 1> s_l0quantumDefects = { 0.210 };
+        constexpr static std::array<double, 2> s_l1quantumDefects = { 0.7038, 0.7410 };
+        constexpr static std::array<double, 3> s_l2quantumDefects = { 0.050, -0.053, 0.089 };
+        constexpr static std::array<double, 4> s_l3quantumDefects = { 0.0182, 0.0172, 0.00128, 0.0057 };
     public:
         NitricOxide();
         
@@ -47,6 +61,8 @@ namespace QSim
         virtual double GetRotationalConstant() const override;
         virtual double GetCentrifugalDistConstant() const override;
         virtual double GetCoreDipoleMoment() const override;
+
+        virtual double GetConfigurationMixingCoeff(int l1, int R1, int l2, int R2, int N) const override;
     };
 
 }

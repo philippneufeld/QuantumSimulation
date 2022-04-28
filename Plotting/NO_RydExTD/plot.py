@@ -9,18 +9,34 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-class GasSensorTimeDependence:
-
-    def __init__(self, path) -> None:
-        self.path = path
-
-
 if __name__ == '__main__':
 
-    filename = "NORydExTD_20220427-170218_ludwigsburg"
+    filename = "Sim_Fine_02"
     dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/07_TimeDependence/01_Ion_modG"
     path = os.path.join(dir_path, filename + ".h5")
 
+    trajs = [0, 100, 200, 300, 400]
+
     with h5py.File(path) as file:
-        for datagroup in tqdm.tqdm([file[k] for k in file.keys() if k.isdecimal()]):
-            pass
+        
+        freqs = file["frequencies"][:]
+        pops = file["populations"][:]
+
+        plt.figure()
+        plt.loglog()
+        plt.plot(freqs, pops)
+        plt.xlabel("Chop frequency (green laser)")
+        plt.ylabel("Mean relative ion population")
+        
+        plt.figure()
+        for data in tqdm.tqdm([file[k] for k in file.keys() if k.isdecimal() and int(k) in trajs]):
+            plt.plot(data["t"][:], data["populations"][:], label = f"$f = {float(data.attrs['frequency']):.3e}$")
+
+        plt.xlabel("t")
+        plt.ylabel("Relative ion population")
+        plt.xlim((0, 4e-7))
+        plt.legend()
+
+    plt.show()
+            
+

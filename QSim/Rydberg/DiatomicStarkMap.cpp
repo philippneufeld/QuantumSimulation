@@ -52,15 +52,18 @@ namespace QSim
         {
             for (int i2 = 0; i2 < i1; i2++)
             {
-                // self dipole interaction
+                // self dipole and self multielectron interaction
                 double selfDip = system.GetSelfDipoleME(m_basis[i1], m_basis[i2]);
-                m_hamiltonian0(i1, i2) += selfDip;
-                m_hamiltonian0(i2, i1) += selfDip;
+                double selfMulti = system.GetSelfMultiElectronME(m_basis[i1], m_basis[i2]);
+                m_hamiltonian0(i1, i2) += selfDip + selfMulti;
+                m_hamiltonian0(i2, i1) += selfDip + selfMulti;
 
                 // stark operator
                 double dip = system.GetDipoleME(m_basis[i1], m_basis[i2]);
                 m_dipoleOperator(i1, i2) += dip;
                 m_dipoleOperator(i2, i1) += dip;
+
+                
             }
         }
     }
