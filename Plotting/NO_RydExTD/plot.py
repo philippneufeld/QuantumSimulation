@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
 
-    filename = "Sim_Fine_02"
+    filename = "Sim_Fine_03"
     dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/07_TimeDependence/01_Ion_modG"
     path = os.path.join(dir_path, filename + ".h5")
 
