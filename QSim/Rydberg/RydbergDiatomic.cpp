@@ -169,7 +169,7 @@ namespace QSim
         }
 
         if (l0 < l)
-            defect = 0.0; // ExtrapolateQuantumDefect(defect, l0, l);
+            defect = ExtrapolateQuantumDefect(defect, l0, l);
 
         return defect;
     }
