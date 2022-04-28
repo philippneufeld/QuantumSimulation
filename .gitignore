@@ -22,3 +22,7 @@ CMakeCache.txt
 Data/
 SimulationData/
 *.h5
+
+# doxygen
+doc/latex
+doc/html
