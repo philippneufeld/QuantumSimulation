@@ -11,7 +11,7 @@ import matplotlib.colors as col
 
 if __name__ == '__main__':
 
-    filename = "NOStarkMap_20220428-114644_calcc"
+    filename = "NOStarkMap_20220428-140003_calcc"
     dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
     # filename = "NOStarkMap_20220410-201736_philtower"

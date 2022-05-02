@@ -26,7 +26,7 @@ public:
         : m_beamRadius(1e-3), 
         m_mass(30.0061 * AtomicMassUnit_v), 
         m_temperature(300), 
-        m_pressure(100.0) // 1e-3 mbar = 100Pa
+        m_pressure(10.0) // 1e-3 mbar = 100Pa
     {
         m_mass = 30.0061 * AtomicMassUnit_v;
         
@@ -39,21 +39,21 @@ public:
 
         // add dipole matrix elements
         m_system.SetDipoleElement(0, 1, 0.1595 * Debye_v); // https://doi.org/10.1093/mnras/stx1211
-        m_system.SetDipoleElement(1, 2, 1e-1 * Debye_v);
-        m_system.SetDipoleElement(2, 3, 5e-1 * Debye_v);
+        m_system.SetDipoleElement(1, 2, 1e-2 * Debye_v);
+        m_system.SetDipoleElement(2, 3, 1e-1 * Debye_v);
 
         // add coupling lasers
         double uvInt = NLevelLaser::PowerToIntensity(0.05, m_beamRadius); // 50mW
         double greenInt = NLevelLaser::PowerToIntensity(1.0, m_beamRadius); // 1W
-        double redInt = NLevelLaser::PowerToIntensity(1.0, m_beamRadius); // 1W
+        double redInt = NLevelLaser::PowerToIntensity(0.5, m_beamRadius); // 500mW
         m_system.AddLaser(NLevelLaser({0, 1}, uvInt, 1.0));
         m_system.AddLaser(NLevelLaser({1, 2}, greenInt, -1.0));
         m_system.AddLaser(NLevelLaser({2, 3}, redInt, -1.0));
 
         // set level decays
         m_system.AddDecay(1, 0, 13.8e6); // https://doi.org/10.1063/1.454958
-        m_system.AddDecay(2, 1, 10.0e6);
-        m_system.AddDecay(3, 2, 10.0e6);
+        m_system.AddDecay(2, 1, 1.0e6);
+        m_system.AddDecay(3, 2, 0.5e6);
 
         // add transit broadening effect
         double meanVel = std::sqrt(2*BoltzmannConstant_v*300 / m_mass);
@@ -65,18 +65,25 @@ public:
 
         // add collisional ionization term
         // collisions between rydberg and ground state
-        double sigmaRX = Pi_v * (rydRadius + xRadius) * (rydRadius + xRadius);
-        double kT = BoltzmannConstant_v * m_temperature;
-        double n = m_pressure / kT; // number density
-        double rate = n * std::sqrt(8*kT / Pi_v) * sigmaRX * std::sqrt(2 / m_mass);
-        m_system.AddDecay(3, 4, rate);
+        double rateRX = GetCollisionRate(rydRadius + xRadius);
+        m_system.AddDecay(3, 4, rateRX);
 
         // add recombination rate (assume to be the same as ionization term for now)
-        m_system.AddDecay(4, 0, rate);
+        m_system.AddDecay(4, 0, rateRX);
 
         // initialize helper variables
         m_transitions = m_system.GetTransitionFreqs();
         m_laserDirs = m_system.GetLaserDirs();
+    }
+
+    double GetCollisionRate(double rEff) const
+    {
+        double kT = BoltzmannConstant_v * m_temperature;
+        double n = m_pressure / kT; // number density
+        double sigma = Pi_v * std::pow(rEff, 2);
+        double mtp = 1.0 / (std::sqrt(2) * sigma * n); // mean free path
+        double vExp = std::sqrt(8*kT / (Pi_v*m_mass)); // expected velocity
+        return vExp / mtp;
     }
 
     Matrix<double, 5, 1> GetPopulations(double uvDet, double greenDet, double redDet) const
@@ -84,14 +91,9 @@ public:
         // make a local copy of the system (makes concurrent calls to this function possible)
         auto sys = m_system;
 
-        // geometric collisional cross-sections
-        double sigmaRe = Pi_v * rydRadius * rydRadius;
-        
         // calculate ionization rate (rate0 + rate1*rho_ion)
-        double kT = BoltzmannConstant_v * m_temperature;
-        double n = m_pressure / kT; // number density
-        double rate0 = sys.GetDecay(3, 4); // constant term
-        double rate1 = n * std::sqrt(8*kT / Pi_v) * sigmaRe / std::sqrt(ElectronMass_v);
+        double rate0 = GetCollisionRate(rydRadius + xRadius); // constant term
+        double rate1 = GetCollisionRate(rydRadius);
 
         // starting point of the calculation
         auto rho0 = sys.CreateGroundState();
