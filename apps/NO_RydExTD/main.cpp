@@ -202,8 +202,6 @@ int main(int argc, const char* argv[])
 {
     NOGasSensorTD gasSensor;
 
-    return 0;
-
     double fmin = 1e5;
     double fmax = 1e9;
     VectorXd freqs = ArrayXd::LinSpaced(500, std::log(fmin), std::log(fmax)).exp();
