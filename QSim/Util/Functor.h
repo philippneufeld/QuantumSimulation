@@ -32,9 +32,48 @@ namespace QSim
     constexpr bool traitname##_v = traitname <Ty, Args...>::value;
 #endif
 
+    QSIM_DEFINE_HAS_MEMBER_FUNCTION(THasInvocationOperator, operator())
+
     template<typename R, typename... Args>
-    class TFunctionPrototype;
-    
+    class TFunctionPrototype
+    {
+    public:
+        using RType = R;
+        using ArgTypes = std::tuple<Args...>;
+    };
+
+    namespace Internal
+    {
+        template<typename Func>
+        class TFunctionTraitsHelper;
+        template<typename R, typename... Args>
+        class TFunctionTraitsHelper<R(Args...)>
+        {
+        public:
+            using Prototype = TFunctionPrototype<R, Args...>;
+            using RType = typename Prototype::RType;
+            using ArgTypes = typename Prototype::ArgTypes;
+        };
+        template<typename R, typename... Args>
+        class TFunctionTraitsHelper<R(*)(Args...)> : public TFunctionTraitsHelper<R(Args...)> {};
+        template<typename R, typename... Args>
+        class TFunctionTraitsHelper<R(&)(Args...)> : public TFunctionTraitsHelper<R(Args...)> {};
+        template<typename C, typename R, typename... Args>
+        class TFunctionTraitsHelper<R(C::*)(Args...)> : public TFunctionTraitsHelper<R(Args...)> {};
+        template<typename C, typename R, typename... Args>
+        class TFunctionTraitsHelper<R(C::*)(Args...) const> : public TFunctionTraitsHelper<R(Args...)> {};
+    }
+
+    template<typename Func, typename=void>
+    class TFunctionTraits : public Internal::TFunctionTraitsHelper<Func> {};
+    template<typename Func>
+    class TFunctionTraits<Func, std::enable_if_t<THasInvocationOperator_v<Func>, void>> 
+        : public Internal::TFunctionTraitsHelper<decltype(&Func::operator())> {};
+
+    //
+    // Functor
+    //
+
     template<typename Func, typename R, typename ArgTuple>
     class TFunctor;
     template<typename Func, typename R, typename... Args>
@@ -58,34 +97,6 @@ namespace QSim
     protected:
         Func& m_func;
     };
-
-    template<typename R, typename... Args>
-    class TFunctionPrototype
-    {
-    public:
-        using RType = R;
-        using ArgTypes = std::tuple<Args...>;
-    };
-
-    template<typename Func>
-    class TFunctionTraits : public TFunctionTraits<decltype(&Func::operator())> {};
-    template<typename R, typename... Args>
-    class TFunctionTraits<R(Args...)>
-    {
-    public:
-        using Prototype = TFunctionPrototype<R, Args...>;
-        using RType = typename Prototype::RType;
-        using ArgTypes = typename Prototype::ArgTypes;
-    };
-    template<typename R, typename... Args>
-    class TFunctionTraits<R(*)(Args...)> : public TFunctionTraits<R(Args...)> {};
-    template<typename R, typename... Args>
-    class TFunctionTraits<R(&)(Args...)> : public TFunctionTraits<R(Args...)> {};
-    template<typename C, typename R, typename... Args>
-    class TFunctionTraits<R(C::*)(Args...)> : public TFunctionTraits<R(Args...)> {};
-    template<typename C, typename R, typename... Args>
-    class TFunctionTraits<R(C::*)(Args...) const> : public TFunctionTraits<R(Args...)> {};
-
 
     template<typename Func>
     auto CreateFunctor(Func& func)
