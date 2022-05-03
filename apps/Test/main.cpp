@@ -12,6 +12,16 @@
 using namespace QSim;
 using namespace Eigen;
 
+int test(double, float) {
+    return 0;
+}
+
+class Test
+{
+public:
+    void operator()(int) {}
+};
+
 int main(int argc, const char *argv[])
 {
     std::cout << Wigner6j(1, 1.5, 0.5, 1, 0.5, 1.5) / 0.263523 << std::endl;

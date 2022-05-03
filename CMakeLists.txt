@@ -109,3 +109,26 @@ qsim_add_app("NO_RydExTD")
 qsim_add_app("Rb_StarkMap")
 qsim_add_app("NO_StarkMap")
 qsim_add_app("AdaptiveODE")
+
+#
+# documentation
+#
+
+# first we can indicate the documentation build as an option and set it to ON by default
+option(BUILD_DOC "Build documentation" ON)
+
+# check if Doxygen is installed
+find_package(Doxygen)
+if (DOXYGEN_FOUND)
+
+    message("${DOXYGEN_EXECUTABLE} -q")
+
+    # note the option ALL which allows to build the docs together with the application
+    add_custom_target( doc_doxygen ALL
+        COMMAND "${DOXYGEN_EXECUTABLE}" "-q"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/doc"
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM )
+else (DOXYGEN_FOUND)
+  message("Doxygen need to be installed to generate the doxygen documentation")
+endif (DOXYGEN_FOUND)
