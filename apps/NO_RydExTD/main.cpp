@@ -19,7 +19,7 @@
 
 #include <iostream>
 
-#define DOPPLER_ADAPTIVE
+// #define DOPPLER_ADAPTIVE
 
 using namespace QSim;
 using namespace Eigen;
@@ -138,12 +138,12 @@ public:
 
         // limit runtime by sacrificing some precision in the doppler integration
 #ifndef DOPPLER_ADAPTIVE
-        TDopplerIntegrator<QuadSimpsonPolicy> doppler(m_mass, m_temperature, 251);
+        TDopplerIntegrator<QuadSimpsonPolicy> doppler(m_mass, m_temperature, 451);
 #else
         TDopplerIntegrator<> doppler(m_mass, m_temperature);
         doppler.SetIntegrationRTol(1e-3);
 #endif
-        doppler.SetIntegrationWidth(0.5);
+        doppler.SetIntegrationWidth(0.75);
 
         auto dopplerCalc = [&](double vel)
         {
@@ -209,12 +209,12 @@ int main(int argc, const char* argv[])
     NOGasSensorTD gasSensor;
 
     double fmin = 7500;
-    double fmax = 1e8;
-    VectorXd freqs = ArrayXd::LinSpaced(200, std::log(fmin), std::log(fmax)).exp();
+    double fmax = 1e9;
+    VectorXd freqs = ArrayXd::LinSpaced(300, std::log(fmin), std::log(fmax)).exp();
     VectorXd populations = VectorXd::Zero(freqs.size());
 
-    double dt = 5e-9;
-    double tmin = 1e-5;
+    double dt = 1e-9;
+    double tmin = 4e-5;
 
     // data storage
     // generate filename (first store locally and then move to desired location)
@@ -235,9 +235,18 @@ int main(int argc, const char* argv[])
         {
             threadPool.Submit([&, i=i]()
             {
-	    	double tsim = std::max(20.0 / freqs[i], tmin);
+	    	double tsim = std::max(15.0 / freqs[i], tmin);
                 auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tsim, dt, freqs[i]);
-                populations[i] = pops.sum() / tsim;
+
+
+		// discard first few cycles
+		double tstart = std::max(tmin / 10, 2.0 / freqs[i]);
+		populations[i] = 0.0;
+		int jstart = static_cast<int>(tstart / dt); 
+		for (int j=jstart; j < pops.size(); j++)
+			populations[i] += pops[j];
+		populations[i] *= dt / (tsim - jstart*dt);
+                // populations[i] = pops.sum() / tsim;
 
                 // store trajectory
                 std::unique_lock lock(file_mutex);
