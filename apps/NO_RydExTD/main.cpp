@@ -138,12 +138,12 @@ public:
 
         // limit runtime by sacrificing some precision in the doppler integration
 #ifndef DOPPLER_ADAPTIVE
-        TDopplerIntegrator<QuadSimpsonPolicy> doppler(m_mass, m_temperature, 451);
+        TDopplerIntegrator<QuadSimpsonPolicy> doppler(m_mass, m_temperature, 1001);
 #else
         TDopplerIntegrator<> doppler(m_mass, m_temperature);
         doppler.SetIntegrationRTol(1e-3);
 #endif
-        doppler.SetIntegrationWidth(0.75);
+        doppler.SetIntegrationWidth(1.0);
 
         auto dopplerCalc = [&](double vel)
         {
@@ -214,7 +214,7 @@ int main(int argc, const char* argv[])
     VectorXd populations = VectorXd::Zero(freqs.size());
 
     double dt = 1e-9;
-    double tmin = 4e-5;
+    double tmin = 1e-4;
 
     // data storage
     // generate filename (first store locally and then move to desired location)
@@ -235,7 +235,7 @@ int main(int argc, const char* argv[])
         {
             threadPool.Submit([&, i=i]()
             {
-	    	double tsim = std::max(15.0 / freqs[i], tmin);
+	    	double tsim = std::max(50.0 / freqs[i], tmin);
                 auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tsim, dt, freqs[i]);
 
                 populations[i] = pops.sum() / tsim;
