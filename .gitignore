@@ -26,3 +26,8 @@ SimulationData/
 # doxygen
 doc/latex
 doc/html
+
+# Plots
+Plotting/**/*.png
+Plotting/**/*.pdf
+Plotting/**/*.jpg
