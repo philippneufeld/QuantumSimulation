@@ -22,6 +22,6 @@ First navigate into the project directory and initialize the build directory by 
 Here, clang/clang++ can be replaced by another compiler (e.g. gcc/g++).
 Next, navigate into the build directory and compile all apps by using
 
-    make
+    cd build && make
 
 Alternatively the apps can also be compiled separately by running the above `make` command in the build folder of a specific app.
