@@ -19,6 +19,8 @@
 
 #include <iostream>
 
+#define DOPPLER_ADAPTIVE
+
 using namespace QSim;
 using namespace Eigen;
 
@@ -135,9 +137,13 @@ public:
         dt = t / steps;
 
         // limit runtime by sacrificing some precision in the doppler integration
+#ifndef DOPPLER_ADAPTIVE
+        TDopplerIntegrator<QuadSimpsonPolicy> doppler(m_mass, m_temperature, 251);
+#else
         TDopplerIntegrator<> doppler(m_mass, m_temperature);
-        doppler.SetIntegrationRTol(1e-4);
-        doppler.SetIntegrationWidth(1.0);
+        doppler.SetIntegrationRTol(1e-3);
+#endif
+        doppler.SetIntegrationWidth(0.5);
 
         auto dopplerCalc = [&](double vel)
         {
@@ -176,7 +182,7 @@ public:
             return ionPops;
         };
 
-        // auto trajectory = dopplerCalc(100.0);
+        // auto trajectory = dopplerCalc(0.0);
         auto trajectory = doppler.Integrate(dopplerCalc);
 
         VectorXd timeAxis = sys.GetTrajectoryTimeaxis(0.0, dt, trajectory.size());
@@ -202,13 +208,13 @@ int main(int argc, const char* argv[])
 {
     NOGasSensorTD gasSensor;
 
-    double fmin = 1e5;
-    double fmax = 1e9;
-    VectorXd freqs = ArrayXd::LinSpaced(500, std::log(fmin), std::log(fmax)).exp();
+    double fmin = 7500;
+    double fmax = 1e8;
+    VectorXd freqs = ArrayXd::LinSpaced(200, std::log(fmin), std::log(fmax)).exp();
     VectorXd populations = VectorXd::Zero(freqs.size());
 
-    double dt = 1e-9;
-    double tmin = 2e-6;
+    double dt = 5e-9;
+    double tmin = 1e-5;
 
     // data storage
     // generate filename (first store locally and then move to desired location)
@@ -229,7 +235,7 @@ int main(int argc, const char* argv[])
         {
             threadPool.Submit([&, i=i]()
             {
-	    	double tsim = std::max(50.0 / freqs[i], tmin);
+	    	double tsim = std::max(20.0 / freqs[i], tmin);
                 auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tsim, dt, freqs[i]);
                 populations[i] = pops.sum() / tsim;
 
