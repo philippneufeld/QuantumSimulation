@@ -238,15 +238,7 @@ int main(int argc, const char* argv[])
 	    	double tsim = std::max(15.0 / freqs[i], tmin);
                 auto [ts, pops] = gasSensor.GetPopulationsTrajectory(0.0, 0.0, 0.0, tsim, dt, freqs[i]);
 
-
-		// discard first few cycles
-		double tstart = std::max(tmin / 10, 2.0 / freqs[i]);
-		populations[i] = 0.0;
-		int jstart = static_cast<int>(tstart / dt); 
-		for (int j=jstart; j < pops.size(); j++)
-			populations[i] += pops[j];
-		populations[i] *= dt / (tsim - jstart*dt);
-                // populations[i] = pops.sum() / tsim;
+                populations[i] = pops.sum() / tsim;
 
                 // store trajectory
                 std::unique_lock lock(file_mutex);
