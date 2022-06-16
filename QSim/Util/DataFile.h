@@ -8,12 +8,45 @@
 #include <hdf5.h>
 
 #include <Eigen/Dense>
+#include "../Math/MatrixTraits.h"
 
 namespace QSim
 {
 
+    //
+    // DataFileObject
+    //
+
     class DataFileObject
     {
+        // SFINAE switch for GetAttribute function
+        // match vectors and and row-major matrices for SO=RowMajor
+        // match col-major matrices for SO=ColMajor
+        template<typename Ty, int SO>
+        struct EnableIfGetAttr;
+        template<typename Ty, int N, int M, int NM, int MM, int SO>
+        struct EnableIfGetAttr<Eigen::Matrix<Ty, N, M, SO, NM, MM>, Eigen::RowMajor>
+            : std::enable_if<SO == Eigen::RowMajor || N == 1 || M == 1, Eigen::Matrix<Ty, N, M, SO, NM, MM>> {};
+        template<typename Ty, int N, int M, int NM, int MM, int SO>
+        struct EnableIfGetAttr<Eigen::Matrix<Ty, N, M, SO, NM, MM>, Eigen::ColMajor>
+            : std::enable_if<!(SO == Eigen::RowMajor || N == 1 || M == 1), Eigen::Matrix<Ty, N, M, SO, NM, MM>> {};
+        template<typename Ty, int SO>
+        using EnableIfGetAttr_t = typename EnableIfGetAttr<Ty, SO>::type;
+
+        // conversion of matrix type to row major storage order
+        template<typename Ty> 
+        struct MakeRowMajor
+        {
+            using type = Ty;
+        };
+        template<typename Ty, int N, int M, int NM, int MM> 
+        struct MakeRowMajor<Eigen::Matrix<Ty, N, M, Eigen::ColMajor, NM, MM>>
+        {
+            using type = Eigen::Matrix<Ty, N, M, Eigen::RowMajor, NM, MM>;
+        };
+        template<typename Ty> 
+        using MakeRowMajor_t = typename MakeRowMajor<Ty>::type;
+
     protected:
         DataFileObject(hid_t hid);
 
@@ -32,18 +65,70 @@ namespace QSim
 
         // attributes
         bool DoesAttributeExist(const std::string& name) const;
-        bool CreateAttribute(const std::string& name, const std::vector<std::size_t>& dims);
         std::vector<std::size_t> GetAttributeDims(const std::string& name) const;
+
+        bool GetAttributeRaw(const std::string& name, double* data) const;
+        bool GetAttributeRawChecked(const std::string& name, const std::vector<std::size_t>& dims, double* data) const;
+        template<typename Ty>
+        std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> GetAttribute(const std::string& name);
+        template<typename Ty>
+        EnableIfGetAttr_t<Ty, Eigen::RowMajor> GetAttribute(const std::string& name);
+        template<typename Ty>
+        EnableIfGetAttr_t<Ty, Eigen::ColMajor> GetAttribute(const std::string& name);
+        
+        bool SetAttribute(const std::string& name, double value);
+        bool SetAttribute(const std::string& name, const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>& value);
+        bool SetAttributeRaw(const std::string& name, const std::vector<std::size_t>& dims, const double* data);
+
+        bool CreateAttribute(const std::string& name, const std::vector<std::size_t>& dims);
         bool LoadAttribute(const std::string& name, double* data) const;
         bool StoreAttribute(const std::string& name, const double* data);
 
     protected:
         hid_t GetNative() const { return m_hid; }
 
+        static std::vector<std::size_t> GetAttributeDimsHelper(hid_t attr);
+
     private:
         hid_t m_hid;
     };
 
+    template<typename Ty>
+    std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> 
+        DataFileObject::GetAttribute(const std::string& name)
+    {
+        double val = 0.0;
+        if (!GetAttributeRawChecked(name, {1}, &val))
+            return std::numeric_limits<double>::quiet_NaN();
+        return val;
+    }
+
+    template<typename Ty>
+    DataFileObject::EnableIfGetAttr_t<Ty, Eigen::RowMajor> 
+        DataFileObject::GetAttribute(const std::string& name)
+    {
+        auto dims = GetAttributeDims(name);
+        if (dims.size() != 2 || dims[0]*dims[1] == 0)
+            return Ty{};
+
+        Ty mat(dims[0], dims[1]);
+        if (!GetAttributeRaw(name, &(mat(0, 0))))
+            return Ty{};
+
+        return mat;
+    }
+
+    template<typename Ty>
+    DataFileObject::EnableIfGetAttr_t<Ty, Eigen::ColMajor> 
+        DataFileObject::GetAttribute(const std::string& name)
+    {
+        return this->template GetAttribute<MakeRowMajor_t<Ty>>(name);
+    }
+
+
+    //
+    // DataFileDataset
+    //
 
     class DataFileDataset : public DataFileObject
     {
