@@ -6,10 +6,10 @@
 using namespace QSim;
 using namespace Eigen;
 
-std::array<double, 5> StateToArray(const RydbergDiatomicState_t& state)
+Matrix<double, 5, 1> StateToArray(const RydbergDiatomicState_t& state)
 {
     auto createArray = [](auto&&... x) { return std::array<double, 5>{static_cast<double>(x)...}; };
-    return std::apply(createArray, state);
+    return Map<Matrix<double, 5, 1>>(std::apply(createArray, state).data());
 }
 
 StorageThread::StorageThread(const std::string& path, 
@@ -21,17 +21,14 @@ StorageThread::StorageThread(const std::string& path,
     auto root = m_file.OpenRootGroup();
     
     // write stark map parameters
-    root.CreateAttribute("State", { 5 });
-    root.StoreAttribute("State", StateToArray(state).data());
-    root.CreateAttribute("Energy_Range", { 1 });
-    root.StoreAttribute("Energy_Range", &dE);
+    root.SetAttribute("State", StateToArray(state));
+    root.SetAttribute("Energy_Range", dE);
 
     // store basis
-    auto basisStorage = root.CreateDataset("Basis", {basis.size(), 5});
     MatrixXd basisMat(basis.size(), 5);
     for (int i = 0; i < basis.size(); i++)
-        basisMat.row(i) = Map<Matrix<double, 5, 1>>(StateToArray(basis[i]).data());
-    basisStorage.StoreMatrix(basisMat);
+        basisMat.row(i) = StateToArray(basis[i]);
+    root.CreateDataset("Basis", basisMat);
 
     m_thread = std::thread([&](){ this->ThreadProc(); });
 }
@@ -88,19 +85,11 @@ void StorageThread::ThreadProc()
             groupName.insert(0, groupNameLen - groupName.size(), '0');
             auto group = root.CreateSubgroup(groupName);
 
-            // define datasets
-            group.CreateAttribute("Electric_Field", { 1 });
-            auto energyStorage = group.CreateDataset("Energies", { static_cast<std::size_t>(energies.size()) });
-            auto stateStorage = group.CreateDataset("States", { static_cast<std::size_t>(states.rows()), 
-                static_cast<std::size_t>(states.cols()) });
-            auto charStorage = group.CreateDataset("Character", { static_cast<std::size_t>(character.rows()), 
-                static_cast<std::size_t>(character.cols()) });
-
             // store data
-            group.StoreAttribute("Electric_Field", &eField);
-            energyStorage.Store(energies.data());
-            stateStorage.StoreMatrix(states);
-            charStorage.StoreMatrix(character);
+            group.SetAttribute("Electric_Field", eField);
+            group.CreateDataset("Energies", energies);
+            group.CreateDataset("States", states);
+            group.CreateDataset("Character", character);
 
             cnt++;
         }

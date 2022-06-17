@@ -8,7 +8,6 @@
 namespace QSim
 {
 
-
     //
     // DataFileObject
     //
@@ -105,15 +104,11 @@ namespace QSim
         // data has to be in row-major format to be stored
         std::size_t rows = static_cast<std::size_t>(value.rows());
         std::size_t cols = static_cast<std::size_t>(value.cols());
-        return SetAttributeRaw(name, {rows, cols}, value.data());
+        return SetAttributeRaw(name, {rows, cols}, &(value(0,0)));
     }
     
     bool DataFileObject::SetAttributeRaw(const std::string& name, const std::vector<std::size_t>& dims, const double* data)
     {
-        // validate dimensions
-        if (dims.empty() || std::find(dims.begin(), dims.end(), 0) != dims.end())
-            return false;
-
         hid_t attr = H5I_INVALID_HID;
         auto attrGuard = CreateScopeGuard([&](){ H5Aclose(attr); });
 
@@ -164,51 +159,9 @@ namespace QSim
     }
 
 
-
-
-    bool DataFileObject::CreateAttribute(const std::string& name, const std::vector<std::size_t>& dims)
-    {
-        if (DoesAttributeExist(name))
-            return false;
-
-        std::vector<hsize_t> hdims(dims.begin(), dims.end());
-        hid_t dspace = H5Screate_simple(hdims.size(), hdims.data(), hdims.data());
-        if (dspace < 0) return false;
-        auto dspaceGuard = CreateScopeGuard([=](){ H5Sclose(dspace); });
-        
-        hid_t attr = H5Acreate2(m_hid, name.c_str(), H5T_IEEE_F64LE, dspace, 
-            H5P_DEFAULT, H5P_DEFAULT);
-        if (attr < 0) return false;
-        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
-
-        return true;
-    }
-
-
-    bool DataFileObject::LoadAttribute(const std::string& name, double* data) const
-    {
-        hid_t attr = H5Aopen(m_hid, name.c_str(), H5P_DEFAULT);
-        if (attr < 0) return false;
-        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
-        
-        herr_t err = H5Aread(attr, H5T_NATIVE_DOUBLE, data);
-        if (err < 0) return false;  
-
-        return true;
-    }
-
-    bool DataFileObject::StoreAttribute(const std::string& name, const double* data)
-    {
-        hid_t attr = H5Aopen(m_hid, name.c_str(), H5P_DEFAULT);
-        if (attr < 0) return false;
-        auto attrGuard = CreateScopeGuard([=](){ H5Aclose(attr); });
-        
-        if(H5Awrite(attr, H5T_NATIVE_DOUBLE, data) < 0)
-            return false;
-
-        return true;
-    }
-
+    //
+    // DataFileDataset
+    //
 
     DataFileDataset::DataFileDataset(hid_t dataset)
         : DataFileObject(dataset) { }
@@ -229,66 +182,50 @@ namespace QSim
         return std::vector<std::size_t>(dims.begin(), dims.end());
     }
 
-    bool DataFileDataset::Load(double* data) const
+    bool DataFileDataset::GetRaw(double* data) const
     {
-        herr_t err = H5Dread(GetNative(), H5T_NATIVE_DOUBLE, 
-            H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
-        return !(err < 0);
+        return !(H5Dread(GetNative(), H5T_NATIVE_DOUBLE, 
+            H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0);
+    }
+    
+    bool DataFileDataset::GetRawChecked(const std::vector<std::size_t>& dims, double* data) const
+    {
+        // validate dimensions
+        if (dims != GetDims())
+            return false;
+
+        return GetRaw(data);
     }
 
-    bool DataFileDataset::Store(const double* data)
+    bool DataFileDataset::Set(double value)
     {
+        return SetRaw({1}, &value);
+    }
+
+    bool DataFileDataset::Set(const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>& value)
+    {
+        // data has to be in row-major format to be stored
+        std::size_t rows = static_cast<std::size_t>(value.rows());
+        std::size_t cols = static_cast<std::size_t>(value.cols());
+        return SetRaw({rows, cols}, &(value(0,0)));
+    }
+
+    bool DataFileDataset::SetRaw(const std::vector<std::size_t>& dims, const double* data)
+    {
+        // validate dimensions
+        if (dims != GetDims())
+            return false;
+
         if(H5Dwrite(GetNative(), H5T_NATIVE_DOUBLE, H5S_ALL, 
                     H5S_ALL, H5P_DEFAULT, data) < 0)
             return false;
 
-        if(!H5Dflush(GetNative()))
+        if(H5Dflush(GetNative()) > 0)
             return false;
  
         return true;
     }
 
-    bool DataFileDataset::StoreMatrix(Eigen::MatrixXd mat)
-    {
-        auto dims = GetDims();
-
-        if (dims.size() == 1)
-        {
-            if (!((mat.rows() == 1 && mat.cols() == dims[0])
-                || (mat.cols() == 1 && mat.rows() == dims[0])))
-                return false;
-        }
-        else if (dims.size() == 2)
-        {
-            if (dims[0] != mat.rows() || dims[1] != mat.cols())
-                return false;
-            mat.transposeInPlace();
-        }
-        else 
-        {
-            return false;
-        }
-
-        return Store(mat.data());
-    }
-
-    Eigen::MatrixXd DataFileDataset::LoadMatrix() const
-    {
-        auto dims = GetDims();
-        if (dims.size() == 1)
-            dims.push_back(1); // make column vector by default
-
-        if (dims.size() != 2)
-            return Eigen::MatrixXd{};
-        
-        Eigen::MatrixXd ret(dims[1], dims[0]);
-        if (!Load(ret.data()))
-            return Eigen::MatrixXd{};
-
-        ret.transposeInPlace();
-
-        return ret;
-    }
 
     DataFileGroup::DataFileGroup(hid_t group) 
         : DataFileObject(group) { }
@@ -324,17 +261,21 @@ namespace QSim
         return subgroups;
     }
 
-    bool DataFileGroup::DoesDatasetExist(const std::string& name) const
+    DataFileDataset DataFileGroup::CreateDataset(const std::string& name, double value)
     {
-        if (H5Lexists(GetNative(), name.c_str(), H5P_DEFAULT) <= 0)
-            return false;
-
-        bool valid = false;    
-        H5E_BEGIN_TRY { valid = GetDataset(name).IsValid(); } H5E_END_TRY;
-        return valid;
+        return CreateDatasetRaw(name, {1}, &value);
     }
 
-    DataFileDataset DataFileGroup::CreateDataset(const std::string& name, const std::vector<std::size_t>& dims)
+    DataFileDataset DataFileGroup::CreateDataset(const std::string& name, 
+        const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>& value)
+    {
+        std::size_t rows = static_cast<std::size_t>(value.rows());
+        std::size_t cols = static_cast<std::size_t>(value.cols());
+        return CreateDatasetRaw(name, {rows, cols}, &(value(0,0)));
+    }
+
+    DataFileDataset DataFileGroup::CreateDatasetRaw(const std::string& name, 
+        const std::vector<std::size_t>& dims, const double* data)
     {
         if (DoesDatasetExist(name))
             return H5I_INVALID_HID;
@@ -344,8 +285,26 @@ namespace QSim
         if (dspace < 0) return H5I_INVALID_HID;
         auto dspaceGuard = CreateScopeGuard([=](){ H5Sclose(dspace); });
         
-        return H5Dcreate2(GetNative(), name.c_str(), H5T_IEEE_F64LE, dspace, 
-            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        DataFileDataset dataset = H5Dcreate2(GetNative(), name.c_str(), 
+            H5T_IEEE_F64LE, dspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+        if (!dataset) 
+            return H5I_INVALID_HID;
+
+        if (!dataset.SetRaw(dims, data))
+            return H5I_INVALID_HID;
+
+        return dataset;
+    }
+
+    bool DataFileGroup::DoesDatasetExist(const std::string& name) const
+    {
+        if (H5Lexists(GetNative(), name.c_str(), H5P_DEFAULT) <= 0)
+            return false;
+
+        bool valid = false;    
+        H5E_BEGIN_TRY { valid = GetDataset(name).IsValid(); } H5E_END_TRY;
+        return valid;
     }
 
     DataFileDataset DataFileGroup::GetDataset(const std::string& name) const
@@ -377,6 +336,9 @@ namespace QSim
     }
 
 
+    //
+    // DataFile
+    //
 
     DataFile::DataFile() 
         : m_file(H5I_INVALID_HID) {}

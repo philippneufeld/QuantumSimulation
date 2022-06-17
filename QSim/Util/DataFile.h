@@ -19,6 +19,7 @@ namespace QSim
 
     class DataFileObject
     {
+    protected:
         // SFINAE switch for GetAttribute function
         // match vectors and and row-major matrices for SO=RowMajor
         // match col-major matrices for SO=ColMajor
@@ -31,7 +32,7 @@ namespace QSim
         struct EnableIfGetAttr<Eigen::Matrix<Ty, N, M, SO, NM, MM>, Eigen::ColMajor>
             : std::enable_if<!(SO == Eigen::RowMajor || N == 1 || M == 1), Eigen::Matrix<Ty, N, M, SO, NM, MM>> {};
         template<typename Ty, int SO>
-        using EnableIfGetAttr_t = typename EnableIfGetAttr<Ty, SO>::type;
+        using EnableIfGet_t = typename EnableIfGetAttr<Ty, SO>::type;
 
         // conversion of matrix type to row major storage order
         template<typename Ty> 
@@ -72,59 +73,21 @@ namespace QSim
         template<typename Ty>
         std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> GetAttribute(const std::string& name);
         template<typename Ty>
-        EnableIfGetAttr_t<Ty, Eigen::RowMajor> GetAttribute(const std::string& name);
+        EnableIfGet_t<Ty, Eigen::RowMajor> GetAttribute(const std::string& name);
         template<typename Ty>
-        EnableIfGetAttr_t<Ty, Eigen::ColMajor> GetAttribute(const std::string& name);
+        EnableIfGet_t<Ty, Eigen::ColMajor> GetAttribute(const std::string& name);
         
         bool SetAttribute(const std::string& name, double value);
         bool SetAttribute(const std::string& name, const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>& value);
         bool SetAttributeRaw(const std::string& name, const std::vector<std::size_t>& dims, const double* data);
 
-        bool CreateAttribute(const std::string& name, const std::vector<std::size_t>& dims);
-        bool LoadAttribute(const std::string& name, double* data) const;
-        bool StoreAttribute(const std::string& name, const double* data);
-
     protected:
         hid_t GetNative() const { return m_hid; }
-
         static std::vector<std::size_t> GetAttributeDimsHelper(hid_t attr);
 
     private:
         hid_t m_hid;
     };
-
-    template<typename Ty>
-    std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> 
-        DataFileObject::GetAttribute(const std::string& name)
-    {
-        double val = 0.0;
-        if (!GetAttributeRawChecked(name, {1}, &val))
-            return std::numeric_limits<double>::quiet_NaN();
-        return val;
-    }
-
-    template<typename Ty>
-    DataFileObject::EnableIfGetAttr_t<Ty, Eigen::RowMajor> 
-        DataFileObject::GetAttribute(const std::string& name)
-    {
-        auto dims = GetAttributeDims(name);
-        if (dims.size() != 2 || dims[0]*dims[1] == 0)
-            return Ty{};
-
-        Ty mat(dims[0], dims[1]);
-        if (!GetAttributeRaw(name, &(mat(0, 0))))
-            return Ty{};
-
-        return mat;
-    }
-
-    template<typename Ty>
-    DataFileObject::EnableIfGetAttr_t<Ty, Eigen::ColMajor> 
-        DataFileObject::GetAttribute(const std::string& name)
-    {
-        return this->template GetAttribute<MakeRowMajor_t<Ty>>(name);
-    }
-
 
     //
     // DataFileDataset
@@ -140,12 +103,21 @@ namespace QSim
         DataFileDataset() = default;
 
         std::vector<std::size_t> GetDims() const;
-        bool Load(double* data) const;
-        bool Store(const double* data);
 
-        bool StoreMatrix(Eigen::MatrixXd mat);
-        Eigen::MatrixXd LoadMatrix() const;
+        bool GetRaw(double* data) const;
+        bool GetRawChecked(const std::vector<std::size_t>& dims, double* data) const;
+        template<typename Ty> std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> Get();
+        template<typename Ty> EnableIfGet_t<Ty, Eigen::RowMajor> Get();
+        template<typename Ty> EnableIfGet_t<Ty, Eigen::ColMajor> Get();
+        
+        bool Set(double value);
+        bool Set(const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>& value);
+        bool SetRaw(const std::vector<std::size_t>& dims, const double* data);
     };
+
+    //
+    // DataFileGroup
+    //
 
     class DataFileGroup : public DataFileObject
     {
@@ -163,16 +135,23 @@ namespace QSim
         std::vector<std::string> EnumerateSubgroups() const;
         
         // datasets
+        DataFileDataset CreateDataset(const std::string& name, double value);
+        DataFileDataset CreateDataset(const std::string& name, const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>& value);
+        DataFileDataset CreateDatasetRaw(const std::string& name, const std::vector<std::size_t>& dims, const double* data);
+
         bool DoesDatasetExist(const std::string& name) const;
-        DataFileDataset CreateDataset(const std::string& name, const std::vector<std::size_t>& dims);
         DataFileDataset GetDataset(const std::string& name) const;
         std::vector<std::string> EnumerateDatasets() const;
-        
+
     private:
         static herr_t EnumGroupsHelper(hid_t group, const char *name, const H5L_info_t *info, void *data);
         static herr_t EnumDatasetHelper(hid_t group, const char *name, const H5L_info_t *info, void *data);
     };
 
+
+    //
+    // DataFile
+    //
 
     enum DataFileOpenFlag
     {
@@ -205,6 +184,66 @@ namespace QSim
     private:
         hid_t m_file;
     };
+
+
+    //
+    // Template function definitions
+    //
+
+    template<typename Ty>
+    std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> 
+        DataFileObject::GetAttribute(const std::string& name)
+    {
+        double val = 0.0;
+        if (!GetAttributeRawChecked(name, {1}, &val))
+            return std::numeric_limits<double>::quiet_NaN();
+        return val;
+    }
+
+    template<typename Ty>
+    DataFileObject::EnableIfGet_t<Ty, Eigen::RowMajor> 
+        DataFileObject::GetAttribute(const std::string& name)
+    {
+        auto dims = GetAttributeDims(name);
+        if (dims.size() != 2 || dims[0]*dims[1] == 0)
+            return Ty{};
+
+        Ty mat(dims[0], dims[1]);
+        return (GetAttributeRaw(name, &(mat(0, 0))) ? mat : Ty{});
+    }
+
+    template<typename Ty>
+    DataFileObject::EnableIfGet_t<Ty, Eigen::ColMajor> 
+        DataFileObject::GetAttribute(const std::string& name)
+    {
+        return this->template GetAttribute<MakeRowMajor_t<Ty>>(name);
+    }
+
+    template<typename Ty> 
+    std::enable_if_t<std::is_convertible_v<double, Ty>, Ty> DataFileDataset::Get()
+    {
+        double val = 0.0;
+        if (!GetRawChecked({1}, &val))
+            return std::numeric_limits<double>::quiet_NaN();
+        return val;
+    }
+
+    template<typename Ty> 
+    DataFileDataset::EnableIfGet_t<Ty, Eigen::RowMajor> DataFileDataset::Get()
+    {
+        auto dims = GetDims();
+        if (dims.size() != 2 || dims[0]*dims[1] == 0)
+            return Ty{};
+
+        Ty mat(dims[0], dims[1]);
+        return (GetRaw(&(mat(0, 0))) ? mat : Ty{});
+    }
+
+    template<typename Ty> 
+    DataFileDataset::EnableIfGet_t<Ty, Eigen::ColMajor> DataFileDataset::Get()
+    {
+        return this->template Get<MakeRowMajor_t<Ty>>();
+    }
 
 }
 

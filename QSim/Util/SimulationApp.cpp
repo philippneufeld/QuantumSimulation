@@ -184,7 +184,7 @@ namespace QSim
 
     void SimulationApp::SetFinished(DataFileGroup& simdata)
     {
-        simdata.CreateAttribute("Finished", {});
+        simdata.SetAttribute("Finished", 1.0);
     }
 
     std::string SimulationApp::ExtractProgramName(int argc, const char** argv)

@@ -245,12 +245,10 @@ int main(int argc, const char* argv[])
                 std::string groupName = std::to_string(i);
                 groupName.insert(groupName.begin(), groupNameLen - groupName.size(), '0');
                 auto group = root.CreateSubgroup(groupName);
-                group.CreateAttribute("frequency", { 1 });
-                group.StoreAttribute("frequency", &freqs[i]);
-                auto tStorage = group.CreateDataset("t", { static_cast<std::size_t>(ts.size()) });
-                auto pStorage = group.CreateDataset("populations", { static_cast<std::size_t>(pops.size()) });
-                tStorage.StoreMatrix(ts);
-                pStorage.StoreMatrix(pops);
+
+                group.SetAttribute("frequency", freqs[i]);
+                group.CreateDataset("t", ts);
+                group.CreateDataset("populations", pops);
 
                 progressBar.IncrementCount();
             });
@@ -259,11 +257,8 @@ int main(int argc, const char* argv[])
         progressBar.WaitUntilFinished();
 
         // store overall
-        auto fStorage = root.CreateDataset("frequencies", { static_cast<std::size_t>(freqs.size()) });
-        auto pStorage = root.CreateDataset("populations", { static_cast<std::size_t>(populations.size()) });
-        fStorage.Store(freqs.data());
-        pStorage.Store(populations.data());
-
+        root.CreateDataset("frequencies", freqs);
+        root.CreateDataset("populations", populations);
     }
 
     if (MoveFile(filename, dstPath))
