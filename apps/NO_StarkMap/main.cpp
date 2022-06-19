@@ -34,11 +34,11 @@ unsigned int GetNumberOfCalcThreads()
 
 int main(int argc, const char* argv[])
 {
-    constexpr double dE = 3.5 * EnergyInverseCm_v;
+    constexpr double dE = 3.25 * EnergyInverseCm_v;
     
     NitricOxide molecule;
-    RydbergDiatomicState_t state(38, 2, 2, 0, 0);
-    DiatomicStarkMap starkMap(molecule, state, 30, 60, 3, dE);
+    RydbergDiatomicState_t state(38, 2, 2, 4, 0);
+    DiatomicStarkMap starkMap(molecule, state, 20, 70, 4, dE);
 
     // analyze basis
     std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
@@ -80,7 +80,8 @@ int main(int argc, const char* argv[])
     std::string dstPath = GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/06_StarkMap/03_NO/" + filename;
     
     // calculate stark map
-    auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
+    // auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
+    auto eField = VectorXd::LinSpaced(40, 0.0, 10.0); // V cm^-1
 
     ThreadPool pool(GetNumberOfCalcThreads());
     StorageThread storageThread(filename, state, starkMap.GetBasis(), dE, eField.size());

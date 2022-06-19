@@ -2,6 +2,7 @@
 
 #include "RydbergDiatomic.h"
 
+#include <iostream>
 #include "../Constants.h"
 #include "QuantumDefects.h"
 
@@ -21,7 +22,7 @@ namespace QSim
         constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
         double rotTerm = R*(R+1);
         energy += hc * this->GetRotationalConstant() * rotTerm;
-        energy += hc * this->GetCentrifugalDistConstant() * rotTerm*rotTerm;
+        energy -= hc * this->GetCentrifugalDistConstant() * rotTerm*rotTerm;
 
         // rydberg term
         energy += this->GetRydbergEnergy(n, state);
@@ -38,7 +39,7 @@ namespace QSim
         constexpr double hc = PlanckConstant_v * SpeedOfLight_v;
         double rotTerm = R*(R+1);
         potential += hc * this->GetRotationalConstant() * rotTerm;
-        potential += hc * this->GetCentrifugalDistConstant() * rotTerm*rotTerm;
+        potential -= hc * this->GetCentrifugalDistConstant() * rotTerm*rotTerm;
 
         // atomic potential term
         potential += this->GetAtomicPotential(r, n, l);
@@ -103,7 +104,7 @@ namespace QSim
         double lambda2 = l2 - mu2;
 
         // approximation: see Phys. Chem. Chem. Phys.,2021, 23, 18806
-        double rad = 2 / (a0*a0 * std::pow(nu1*nu2, 1.5) * (lambda1 + lambda2 + 1));
+        double rad = 2.0 / (a0*a0 * std::pow(nu1*nu2, 1.5) * (lambda1 + lambda2 + 1));
         rad *= std::sin(Pi_v * (lambda1 - lambda2)) / (Pi_v*(lambda1 - lambda2));
 
         return k * mu * rad * f;
@@ -116,7 +117,7 @@ namespace QSim
         const auto [n2, l2, R2, N2, mN2] = state2;
 
         // selection rules
-        if (N1 != N2 || mN1 != mN2)
+        if (N1 != N2 || mN1 != mN2 || std::abs(R1-R2) != 2) // TODO: Delta R selection rule correct here?
             return 0.0;
 
         double hcoeff = this->GetConfigurationMixingCoeff(l1, R1, l2, R2, N1);
@@ -124,12 +125,10 @@ namespace QSim
             return 0.0;
             
         // adjusted quantum number n
-        double mu1 = this->GetQuantumDefect(state1);
-        double mu2 = this->GetQuantumDefect(state2);
-        double nu1 = n1 - mu1;
-        double nu2 = n2 - mu2;
+        double nu1 = n1 - this->GetQuantumDefect(state1);
+        double nu2 = n2 - this->GetQuantumDefect(state2);
 
-        constexpr double k = 2 * PlanckConstant_v * SpeedOfLight_v;
+        constexpr double k = -2 * PlanckConstant_v * SpeedOfLight_v;
         return k * this->GetScaledRydbergConstant() / std::pow(nu1*nu2, 1.5) * hcoeff;
     }
 
@@ -169,7 +168,7 @@ namespace QSim
         }
 
         if (l0 < l)
-            defect = ExtrapolateQuantumDefect(defect, l0, l);
+            defect = 0.0; // ExtrapolateQuantumDefect(defect, l0, l);
 
         return defect;
     }
@@ -208,19 +207,14 @@ namespace QSim
         for (int lambda = 0; lambda < quantumDefects.size(); lambda++)
         {
             double hinner = 0.0;
-            if (lambda == 0)
-            {
-                if (l1 == 0 && l2 == 0)
-                    hinner = c*c*quantumDefects[0][0] + s*s*quantumDefects[2][0];
-                else if (l1 == 2 && l2 == 2)
-                    hinner = s*s*quantumDefects[0][0] + c*c*quantumDefects[2][0];
-                else if ((l1 == 0 || l1 == 2) && (l2 == 0 || l2 == 2))
+            if (lambda == 0 && ((l1 == 0 && l2 == 2) || (l1 == 2 && l2 == 0)))
                     hinner = s2 * (quantumDefects[0][0] + quantumDefects[2][0]);
-                else
-                    continue;
-            }
+            else if (lambda == 0 && l1 == 0 && l2 == 0)
+                    hinner = c*c*quantumDefects[0][0] + s*s*quantumDefects[2][0];
+            else if (lambda == 0 && l1 == 2 && l2 == 2)
+                    hinner = s*s*quantumDefects[0][0] + c*c*quantumDefects[2][0];
             else if (l1 == l2 && l1 <= lambda)
-                return quantumDefects[l1][lambda];
+                hinner = quantumDefects[l1][lambda];
             else
                 continue;
             

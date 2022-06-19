@@ -1,6 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
 #include "DiatomicStarkMap.h"
+#include <iostream>
 
 namespace QSim
 {
@@ -55,15 +56,13 @@ namespace QSim
                 // self dipole and self multielectron interaction
                 double selfDip = system.GetSelfDipoleME(m_basis[i1], m_basis[i2]);
                 double selfMulti = system.GetSelfMultiElectronME(m_basis[i1], m_basis[i2]);
-                m_hamiltonian0(i1, i2) += selfDip + selfMulti;
-                m_hamiltonian0(i2, i1) += selfDip + selfMulti;
+                m_hamiltonian0(i1, i2) += 0*selfDip + selfMulti / Pi_v;
+                m_hamiltonian0(i2, i1) = m_hamiltonian0(i1, i2);
 
-                // stark operator
+                // stark operators
                 double dip = system.GetDipoleME(m_basis[i1], m_basis[i2]);
                 m_dipoleOperator(i1, i2) += dip;
-                m_dipoleOperator(i2, i1) += dip;
-
-                
+                m_dipoleOperator(i2, i1) = m_dipoleOperator(i1, i2);
             }
         }
     }
