@@ -123,7 +123,7 @@ namespace QSim
         double hcoeff = this->GetConfigurationMixingCoeff(l1, R1, l2, R2, N1);
         if (hcoeff == 0.0)
             return 0.0;
-            
+        
         // adjusted quantum number n
         double nu1 = n1 - this->GetQuantumDefect(state1);
         double nu2 = n2 - this->GetQuantumDefect(state2);

@@ -133,7 +133,7 @@ namespace QSim
         // alphas and betas must be integer
         if (alpha[0]%2 || alpha[1]%2 || alpha[2]%2 || alpha[3]%2 ||
             beta[0]%2 || beta[1]%2 || beta[2]%2)
-            return 0.0;
+            return NAN;
 
         for (auto& v: alpha) v /= 2;
         for (auto& v: beta) v /= 2;
@@ -143,7 +143,7 @@ namespace QSim
         lnPre += WignerLnDeltaHelper(twoJ4, twoJ5, twoJ3);
         lnPre += WignerLnDeltaHelper(twoJ1, twoJ5, twoJ6);
         lnPre += WignerLnDeltaHelper(twoJ4, twoJ2, twoJ6);
-        double pre = std::exp(0.5 * lnPre);
+        double pre = std::exp(0.5 * lnPre); // ln(sqrt(a)) = 0.5*ln(a)
 
         double sumPart = 0.0;
         int kmin = *std::max_element(alpha.begin(), alpha.end());

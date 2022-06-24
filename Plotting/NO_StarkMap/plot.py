@@ -15,11 +15,12 @@ if __name__ == '__main__':
     filename = "NOStarkMap_20220428-140003_calcc"
     dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
-    filename = "NOStarkMap_20220619-143956_monaco"
-    dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
+    # filename = "NOStarkMap_20220619-143956_monaco"
+    # dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
+    
     path = os.path.join(dir_path, filename + ".h5")
 
-    paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-3:]
+    paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-4:]
 
     for path in paths:
         fig = plt.figure()
