@@ -97,7 +97,7 @@ int main(int argc, const char* argv[])
             
             // get character of the states
             Matrix<double, Dynamic, 4> character(basisSize, 4);
-            auto statesSq = states.array().square().matrix().eval();
+            auto statesSq = states.cwiseAbs2().eval();
             MatrixXd nMat = nCharMatrix * statesSq;
             MatrixXd lMat = lCharMatrix * statesSq;
             MatrixXd RMat = RCharMatrix * statesSq;

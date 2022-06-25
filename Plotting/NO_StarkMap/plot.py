@@ -12,15 +12,15 @@ from glob import glob
 
 if __name__ == '__main__':
 
-    filename = "NOStarkMap_20220428-140003_calcc"
-    dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
+    # filename = "NOStarkMap_20220428-140003_calcc"
+    # dir_path = "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/"
 
-    # filename = "NOStarkMap_20220619-143956_monaco"
-    # dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
+    filename = "NOStarkMap_20220619-143956_monaco"
+    dir_path = "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap"
     
     path = os.path.join(dir_path, filename + ".h5")
 
-    paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-4:]
+    paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-1:]
 
     for path in paths:
         fig = plt.figure()
@@ -31,6 +31,8 @@ if __name__ == '__main__':
         # color_palette = np.array([col.to_rgb(f"C{i}") for i in range(10)])
         color_palette = np.array([col.to_rgb(c) for c in ("black", "blue", "red", "green", "purple", "orange", "grey")])
                 
+        print(path)
+
         with h5py.File(path) as file:
             for datagroup in tqdm.tqdm([file[k] for k in file.keys() if k.isdecimal()]):
 
