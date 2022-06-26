@@ -81,7 +81,7 @@ int main(int argc, const char* argv[])
     
     // calculate stark map
     // auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
-    auto eField = VectorXd::LinSpaced(36, 0.0, 8.0); // V cm^-1
+    auto eField = VectorXd::LinSpaced(180, 0.0, 25.0); // V cm^-1
 
     ThreadPool pool(GetNumberOfCalcThreads());
     StorageThread storageThread(filename, state, starkMap.GetBasis(), dE, eField.size());
