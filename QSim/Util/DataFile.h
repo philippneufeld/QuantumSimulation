@@ -5,6 +5,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <complex>
 #include <hdf5.h>
 
@@ -22,41 +23,13 @@ namespace QSim
 
     template<typename Ty>
     class DataFileType;
-    template<typename Ty>
-    class DataFileType<std::complex<Ty>>
+    
+    template<>
+    class DataFileType<float>
     {
     public:
-        DataFileType() 
-        {
-            auto dft = DataFileType<Ty>{};
-            m_msTy = dft.GetStorageType();
-            m_mnTy = dft.GetNativeType();
-            H5Iinc_ref(m_msTy);
-            H5Iinc_ref(m_mnTy);
-
-            m_sTy = H5Tcreate(H5T_COMPOUND, sizeof(std::complex<Ty>));
-            H5Tinsert(m_sTy, "real", 0, m_msTy);
-            H5Tinsert(m_sTy, "imaginary", sizeof(Ty), m_msTy);
-
-            m_nTy = H5Tcreate(H5T_COMPOUND, sizeof(std::complex<Ty>));
-            H5Tinsert(m_nTy, "real", 0, m_mnTy);
-            H5Tinsert(m_nTy, "imaginary", sizeof(Ty), m_mnTy);
-        }
-
-        ~DataFileType()
-        {
-            H5Tclose(m_sTy);
-            H5Tclose(m_nTy);
-            H5Idec_ref(m_msTy);
-            H5Idec_ref(m_mnTy);
-        }
-
-        hid_t GetStorageType() const { return m_sTy; }
-        hid_t GetNativeType() const { return m_nTy; }
-
-    private:
-        hid_t m_msTy, m_mnTy;
-        hid_t m_sTy, m_nTy;
+        hid_t GetStorageType() const { return H5T_IEEE_F32LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_FLOAT; }
     };
 
     template<>
@@ -67,6 +40,84 @@ namespace QSim
         hid_t GetNativeType() const { return H5T_NATIVE_DOUBLE; }
     };
 
+    template<>
+    class DataFileType<std::int8_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_I8LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_INT8; }
+    };
+
+    template<>
+    class DataFileType<std::uint8_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_U8LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_UINT8; }
+    };
+
+    template<>
+    class DataFileType<std::int16_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_I16LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_INT16; }
+    };
+
+    template<>
+    class DataFileType<std::uint16_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_U16LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_UINT16; }
+    };
+
+    template<>
+    class DataFileType<std::int32_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_I32LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_INT32; }
+    };
+
+    template<>
+    class DataFileType<std::uint32_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_U32LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_UINT32; }
+    };
+
+    template<>
+    class DataFileType<std::int64_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_I64LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_INT64; }
+    };
+
+    template<>
+    class DataFileType<std::uint64_t>
+    {
+    public:
+        hid_t GetStorageType() const { return H5T_STD_U64LE; }
+        hid_t GetNativeType() const { return H5T_NATIVE_UINT64; }
+    };
+
+    template<typename Ty>
+    class DataFileType<std::complex<Ty>>
+    {
+    public:
+        DataFileType();
+        ~DataFileType();
+
+        hid_t GetStorageType() const { return m_sTy; }
+        hid_t GetNativeType() const { return m_nTy; }
+
+    private:
+        hid_t m_msTy, m_mnTy;
+        hid_t m_sTy, m_nTy;
+    };
 
     //
     // DataFileObject
@@ -262,6 +313,38 @@ namespace QSim
 
 
     //
+    // Template function definitions (DataFileType<std::complex>)
+    //
+
+    template<typename Ty>
+    DataFileType<std::complex<Ty>>::DataFileType() 
+    {
+        auto dft = DataFileType<Ty>{};
+        m_msTy = dft.GetStorageType();
+        m_mnTy = dft.GetNativeType();
+        H5Iinc_ref(m_msTy);
+        H5Iinc_ref(m_mnTy);
+
+        m_sTy = H5Tcreate(H5T_COMPOUND, sizeof(std::complex<Ty>));
+        H5Tinsert(m_sTy, "Re", 0, m_msTy);
+        H5Tinsert(m_sTy, "Im", sizeof(Ty), m_msTy);
+
+        m_nTy = H5Tcreate(H5T_COMPOUND, sizeof(std::complex<Ty>));
+        H5Tinsert(m_nTy, "Re", 0, m_mnTy);
+        H5Tinsert(m_nTy, "Im", sizeof(Ty), m_mnTy);
+    }
+
+    template<typename Ty>
+    DataFileType<std::complex<Ty>>::~DataFileType()
+    {
+        H5Tclose(m_sTy);
+        H5Tclose(m_nTy);
+        H5Idec_ref(m_msTy);
+        H5Idec_ref(m_mnTy);
+    }
+
+
+    //
     // Template function definitions (DataFileObject)
     //
 
@@ -271,7 +354,7 @@ namespace QSim
     {
         Ty val = 0.0;
         if (!GetAttributeRawChecked(name, {1}, &val))
-            return std::numeric_limits<Ty>::quiet_NaN();
+            return (std::numeric_limits<Ty>::has_quiet_NaN ? std::numeric_limits<Ty>::quiet_NaN() : Ty{});
         return val;
     }
 
@@ -395,7 +478,7 @@ namespace QSim
     {
         double val = 0.0;
         if (!GetRawChecked({1}, &val))
-            return std::numeric_limits<double>::quiet_NaN();
+            return (std::numeric_limits<Ty>::has_quiet_NaN ? std::numeric_limits<Ty>::quiet_NaN() : Ty{});
         return val;
     }
 
@@ -527,8 +610,6 @@ namespace QSim
 
         return dataset;
     }
-
-
 
 }
 
