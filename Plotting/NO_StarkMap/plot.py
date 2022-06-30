@@ -35,12 +35,116 @@ def plot_starkmap_scatter(path):
     return fig, ax
 
 
-def plot_starkmap(path, track_state):
+def plot_starkmap_lines(path):
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
     prev_states = None
+
+    with h5py.File(path) as file:
+        keys = [k for k in file.keys() if k.isdecimal() and 0 < int(k) <= 100]
+        
+        efields = np.empty(len(keys))
+        stark_map = np.empty((file[keys[0]]["States"].shape[0], len(keys)))
+        stark_map[:, :] = np.NaN
+        colors = COLOR_PALETTE[np.clip(file[keys[0]]["Character"][:, 2].astype(int), 0, len(COLOR_PALETTE)-1), :]
+
+        for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
+            # load data from file
+            efields[idx] = float(datagroup.attrs["Electric_Field"])
+            energies = np.array(datagroup["Energies"][:, 0])
+            states = np.array(datagroup["States"])
+
+            # reorder basis states to match order of previous configuration
+            if idx == 0:
+                prev_states = states
+                stark_map[:, idx] = energies
+            else:
+                
+                overlap = np.abs(np.matmul(np.transpose(states), prev_states))
+                match = np.max(overlap, axis=0)
+                match_idx = np.argmax(overlap, axis=0)
+
+                accept = match > np.sqrt(0)
+                stark_map[accept, idx] = energies[match_idx[accept]]
+                prev_states[:, accept] = states[:, match_idx[accept]]
+
+                reject = np.logical_not(accept)
+                stark_map[reject, idx] = np.NaN
+                prev_states[:, reject] = 0
+
+    for i in range(stark_map.shape[0]):
+        plt.plot(efields, stark_map[i, :], '-', color=colors[i, :])
+
+    ax.set_xlim((0, 25))
+    ax.set_ylim((-66.5, -61.5))
+    ax.set_xlabel("Electric field (V / cm)")
+    ax.set_ylabel("Energy / $hc$ (cm${}^{-1}$)")
+
+    return fig, ax
+
+def plot_starkmap_lines2(path):
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    prev_states = None
+
+    with h5py.File(path) as file:
+        keys = [k for k in file.keys() if k.isdecimal() and 0 < int(k) <= 400]
+        
+        efields = np.empty(len(keys))
+        stark_map = []
+
+        min_matches = np.inf
+
+        for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
+            # load data from file
+            efields[idx] = float(datagroup.attrs["Electric_Field"])
+            energies = np.array(datagroup["Energies"][:, 0])
+            states = np.array(datagroup["States"])
+            characters = np.array(datagroup["Character"])
+
+            # reorder basis states to match order of previous configuration
+            if idx == 0:
+                prev_states = states
+                stark_map = [[(c, [e])] for c, e in zip(characters[:, 2], energies)]
+            else:
+                
+                overlap = np.abs(np.matmul(np.transpose(states), prev_states))
+                match_idx = np.argmax(overlap, axis=0)
+
+                min_matches = min(min_matches, len(set(match_idx)))
+
+                for i, midx in enumerate(match_idx):
+                    c = characters[midx, 2]
+                    stark_map[i][-1][1].append(energies[midx])
+                    if stark_map[i][-1][0] != c:
+                        stark_map[i].append((c, [energies[midx]]))
+
+                prev_states = states[:, match_idx]
+
+    for line in stark_map:
+        idx = 0
+        for c, subline in line:
+            plt.plot(efields[idx: idx+len(subline)], subline, color=COLOR_PALETTE[int(c), :])
+            idx += len(subline) - 1
+
+    print(min_matches)
+
+    ax.set_xlim((0, 25))
+    ax.set_ylim((-66.5, -61.5))
+    ax.set_xlabel("Electric field (V / cm)")
+    ax.set_ylabel("Energy / $hc$ (cm${}^{-1}$)")
+
+    return fig, ax
+
+
+def plot_starkmap_lines_slow(path):
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
 
     with h5py.File(path) as file:
         keys = [k for k in file.keys() if k.isdecimal() and 0 < int(k) <= np.inf]
@@ -49,9 +153,6 @@ def plot_starkmap(path, track_state):
         stark_map = np.empty((file[keys[0]]["States"].shape[0], len(keys)))
         stark_map[:, :] = np.NaN
         colors = COLOR_PALETTE[np.clip(file[keys[0]]["Character"][:, 2].astype(int), 0, len(COLOR_PALETTE)-1), :]
-
-        # track_state = 598
-        # track_state = 599
 
         for c, track_state in enumerate(range(0, 1059)):
             for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
@@ -63,7 +164,6 @@ def plot_starkmap(path, track_state):
                 # reorder basis states to match order of previous configuration
                 if idx == 0:
                     prev_state = states[:, track_state]
-
                     stark_map[c, idx] = energies[track_state]
                 else:
                     
@@ -71,23 +171,11 @@ def plot_starkmap(path, track_state):
                     match = np.max(overlap)
                     match_idx = np.argmax(overlap)
 
-                    if match < np.sqrt(0.25):
+                    if match < np.sqrt(0.6):
                         break
 
-                    # print(np.dot(prev_state, states[:]))
-                    # print(match_idx, match)
-
-                    # energies = energies[order]
-                    # states = states[order, :][:, order]
-                    # character = character[order, :]
-                    # stark_map[:, idx] = energies
-
                     stark_map[c, idx] = energies[match_idx]
-
                     prev_state = states[:, match_idx]
-                
-                # stark_map[:, idx] = energies
-
 
     for i in range(stark_map.shape[0]):
         plt.plot(efields, stark_map[i, :], '-', color=colors[i, :])
@@ -110,8 +198,8 @@ if __name__ == '__main__':
     paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-1:]
 
     for path in paths:
-        fig, ax = plot_starkmap_scatter(path)
-        fig, ax = plot_starkmap(path, 594)
+        # fig, ax = plot_starkmap_scatter(path)
+        fig, ax = plot_starkmap_lines2(path)
 
         fig.tight_layout()
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".pdf"))
