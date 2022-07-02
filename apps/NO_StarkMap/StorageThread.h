@@ -22,20 +22,23 @@ public:
         double dE, std::size_t cnt);
     ~StorageThread();
 
-    void AddData(int i, double eField, 
+    void StoreData(int i, double eField, 
         const Eigen::VectorXd& energies, 
         const Eigen::MatrixXd& states, 
         const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
+    Data_t LoadData(int i);
+    void AdjustStates(int i, const Eigen::MatrixXd& states);
     void WaitUntilFinished();
 
 private:
     void ThreadProc();
+    std::string GenerateGroupName(int i) const;
 
 private:
-    QSim::DataFile m_file;
+    std::string m_path;
 
     std::thread m_thread;
-    std::mutex m_mutex;
+    std::mutex m_mutexQueue, m_mutexFile;
     std::condition_variable m_cond;
     std::queue<Data_t> m_dataQueue;
 

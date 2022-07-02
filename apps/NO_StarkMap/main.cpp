@@ -1,5 +1,6 @@
 // Philipp Neufeld, 2021-2022
 
+#include <set>
 #include <iostream>
 #include <algorithm>
 #include <limits>
@@ -13,6 +14,7 @@
 
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/ProgressBar.h>
+#include <QSim/Util/Argparse.h>
 
 #include "StorageThread.h"
 #include <QSim/Util/PathUtil.h>
@@ -34,6 +36,28 @@ unsigned int GetNumberOfCalcThreads()
 
 int main(int argc, const char* argv[])
 {
+    ArgumentParser argparse;
+
+    std::string defaultFilename = GetHomeDirSubfolderPath("remote_home") 
+        + "/Masterarbeit/06_StarkMap/03_NO/" + GenerateFilename("NOStarkMap") + ".h5";
+    argparse.AddOptionDefault("file", "HDF5 file path", defaultFilename);
+    argparse.AddOption("help", "Print this help string");
+
+    auto args = argparse.Parse(argc, argv);
+    
+    if (args.IsError())
+    {
+        std::cout << args.GetError() << std::endl;
+        return 1;
+    }
+    else if (args.IsOptionPresent("help"))
+    {
+        std::cout << argparse.GetHelpString() << std::endl;
+        return 0;
+    }
+
+    std::string filename = args.GetOptionStringValue("file");
+
     constexpr double dE = 3.25 * EnergyInverseCm_v;
     
     NitricOxide molecule;
@@ -74,17 +98,13 @@ int main(int argc, const char* argv[])
         RCharMatrix(R, i) = 1.0;
         NCharMatrix(N-minN, i) = 1.0;
     }
-
-    // generate filename (first store locally and then move to desired location)
-    std::string filename = GenerateFilename("NOStarkMap") + ".h5";
-    std::string dstPath = GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/06_StarkMap/03_NO/" + filename;
     
     // calculate stark map
     auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
     // auto eField = VectorXd::LinSpaced(180, 0.0, 25.0); // V cm^-1
 
-    ThreadPool pool(GetNumberOfCalcThreads());
     StorageThread storageThread(filename, state, starkMap.GetBasis(), dE, eField.size());
+    ThreadPool pool(GetNumberOfCalcThreads());
     ProgressBar progress(eField.size());
 
     for (int i=0; i<eField.size(); i++)
@@ -118,20 +138,67 @@ int main(int argc, const char* argv[])
             }
 
             // Store data
-            storageThread.AddData(i, eField[i], energies, states, character);
+            storageThread.StoreData(i, eField[i], energies, states, character);
             progress.IncrementCount();
         });
     }
 
     progress.WaitUntilFinished();
-    std::cout << "Finishing up..." << std::endl;
+    std::cout << "Waiting for I/O to complete..." << std::endl;
     storageThread.WaitUntilFinished();
-    std::cout << "Data stored successfully." << std::endl;
 
-    if (MoveFile(filename, dstPath))
-        std::cout << "Finished. Data saved to " << dstPath << std::endl;
-    else
-        std::cout << "Finished. Data saved locally to " << filename << std::endl;
+    // do post processing
+    std::cout << "Do post processing..." << std::endl;
+
+    MatrixXd prevStates;
+    std::set<int> matched;
+    std::vector<int> indices;
+    ProgressBar progress2(eField.size());
+    for(int i=0; i<eField.size(); i++)
+    {
+        auto data = storageThread.LoadData(i);
+        auto [idx, eField, energies, states, character] = data;
+
+        if (i == 0)
+        {
+            // prepare ordering auxilliary variables
+            prevStates = states;
+            indices.reserve(states.rows());
+            for (int i=0; i<states.rows();i++)
+                indices[i] = i;
+            continue;
+        }
+
+        matched.clear();
+        MatrixXd statesOrdered(states.rows(), states.cols());
+        MatrixXd overlaps = (prevStates.transpose() * states).cwiseAbs();
+        for(int j=0; j<states.rows(); j++)
+        {
+            auto overlap = overlaps.row(j);
+            int idx = 0;
+            int val = overlap.maxCoeff(&idx);
+
+            // index is already taken? Find greates overlap state that is
+            // not already taken
+            if (matched.find(idx) != matched.end())
+            {
+                std::stable_sort(indices.begin(), indices.end(), 
+                    [&](int i1, int i2){ return overlap[i1]<overlap[i2]; });
+
+                int k = indices.size() - 1;
+                while (matched.find(indices[--k]) == matched.end());
+                idx = indices[k];
+            }
+
+            matched.insert(idx);
+            statesOrdered.row(j) = states.row(idx);
+        }
+        
+        storageThread.AdjustStates(i, statesOrdered);
+        progress2.IncrementCount();
+    }
+
+    std::cout << "Data stored successfully (" << filename << ")" << std::endl;
 
     return 0;
 }

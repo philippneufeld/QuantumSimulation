@@ -15,10 +15,11 @@ Matrix<double, 5, 1> StateToArray(const RydbergDiatomicState_t& state)
 StorageThread::StorageThread(const std::string& path, 
     const RydbergDiatomicState_t& state, const std::vector<RydbergDiatomicState_t>& basis, 
     double dE, std::size_t cnt)
-    : m_totalCnt(cnt)
+    : m_path(path), m_totalCnt(cnt)
 {
-    m_file.Open(path, DataFile_MUST_NOT_EXIST);
-    auto root = m_file.OpenRootGroup();
+    DataFile file;
+    file.Open(m_path, DataFile_DEFAULT);
+    auto root = file.OpenRootGroup();
     
     // write stark map parameters
     root.SetAttribute("State", StateToArray(state));
@@ -36,15 +37,42 @@ StorageThread::StorageThread(const std::string& path,
 StorageThread::~StorageThread() 
 { 
     WaitUntilFinished();
-    m_file.Close(); 
 }
 
-void StorageThread::AddData(int i, double eField, const VectorXd& energies, 
+void StorageThread::StoreData(int i, double eField, const VectorXd& energies, 
     const MatrixXd& states, const Matrix<double, Dynamic, 4>& character)
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutexQueue);
     m_dataQueue.emplace(i, eField, energies, states, character);
     m_cond.notify_all();
+}
+
+typename StorageThread::Data_t StorageThread::LoadData(int i)
+{
+        std::unique_lock<std::mutex> fileLock(m_mutexFile);
+        DataFile file;
+
+        file.Open(m_path, DataFile_DEFAULT);
+        auto root = file.OpenRootGroup();
+        auto group = root.GetSubgroup(GenerateGroupName(i));
+        
+        return std::make_tuple(
+            i, group.GetAttribute<double>("Electric_Field"),
+            group.GetDataset("Energies").Get<VectorXd>(),
+            group.GetDataset("States").Get<MatrixXd>(),
+            group.GetDataset("Character").Get<MatrixXd>());
+}
+
+void StorageThread::AdjustStates(int i, const Eigen::MatrixXd& states)
+{
+        std::unique_lock<std::mutex> fileLock(m_mutexFile);
+        DataFile file;
+
+        file.Open(m_path, DataFile_DEFAULT);
+        auto root = file.OpenRootGroup();
+        auto group = root.GetSubgroup(GenerateGroupName(i)); 
+        auto stateDs = group.GetDataset("States");
+        stateDs.Set(states);
 }
 
 void StorageThread::WaitUntilFinished() 
@@ -57,10 +85,8 @@ void StorageThread::WaitUntilFinished()
 void StorageThread::ThreadProc()
 {
     int cnt = 0;
-    int groupNameLen = std::to_string(m_totalCnt).size();
-    auto root = m_file.OpenRootGroup();
 
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutexQueue);
     while(true)
     {
         m_cond.wait(lock, [&](){ return !m_dataQueue.empty() || cnt >= m_totalCnt; });
@@ -76,16 +102,16 @@ void StorageThread::ThreadProc()
         lock.unlock();
 
         // store data to file
+        std::unique_lock<std::mutex> fileLock(m_mutexFile);
+        DataFile file;
+
+        file.Open(m_path, DataFile_DEFAULT);
+        auto root = file.OpenRootGroup();
         for (const Data_t& dat : data)
         {
             const auto& [i, eField, energies, states, character] = dat;
 
-            // create data group
-            std::string groupName = std::to_string(i);
-            groupName.insert(0, groupNameLen - groupName.size(), '0');
-            auto group = root.CreateSubgroup(groupName);
-
-            // store data
+            auto group = root.CreateSubgroup(GenerateGroupName(i));
             group.SetAttribute("Electric_Field", eField);
             group.CreateDataset("Energies", energies);
             group.CreateDataset("States", states);
@@ -93,6 +119,8 @@ void StorageThread::ThreadProc()
 
             cnt++;
         }
+        file.Close();
+        fileLock.unlock();
 
         if (cnt >= m_totalCnt)
             break;
@@ -100,8 +128,13 @@ void StorageThread::ThreadProc()
         // reaquire lock
         lock.lock();
     }
+}
 
-    // finished writing all data
-    m_file.Close();
+std::string StorageThread::GenerateGroupName(int i) const
+{
+    int groupNameLen = std::to_string(m_totalCnt).size();
+    std::string groupName = std::to_string(i);
+    groupName.insert(0, groupNameLen - groupName.size(), '0');
+    return groupName;
 }
 

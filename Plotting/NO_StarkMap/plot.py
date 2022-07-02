@@ -92,7 +92,7 @@ def plot_starkmap_lines2(path):
     prev_states = None
 
     with h5py.File(path) as file:
-        keys = [k for k in file.keys() if k.isdecimal() and 0 < int(k) <= 400]
+        keys = [k for k in file.keys() if k.isdecimal() and 0 < int(k) <= np.inf]
         
         efields = np.empty(len(keys))
         stark_map = []
