@@ -63,7 +63,8 @@ typename StorageThread::Data_t StorageThread::LoadData(int i)
             group.GetDataset("Character").Get<MatrixXd>());
 }
 
-void StorageThread::AdjustStates(int i, const Eigen::MatrixXd& states)
+void StorageThread::ChangeData(int i, double eField, const VectorXd& energies, 
+    const MatrixXd& states, const Matrix<double, Dynamic, 4>& character)
 {
         std::unique_lock<std::mutex> fileLock(m_mutexFile);
         DataFile file;
@@ -71,8 +72,10 @@ void StorageThread::AdjustStates(int i, const Eigen::MatrixXd& states)
         file.Open(m_path, DataFile_DEFAULT);
         auto root = file.OpenRootGroup();
         auto group = root.GetSubgroup(GenerateGroupName(i)); 
-        auto stateDs = group.GetDataset("States");
-        stateDs.Set(states);
+        group.SetAttribute("Electric_Field", eField);
+        group.GetDataset("Energies").Set(energies);
+        group.GetDataset("States").Set(states);
+        group.GetDataset("Character").Set(character);
 }
 
 void StorageThread::WaitUntilFinished() 

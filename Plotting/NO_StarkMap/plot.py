@@ -140,45 +140,38 @@ def plot_starkmap_lines2(path):
 
     return fig, ax
 
-
-def plot_starkmap_lines_slow(path):
+def plot_starkmap_lines3(path):
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
     with h5py.File(path) as file:
-        keys = [k for k in file.keys() if k.isdecimal() and 0 < int(k) <= np.inf]
+        keys = [k for k in file.keys() if k.isdecimal() and 0 <= int(k) <= 800]
         
         efields = np.empty(len(keys))
-        stark_map = np.empty((file[keys[0]]["States"].shape[0], len(keys)))
-        stark_map[:, :] = np.NaN
-        colors = COLOR_PALETTE[np.clip(file[keys[0]]["Character"][:, 2].astype(int), 0, len(COLOR_PALETTE)-1), :]
+        stark_map = []
 
-        for c, track_state in enumerate(range(0, 1059)):
-            for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
-                # load data from file
-                efields[idx] = float(datagroup.attrs["Electric_Field"])
-                energies = np.array(datagroup["Energies"][:, 0])
-                states = np.array(datagroup["States"])
+        for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
+            # load data from file
+            efields[idx] = float(datagroup.attrs["Electric_Field"])
+            energies = np.array(datagroup["Energies"][:, 0])
+            characters = np.array(datagroup["Character"])
 
-                # reorder basis states to match order of previous configuration
-                if idx == 0:
-                    prev_state = states[:, track_state]
-                    stark_map[c, idx] = energies[track_state]
-                else:
-                    
-                    overlap = np.abs(np.matmul(np.transpose(states), prev_state))
-                    match = np.max(overlap)
-                    match_idx = np.argmax(overlap)
+            # reorder basis states to match order of previous configuration
+            if idx == 0:
+                stark_map = [[(c, [e])] for c, e in zip(characters[:, 2], energies)]
+            else:
+                for i in range(len(stark_map)):
+                    c = characters[i, 2]
+                    stark_map[i][-1][1].append(energies[i])
+                    if stark_map[i][-1][0] != c:
+                        stark_map[i].append((c, [energies[i]]))
 
-                    if match < np.sqrt(0.6):
-                        break
-
-                    stark_map[c, idx] = energies[match_idx]
-                    prev_state = states[:, match_idx]
-
-    for i in range(stark_map.shape[0]):
-        plt.plot(efields, stark_map[i, :], '-', color=colors[i, :])
+    for line in tqdm.tqdm(stark_map):
+        idx = 0
+        for c, subline in line:
+            plt.plot(efields[idx: idx+len(subline)], subline, '-', color=COLOR_PALETTE[int(c), :])
+            idx += len(subline) - 1
 
     ax.set_xlim((0, 25))
     ax.set_ylim((-66.5, -61.5))
@@ -187,18 +180,20 @@ def plot_starkmap_lines_slow(path):
 
     return fig, ax
 
+
 if __name__ == '__main__':
 
     dir_paths = {
         "ludwigsburg": "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/",
         "monaco": "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap",
-        "panama": "/home/pneufeld/git/QuantumSimulation/build/apps/NO_StarkMap",
+        "panama": "/mnt/Data/pneufeld/Masterarbeit/06_StarkMap/03_NO/",
     }
     dir_path = dir_paths[socket.gethostname()]
     paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-1:]
 
     for path in paths:
         # fig, ax = plot_starkmap_scatter(path)
+        # fig, ax = plot_starkmap_lines3(path)
         fig, ax = plot_starkmap_lines2(path)
 
         fig.tight_layout()

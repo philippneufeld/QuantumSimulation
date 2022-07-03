@@ -58,11 +58,12 @@ int main(int argc, const char* argv[])
 
     std::string filename = args.GetOptionStringValue("file");
 
-    constexpr double dE = 3.25 * EnergyInverseCm_v;
+    // constexpr double dE = 3.25 * EnergyInverseCm_v;
+    constexpr double dE = 1.0 * EnergyInverseCm_v;
     
     NitricOxide molecule;
     RydbergDiatomicState_t state(38, 2, 2, 4, 0);
-    DiatomicStarkMap starkMap(molecule, state, 20, 70, 4, dE);
+    DiatomicStarkMap starkMap(molecule, state, 20, 70, 2, dE);
 
     // analyze basis
     std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
@@ -100,8 +101,9 @@ int main(int argc, const char* argv[])
     }
     
     // calculate stark map
-    auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
-    // auto eField = VectorXd::LinSpaced(180, 0.0, 25.0); // V cm^-1
+    // auto eField = VectorXd::LinSpaced(1500, 0.0, 25.0); // V cm^-1
+    auto eField = VectorXd::LinSpaced(500, 0.0, 2.5); // V cm^-1
+    // auto eField = VectorXd::LinSpaced(20, 0.0, 0.025); // V cm^-1
 
     StorageThread storageThread(filename, state, starkMap.GetBasis(), dE, eField.size());
     ThreadPool pool(GetNumberOfCalcThreads());
@@ -151,50 +153,100 @@ int main(int argc, const char* argv[])
     std::cout << "Do post processing..." << std::endl;
 
     MatrixXd prevStates;
+    VectorXd prevEnergies, prevEnergies2, extrEnergies;
+
     std::set<int> matched;
     std::vector<int> indices;
-    ProgressBar progress2(eField.size());
-    for(int i=0; i<eField.size(); i++)
+    ProgressBar progress2(eField.size() - 1);
+    for(int i=0; i<0*eField.size(); i++)
     {
         auto data = storageThread.LoadData(i);
-        auto [idx, eField, energies, states, character] = data;
+        auto [idx, ef, energies, states, character] = data;
 
         if (i == 0)
         {
             // prepare ordering auxilliary variables
+            prevEnergies = energies;
+            prevEnergies2 = prevEnergies;
             prevStates = states;
-            indices.reserve(states.rows());
+            indices.resize(states.rows());
             for (int i=0; i<states.rows();i++)
                 indices[i] = i;
             continue;
         }
 
         matched.clear();
+        
+        VectorXd energiesOrdered(states.rows());
         MatrixXd statesOrdered(states.rows(), states.cols());
-        MatrixXd overlaps = (prevStates.transpose() * states).cwiseAbs();
+        Matrix<double, Dynamic, 4> characterOrdered(states.rows(), 4);
+
+        MatrixXd overlaps = (prevStates.transpose() * states).cwiseAbs().array().transpose().matrix();
+        MatrixXd energyDiffs(overlaps.rows(), overlaps.cols());
+        for (int i1=0; i1<energyDiffs.rows(); i1++)
+        {
+            for (int i2=0; i2<energyDiffs.rows(); i2++)
+            {
+                extrEnergies = prevEnergies2;
+                if (i > 1)
+                    extrEnergies += (prevEnergies - prevEnergies2) / (eField[i-1] - eField[i - 2]) * (eField[i] - eField[i-2]);
+                energyDiffs(i1, i2) = std::abs(energies[i2] - extrEnergies[i1]);
+            }
+        }
+        energyDiffs /= energyDiffs.maxCoeff();
+        MatrixXd combinedCrits = overlaps - energyDiffs.cwiseSqrt();
+
+        std::vector<double> overlapMax(states.rows());
+        std::vector<double> combinedMax(states.rows());
+        std::vector<int> overlapIndices(states.rows());
+        std::vector<int> stateIndices(states.rows());
         for(int j=0; j<states.rows(); j++)
         {
+            stateIndices[j]= j;
+            overlapMax[j] = overlaps.row(j).maxCoeff(&overlapIndices[j]);
+            combinedMax[j] = combinedCrits.row(j).maxCoeff();
+        }
+
+        std::stable_sort(stateIndices.begin(), stateIndices.end(), 
+            [&](int i1, int i2){ return overlapMax[i1]>overlapMax[i2]; });
+        
+        constexpr double threshold = 0.8; // 0.70710678118;
+        auto it = stateIndices.begin();
+        for(; it < stateIndices.end() && overlapMax[*it] > threshold; it++);
+        std::stable_sort(it, stateIndices.end(), 
+            [&](int i1, int i2){ return combinedMax[i1]>combinedMax[i2]; });
+
+        for(int j: stateIndices)
+        {
             auto overlap = overlaps.row(j);
-            int idx = 0;
-            int val = overlap.maxCoeff(&idx);
+            auto combinedCrit = combinedCrits.row(j);
+            idx = overlapIndices[j];
 
             // index is already taken? Find greates overlap state that is
             // not already taken
-            if (matched.find(idx) != matched.end())
+            if (overlapMax[j] <= threshold || matched.find(idx) != matched.end())
             {
                 std::stable_sort(indices.begin(), indices.end(), 
-                    [&](int i1, int i2){ return overlap[i1]<overlap[i2]; });
+                    [&](int i1, int i2){ return combinedCrit[i1]<combinedCrit[i2]; });
 
-                int k = indices.size() - 1;
-                while (matched.find(indices[--k]) == matched.end());
+                int k = indices.size();
+                while (matched.find(indices[--k]) != matched.end() && k >= 0);
                 idx = indices[k];
             }
 
             matched.insert(idx);
+            energiesOrdered(j) = energies(idx);
             statesOrdered.row(j) = states.row(idx);
+            characterOrdered.row(j) = character.row(idx);
         }
+
+        // if (i>1) energiesOrdered = extrEnergies;
+
+        prevEnergies2 = prevEnergies;
+        prevEnergies = energiesOrdered;
+        prevStates = statesOrdered;
         
-        storageThread.AdjustStates(i, statesOrdered);
+        storageThread.ChangeData(i, ef, energiesOrdered, statesOrdered, characterOrdered);
         progress2.IncrementCount();
     }
 

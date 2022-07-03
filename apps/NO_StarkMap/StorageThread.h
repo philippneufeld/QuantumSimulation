@@ -27,7 +27,10 @@ public:
         const Eigen::MatrixXd& states, 
         const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
     Data_t LoadData(int i);
-    void AdjustStates(int i, const Eigen::MatrixXd& states);
+    void ChangeData(int i, double eField, 
+        const Eigen::VectorXd& energies, 
+        const Eigen::MatrixXd& states, 
+        const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
     void WaitUntilFinished();
 
 private:
