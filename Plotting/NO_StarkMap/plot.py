@@ -133,10 +133,13 @@ def plot_starkmap_lines2(path):
 
     print(min_matches)
 
-    ax.set_xlim((0, 25))
-    ax.set_ylim((-66.5, -61.5))
+    # ax.set_xlim((0, 25))
+    # ax.set_ylim((-66.5, -61.5))
+    ax.set_xlim((0, 2.5))
+    ax.set_ylim((-65, -63.6))
     ax.set_xlabel("Electric field (V / cm)")
     ax.set_ylabel("Energy / $hc$ (cm${}^{-1}$)")
+    fig.tight_layout()
 
     return fig, ax
 
@@ -173,10 +176,13 @@ def plot_starkmap_lines3(path):
             plt.plot(efields[idx: idx+len(subline)], subline, '-', color=COLOR_PALETTE[int(c), :])
             idx += len(subline) - 1
 
-    ax.set_xlim((0, 25))
-    ax.set_ylim((-66.5, -61.5))
+    # ax.set_xlim((0, 25))
+    # ax.set_ylim((-66.5, -61.5))
+    ax.set_xlim((0, 2.5))
+    ax.set_ylim((-65, -63.6))
     ax.set_xlabel("Electric field (V / cm)")
     ax.set_ylabel("Energy / $hc$ (cm${}^{-1}$)")
+    fig.tight_layout()
 
     return fig, ax
 
@@ -193,10 +199,9 @@ if __name__ == '__main__':
 
     for path in paths:
         # fig, ax = plot_starkmap_scatter(path)
-        # fig, ax = plot_starkmap_lines3(path)
-        fig, ax = plot_starkmap_lines2(path)
+        fig, ax = plot_starkmap_lines3(path)
+        # fig, ax = plot_starkmap_lines2(path)
 
-        fig.tight_layout()
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".pdf"))
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".png"))
 
