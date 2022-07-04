@@ -4,33 +4,32 @@
 #include <thread>
 #include <queue>
 #include <condition_variable>
+#include <future>
 
 #include <Eigen/Dense>
 
 #include <QSim/Util/DataFile.h>
 #include <QSim/Rydberg/RydbergDiatomic.h>
 
-class StorageThread
+class IOThread
 {
     using Data_t = std::tuple<int, double, 
         Eigen::VectorXd, Eigen::MatrixXd, 
         Eigen::Matrix<double, Eigen::Dynamic, 4>>;
 public:
-    StorageThread(const std::string& path, 
-        const QSim::RydbergDiatomicState_t& state, 
-        const std::vector<QSim::RydbergDiatomicState_t>& basis, 
-        double dE, std::size_t cnt);
-    ~StorageThread();
+    IOThread(const std::string& path);
+    ~IOThread();
 
-    void StoreData(int i, double eField, 
+    bool Start(const QSim::RydbergDiatomicState_t& state, 
+        const std::vector<QSim::RydbergDiatomicState_t>& basis, double dE);
+    void Stop();
+
+    void StoreData(int i, double eField,
         const Eigen::VectorXd& energies, 
         const Eigen::MatrixXd& states, 
         const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
-    Data_t LoadData(int i);
-    void ChangeData(int i, double eField, 
-        const Eigen::VectorXd& energies, 
-        const Eigen::MatrixXd& states, 
-        const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
+    std::future<Data_t> LoadData(int i);
+
     void WaitUntilFinished();
 
 private:
@@ -41,9 +40,12 @@ private:
     std::string m_path;
 
     std::thread m_thread;
-    std::mutex m_mutexQueue, m_mutexFile;
+ 
+    bool m_stopThread;
+    enum class CmdType { Load, Store };
+    std::queue<CmdType> m_commandQueue;
+    std::queue<Data_t> m_storageQueue;
+    std::queue<std::pair<int, std::promise<Data_t>>> m_loadingQueue;
+    std::mutex m_mutex;
     std::condition_variable m_cond;
-    std::queue<Data_t> m_dataQueue;
-
-    const std::size_t m_totalCnt;
 };
