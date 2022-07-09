@@ -79,7 +79,7 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
 
 int main(int argc, const char* argv[])
 {
-    PythonMatplotlib matplotlib;
+    /*PythonMatplotlib matplotlib;
 
     testIntegrators("sin(x)*(1-x+x^2)", 
         [](double x){ return std::sin(x) * (1 - x + x*x); }, 
@@ -97,22 +97,20 @@ int main(int argc, const char* argv[])
             [](double x){ return std::sin(1 / x); }, 
             0.025, 1.0, 0.5044592407911533);
             
-    matplotlib.RunGUILoop();
+    matplotlib.RunGUILoop();*/
 
-    /*int fcnt = 0;
-    auto func = [&](double x){ fcnt++; return 1 / (Pi_v * (x*x + 1)); };
-    double exact = 0.9974535344916211;
-    double atol = 1e-9;
+    constexpr double x0 = 0.1872;
+    auto func = [](double x){ return 1 / (Pi_v * ((x-x0)*(x-x0) + 1)); };
+    double exact = TQuadrature<QuadMidpointPolicy>::Integrate(func, -250.0, 250.0, 1000000);
+    double atol = 1e-7;
     double rtol = 1e-7;
-    std::size_t n = 200;
+    std::size_t n = 300;
 
-    fcnt = 0;
     auto [I1, fevs1] = TQuadrature<QuadAdaptivePolicy>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
-    std::cout << std::abs(I1-exact) << " (" << fevs1 << ", " << fcnt << ")" << std::endl;
-    
-    fcnt = 0;
-    auto [I2, fevs2] = TQuadrature<QuadAdaptive2Policy>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
-    std::cout << std::abs(I2-exact) << " (" << fevs2 << ", " << fcnt << ")" << std::endl;*/
+    std::cout << std::abs(I1-exact) << " (" << fevs1 << ")" << std::endl;
+
+    auto [I2, fevs2] = TQuadrature<QuadAdaptivePolicy2>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
+    std::cout << std::abs(I2-exact) << " (" << fevs2 << ")" << std::endl;
 }
 
 #else

@@ -12,7 +12,6 @@
 
 namespace QSim
 {
-
     // Quadrature policy (see Math/Quad.h)
     // Adaptive step size integrator
     class QuadAdaptivePolicy
@@ -53,35 +52,35 @@ namespace QSim
             if (n < 5)
                 n = 5;
             n -= (n - 1) % 4;
-            std::size_t sections = (n - 1) / 4;
 
+            // separate range into sections
+            std::size_t sections = (n - 1) / 4;
             XTy dx = static_cast<XTy>(b - a) / sections;
+            auto dxlen = TMatrixNorm<XTy>::Get(dx);
             atol /= sections;
 
-            auto dxlen = TMatrixNorm<XTy>::Get(dx);
-
-            std::size_t fsCnt = 1+2*sections;
+            // invoke functions
             std::vector<YTy> fs;
-            fs.reserve(fsCnt);
-            for (size_t i = 0; i < fsCnt; i++)
-                fs.emplace_back(std::invoke(func, a+i*0.5*dx));
+            fs.reserve(n);
+            for (size_t i = 0; i < n; i++)
+                fs.emplace_back(std::invoke(func, a+i*0.25*dx));
             YTy fsSum = std::accumulate(fs.begin() + 1, fs.end(), fs[0]);
-            std::size_t fevs = fsCnt;
+            std::size_t fevs = n;
 
             // estimate using the trapezoid rule (divided by section count)
-            YTy IestSec = (fsSum - 0.5*(fs[0]-fs[fsCnt-1])) * (0.5* dxlen / sections);
+            YTy IestSec = (fsSum - 0.5*(fs[0]-fs[n-1])) * (0.25* dxlen / sections);
 
             // first iteration
             auto [res, sub_fevs] = IntegrateHelper(func, a, dx, dxlen, 
-                1, fs[0], fs[1], fs[2], IestSec, rtol, atol, depth);
+                1, fs[0], fs[1], fs[2], fs[3], fs[4], IestSec, rtol, atol, depth);
             YTy result = std::move(res);
             fevs += sub_fevs;
 
             // rest of the iterations
             for (size_t i = 1; i < sections; i++)
             {
-                auto [res, sub_fevs] = IntegrateHelper(func, a+i*dx, dx, dxlen, 
-                    1, fs[2*i], fs[2*i+1], fs[2*i+2], IestSec, rtol, atol, depth);
+                auto [res, sub_fevs] = IntegrateHelper(func, a+i*dx, dx, dxlen, 1, 
+                    fs[4*i], fs[4*i+1], fs[4*i+2], fs[4*i+3], fs[4*i+4], IestSec, rtol, atol, depth);
                 result += res;
                 fevs += sub_fevs;
             }
@@ -101,7 +100,8 @@ namespace QSim
         template<typename Func, typename XTyA, typename DXTy>
         static std::pair<YTy_t<Func, XTyA, DXTy>, std::size_t> IntegrateHelper(
             Func& func, XTyA&& a, DXTy&& dx, TMatrixNorm_t<DXTy> dxlen, std::size_t d,
-            const YTy_t<Func, XTyA, DXTy>& f0, const YTy_t<Func, XTyA, DXTy>& f2,
+            const YTy_t<Func, XTyA, DXTy>& f0, const YTy_t<Func, XTyA, DXTy>& f1,
+            const YTy_t<Func, XTyA, DXTy>& f2, const YTy_t<Func, XTyA, DXTy>& f3,
             const YTy_t<Func, XTyA, DXTy>& f4, const YTy_t<Func, XTyA, DXTy>& Iest,
             double rtol, double atol, std::size_t depth)
         {
@@ -109,21 +109,15 @@ namespace QSim
             using XTy = TMatrixAddResultFP_t<XTyA, DXTy>;
             using YTy = YTy_t<Func, XTyA, DXTy>;
             
-            std::size_t fevs = 2;
+            std::size_t fevs = 0;
 
-            // calculate area via Simpson's rule
+            // calculate area via one and two Simpson's rules
             YTy I1 = (dxlen / 6) * (f0 + 4*f2 + f4);
-            
-            // calculate function value at intermediary points
-            YTy f1 = std::invoke(func, a + 0.25*dx);
-            YTy f3 = std::invoke(func, a + 0.75*dx);
-
-            // calculate area via two Simpson's rule steps with half step size
             YTy I2 = (dxlen / 12) * (f0 + 4*(f1 + f3) + 2*f2 + f4);
             
+            // add error to I2 (I is equivalent to Boole's rule)
             YTy Ierr = (I2 - I1) / 15;
-            YTy I = I2 + Ierr; // add error to I2 (I is equivalent to Boole's rule)
-
+            YTy I = I2 + Ierr;
 
             // check if accuracy is sufficient (otherwise recurse)
             YTy IerrAbs = TMatrixCwiseAbs<YTy>::Get(Ierr);
@@ -131,20 +125,28 @@ namespace QSim
             YTy IestAdj = TMatrixCwiseAbsMax<YTy>::Get(Iest, I);
             if (d < depth && TMatrixAnyCwiseLess<YTy>::Get(rtol*IestAdj, IerrAbs-atolY))
             {
+                // calculate half of integration properties
+                XTy dx2 = dx / 2;
+                YTy Iest2 = IestAdj / 2;
+                auto dxlen2 = dxlen / 2;
+
+                // calculate intermediate points
+                YTy f01 = std::invoke(func, a + 0.25*dx2);
+                YTy f12 = std::invoke(func, a + 0.75*dx2);
+                YTy f23 = std::invoke(func, a + 1.25*dx2);
+                YTy f34 = std::invoke(func, a + 1.75*dx2);
+
                 // NOTE:
                 // static_cast<XTy>(a+dx2) in IntegrateHelper is necessary in order to
                 // prevent the expression template to be passed directly and thus
                 // exceeding the template recursion limit
-                XTy dx2 = dx / 2;
-                YTy Iest2 = IestAdj / 2;
-                auto dxlen2 = dxlen / 2;
                 auto [res1, sub_fevs1] = IntegrateHelper(func, a, dx2, 
-                    dxlen2, d+1, f0, f1,  f2, Iest2, rtol, atol / 2, depth);
+                    dxlen2, d+1, f0, f01, f1, f12, f2, Iest2, rtol, atol / 2, depth);
                 auto [res2, sub_fevs2] = IntegrateHelper(func, static_cast<XTy>(a+dx2), 
-                    dx2, dxlen2, d+1, f2, f3, f4, Iest2, rtol, atol / 2, depth);
+                    dx2, dxlen2, d+1, f2, f23, f3, f34, f4, Iest2, rtol, atol / 2, depth);
                 
                 I = res1 + res2;
-                fevs += sub_fevs1 + sub_fevs2;
+                fevs += 4 + sub_fevs1 + sub_fevs2;
             }
 
             return std::make_pair(I, fevs);
