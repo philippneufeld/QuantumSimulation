@@ -76,6 +76,7 @@ namespace QSim
         ~TQuadNewtonCotesPolicy() = default;
 
     public:
+        TQuadNewtonCotesPolicy() = default;
 
         template<typename YTy, typename XTy, typename=std::enable_if_t<IsValidData_v<YTy>>>
         static RType_t<YTy, XTy> Integrate(const YTy& y, XTy dx)
@@ -185,7 +186,12 @@ namespace QSim
 
     // Helper class for usecases where inheritance from the policy is not desired
     template<typename QuadPolicy=QuadSimpsonPolicy>
-    class TQuadrature : public QuadPolicy {};
+    class TQuadrature final : public QuadPolicy 
+    {
+    public:
+        TQuadrature() : QuadPolicy() {}
+        ~TQuadrature() {}
+    };
 
 }
 

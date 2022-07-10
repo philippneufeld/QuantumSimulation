@@ -42,13 +42,13 @@ namespace QSim
 
     }
 
-    template<typename QuadPolicy=QuadAdaptivePolicy>
-    class TDopplerIntegrator : public Internal::TDopplerIntegratorHelper<QuadAdaptivePolicy>
+    template<typename QuadPolicy=QuadFixedAdaptivePolicy>
+    class TDopplerIntegrator : public Internal::TDopplerIntegratorHelper<QuadPolicy>
     {
     public:
         // constructors
         TDopplerIntegrator() : TDopplerIntegrator(1.674e-27, 300) { }
-        TDopplerIntegrator(double mass, double temperature) : TDopplerIntegrator(mass, temperature, 250) { }
+        TDopplerIntegrator(double mass, double temperature) : TDopplerIntegrator(mass, temperature, 1000) { }
         TDopplerIntegrator(double mass, double temperature, std::size_t steps)
             : m_mass(mass), m_temperature(temperature), m_steps(steps), m_sigmas(3.5) { }
 

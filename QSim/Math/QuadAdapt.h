@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <numeric>
+#include <queue>
 
 #include "MatrixTraits.h"
 #include "Quad.h"
@@ -156,6 +157,117 @@ namespace QSim
         double m_rtol;
         double m_atol;
         std::size_t m_depth;
+    };
+
+
+    // Quadrature policy (see Math/Quad.h)
+    // Adaptive step size integrator with fixed number of function evaluations
+    class QuadFixedAdaptivePolicy
+    {
+        template<typename Func, typename XTyA, typename XTyB>
+        using YTy_t = TMatrixMulResultFP_t<
+            std::invoke_result_t<Func, TMatrixAddResultFP_t<XTyA, XTyB>>, 
+            TMatrixAddResultFP_t<XTyA, XTyB>>;
+
+        template<typename XTy, typename YTy>
+        struct Section
+        {
+            YTy m_I;
+            YTy m_Ierr;
+            XTy m_a;
+            std::array<YTy, 5> m_fs;
+            int m_depth;
+
+            Section(const TMatrixNorm_t<XTy>& dxlen, const YTy& f0, const YTy& f1, 
+                const YTy& f2, const YTy& f3, const YTy& f4, const XTy& a, int depth)
+                : m_fs{f0, f1, f2, f3, f4}, m_a(a), m_depth(depth)
+            {
+                YTy I1 = (dxlen / 6) * (m_fs[0] + 4*m_fs[2] + m_fs[4]);
+                YTy I2 = (dxlen / 12) * (m_fs[0] + 4*(m_fs[1] + m_fs[3]) + 2*m_fs[2] + m_fs[4]);
+                YTy Ierr = (I2 - I1) / 15;
+                m_Ierr = TMatrixCwiseAbs<YTy>::Get(Ierr);
+                m_I = I2 + Ierr;
+            }
+
+            bool operator<(const Section& rhs) const { return TMatrixAnyCwiseLess<YTy>::Get(m_Ierr, rhs.m_Ierr); }
+        };
+
+    protected:
+        ~QuadFixedAdaptivePolicy() = default;
+
+    public:
+        QuadFixedAdaptivePolicy() = default;
+
+        template<typename Func, typename XTyA, typename XTyB>
+        static auto Integrate(Func&& func, XTyA&& a, XTyB&& b, std::size_t n)
+        {
+            return IntegrateFevs(func, a, b, n).first;
+        }
+
+        template<typename Func, typename XTyA, typename XTyB>
+        static auto IntegrateFevs(Func&& func, XTyA&& a, XTyB&& b, std::size_t n)
+        {
+            // define types
+            using XTy = TMatrixAddResultFP_t<XTyA, XTyB>;
+            using YTy = YTy_t<Func, XTyA, XTyB>;
+
+            // reduce count of points to be used in the coarse run
+            std::size_t n0 = static_cast<std::size_t>(n / 2.5);
+
+            // adjust n0 to fit the simpson method used
+            if (n0 < 5)
+                n0 = 5;
+            n0 -= (n0 - 1) % 4;
+
+            // separate range into sections
+            std::size_t secCnt = (n0 - 1) / 4;
+            XTy dx = static_cast<XTy>(b - a) / secCnt;
+            auto dxlen = TMatrixNorm<XTy>::Get(dx);
+            
+            std::vector<Section<XTy, YTy>> queue_container;
+            queue_container.reserve(static_cast<std::size_t>(std::ceil(n / 4.0)));
+            std::priority_queue<Section<XTy, YTy>> section_queue(
+                std::less<Section<XTy, YTy>>(), std::move(queue_container));
+
+            YTy f0 = std::invoke(func, a);
+            for (size_t i = 0; i < secCnt; i++)
+            {
+                YTy f1 = std::invoke(func, a + (i+0.25)*dx);
+                YTy f2 = std::invoke(func, a + (i+0.5)*dx);
+                YTy f3 = std::invoke(func, a + (i+0.75)*dx);
+                YTy f4 = std::invoke(func, a + (i+1)*dx);
+                section_queue.emplace(dxlen, f0, f1, f2, f3, f4, a + i*dx, 0);
+                f0 = f4;
+            }
+
+            std::size_t fevs = n0;
+            while (fevs < n)
+            {
+                auto sec = section_queue.top();
+                section_queue.pop();
+
+                double den = std::pow(2.0, sec.m_depth + 1);
+                XTy dx2 = dx / den;
+                auto dxlen2 = dxlen / den;
+
+                // calculate intermediate points
+                YTy f01 = std::invoke(func, sec.m_a + 0.25*dx2);
+                YTy f12 = std::invoke(func, sec.m_a + 0.75*dx2);
+                YTy f23 = std::invoke(func, sec.m_a + 1.25*dx2);
+                YTy f34 = std::invoke(func, sec.m_a + 1.75*dx2);
+                fevs += 4;
+
+                section_queue.emplace(dxlen2, sec.m_fs[0], f01, sec.m_fs[1], f12, sec.m_fs[2], sec.m_a, sec.m_depth + 1);
+                section_queue.emplace(dxlen2, sec.m_fs[2], f23, sec.m_fs[3], f34, sec.m_fs[4], sec.m_a+dx2, sec.m_depth + 1);
+            }
+
+            YTy res = section_queue.top().m_I;
+            section_queue.pop();
+            for (; !section_queue.empty(); section_queue.pop())
+                res += section_queue.top().m_I;
+
+            return std::make_pair(res, fevs);
+        }
     };
 
 }

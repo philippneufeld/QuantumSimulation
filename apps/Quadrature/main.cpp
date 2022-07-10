@@ -55,6 +55,10 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
         errors[i] = std::invoke(createErrorFunction<QuadTrapezoidalPolicy>(func, a, b, exact), ns[i]);
     ax.Plot(ns.data(), errors.data(), ns.size(), "trapezoid");
 
+    for (std::size_t i = 0; i < ns.size(); i++)
+        errors[i] = std::invoke(createErrorFunction<QuadFixedAdaptivePolicy>(func, a, b, exact), ns[i]);
+    ax.Plot(ns.data(), errors.data(), ns.size(), "ad2");
+
     // adaptive integrator
     std::size_t cnt = 2500;
     auto ns_ad1 = std::vector<double>(cnt);
@@ -79,38 +83,41 @@ void testIntegrators(const std::string& title, std::function<double(double)> fun
 
 int main(int argc, const char* argv[])
 {
-    /*PythonMatplotlib matplotlib;
-
-    testIntegrators("sin(x)*(1-x+x^2)", 
-        [](double x){ return std::sin(x) * (1 - x + x*x); }, 
-        0.0, 5.0, -15.01989999576955);
-
-    testIntegrators("1/(pi*(x^2+1))", 
-            [](double x){ return 1 / (Pi_v * (x*x + 1)); }, 
-            -2, 2, 0.7048327646991335);
-
+    // testIntegrators("sin(x)*(1-x+x^2)", 
+    //     [](double x){ return std::sin(x) * (1 - x + x*x); }, 
+    //     0.0, 5.0, -15.01989999576955);
+    // testIntegrators("1/(pi*(x^2+1))", 
+    //         [](double x){ return 1 / (Pi_v * (x*x + 1)); }, 
+    //         -2, 2, 0.7048327646991335);
     testIntegrators("1/(pi*(x^2+1))", 
             [](double x){ return 1 / (Pi_v * (x*x + 1)); }, 
             -250.0, 250.0, 0.9974535344916211);
+    // testIntegrators("sin(1/x)", 
+    //         [](double x){ return std::sin(1 / x); }, 
+    //         0.025, 1.0, 0.5044592407911533);
 
-    testIntegrators("sin(1/x)", 
-            [](double x){ return std::sin(1 / x); }, 
-            0.025, 1.0, 0.5044592407911533);
-            
-    matplotlib.RunGUILoop();*/
 
-    constexpr double x0 = 0.1872;
-    auto func = [](double x){ return 1 / (Pi_v * ((x-x0)*(x-x0) + 1)); };
-    double exact = TQuadrature<QuadMidpointPolicy>::Integrate(func, -250.0, 250.0, 1000000);
-    double atol = 1e-7;
-    double rtol = 1e-7;
-    std::size_t n = 300;
+    PythonMatplotlib matplotlib;
 
-    auto [I1, fevs1] = TQuadrature<QuadAdaptivePolicy>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
-    std::cout << std::abs(I1-exact) << " (" << fevs1 << ")" << std::endl;
+    std::vector<double> samples;
+    constexpr double x0 = 0.0;
+    auto func = [&](double x){ return 1 / (Pi_v * ((x-x0)*(x-x0) + 1)); };
+    auto func_tracked = [&](double x){ samples.push_back(x); return func(x); };
+    std::size_t n = 100;
 
-    auto [I2, fevs2] = TQuadrature<QuadAdaptivePolicy2>::IntegrateFevs(func, -250.0, 250.0, n, rtol, atol, 100);
-    std::cout << std::abs(I2-exact) << " (" << fevs2 << ")" << std::endl;
+    TQuadrature<QuadFixedAdaptivePolicy> quadrature;
+    auto [I2, fevs2] = quadrature.IntegrateFevs(func_tracked, -50.0, 50.0, n);
+
+    auto fig = matplotlib.CreateFigure();
+    auto ax1 = fig.AddSubplot(2, 1, 1);
+    auto ax2 = fig.AddSubplot(2, 1, 2);
+
+    auto samplesy = samples;
+    for (auto& s: samplesy) s = func(s);
+    ax1.Plot(samples.data(), samplesy.data(), samples.size(), "", ".");
+    ax2.Plot(samples.data(), std::vector<double>(samples.size(), 0.0).data(), samples.size(), "", ".");
+
+    matplotlib.RunGUILoop();
 }
 
 #else

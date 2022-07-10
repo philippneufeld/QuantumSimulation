@@ -34,8 +34,7 @@ int main(int argc, const char* argv[])
     double dt = 2e-10;
     auto rho0 = system.CreateGroundState();
     
-    TDopplerIntegrator<QuadMidpointPolicy> doppler;
-    doppler.SetIntegrationSteps(300);
+    TDopplerIntegrator<> doppler;
     doppler.SetMass(1.44316060e-25);
     doppler.SetTemperature(0);
 
