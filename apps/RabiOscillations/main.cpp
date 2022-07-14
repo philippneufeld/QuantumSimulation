@@ -3,8 +3,6 @@
 #include <Eigen/Dense>
 
 #include <QSim/NLevel/NLevelSystem.h>
-#include <QSim/NLevel/NLevelSystemQM.h>
-#include <QSim/NLevel/NLevelSystemSC.h>
 #include <QSim/NLevel/Doppler.h>
 
 #ifdef QSIM_PYTHON3
@@ -16,20 +14,14 @@ using namespace Eigen;
 
 int main(int argc, const char* argv[])
 {
-    constexpr double dip = 4.227 * ElementaryCharge_v * BohrRadius_v;
-    double intProbe = NLevelLaser::RabiToIntensity(dip, 30.5e6);
-
     double modPeriod = 1e-6;
-    ModulatedNLevelLaser laser({0, 1});
-    laser.SetIntensity(intProbe);
-    laser.SetModulationFunc([=](double t){ t = std::fmod(t, modPeriod); return t <= modPeriod / 2 ? 1.0 : 0.0; });
+    auto rabiFunc = [=](double t){ t = std::fmod(t, modPeriod); return 30.5e6 * (t <= modPeriod / 2 ? 1.0 : 0.0); }; 
 
-    TNLevelSystemSC<DynamicDim_v, true> system(2);
+    TNLevelSystem<DynamicDim_v, true> system(2);
     system.SetLevel(0, 0.0);
     system.SetLevel(1, SpeedOfLight_v / 780.241e-9);
     system.SetDecay(1, 0, 6.065e6);
-    system.SetDipoleElement(0, 1, dip);
-    system.AddLaser(laser);
+    system.AddCoupling(0, 1, rabiFunc);
 
     double dt = 2e-10;
     auto rho0 = system.CreateGroundState();
@@ -39,12 +31,12 @@ int main(int argc, const char* argv[])
     doppler.SetTemperature(0);
 
     // get properties of the system and the lasers
-    auto transitions = system.GetTransitionFreqs();
-    auto dirs = system.GetLaserDirs();
+    VectorXd resonanceFreqs = system.GetCouplingResonanceFreqs();
+    VectorXd dirs = VectorXd::Ones(resonanceFreqs.size());
 
     auto traj = doppler.Integrate([&](double vel)
     { 
-        VectorXd laserFreqs = doppler.ShiftFrequencies(transitions, dirs, vel);
+        VectorXd laserFreqs = doppler.ShiftFrequencies(resonanceFreqs, dirs, vel);
         auto rhos = system.GetTrajectory(laserFreqs, rho0, 0.0, 2e-6, dt);
         VectorXd pops(rhos.size());
         for (int i=0; i<rhos.size(); i++) 

@@ -1,15 +1,5 @@
 # Philipp Neufeld, 2021-2022
-# Fabian Munkes, 2022 (did the most work) as always!
 import sys
-
-sys.path.append(
-    "/mnt/ceph/file/groups/MicCells/TraceGasSensing/Measurements/2021/2021-Electric-Map-Eval"
-)
-
-import niceplot
-
-niceplot.thesis_defaults()
-niceplot.use_pgf()
 
 import subprocess
 
@@ -25,29 +15,30 @@ import matplotlib.pyplot as plt
 
 def freq_pprint(val):
     units = {1: "Hz", 1e3: "kHz", 1e6: "MHz", 1e9: "GHz"}
-    units = {
-        1: r"\hertz",
-        1e3: r"\kilo\hertz",
-        1e6: r"\mega\hertz",
-        1e9: r"\giga\hertz",
-    }
+    # units = {
+    #     1: r"\hertz",
+    #     1e3: r"\kilo\hertz",
+    #     1e6: r"\mega\hertz",
+    #     1e9: r"\giga\hertz",
+    # }
     for v in reversed(sorted(units)):
         if val > v:
-            # return f"${val / v:.2f}$ {units[v]}"
-            return f"\\SI{{{val/v:.2f}}}{{{units[v]}}}"
+            return f"${val / v:.2f}$ {units[v]}"
+            # return f"\\SI{{{val/v:.2f}}}{{{units[v]}}}"
     return "ERROR"
 
 
 if __name__ == "__main__":
 
     # filename = "Sim_Fine_03"
-    filename = "NORydExTD_20220503-093615_calcc"
+    # filename = "NORydExTD_20220503-093615_calcc"
+    filename = "NORydExTD_20220714-141446_ludwigsburg"
     dir_path = (
         "/home/PI5/pneufeld/remote_home/Masterarbeit/07_TimeDependence/01_Ion_modG"
     )
-    dir_path = (
-        "/mnt/ceph/file/users/pneufeld/Masterarbeit/07_TimeDependence/01_Ion_modG"
-    )
+    # dir_path = (
+    #     "/mnt/ceph/file/users/pneufeld/Masterarbeit/07_TimeDependence/01_Ion_modG"
+    # )
     path = os.path.join(dir_path, filename + ".h5")
 
     # trajs = [0, 100, 200, 300, 400]
@@ -74,7 +65,7 @@ if __name__ == "__main__":
             1,
             2,
             gridspec_kw={"width_ratios": [1, 2.5]},
-            figsize=niceplot.set_size(800, ratio=1 / 1.61803398875 / 2),
+            # figsize=niceplot.set_size(800, ratio=1 / 1.61803398875 / 2),
         )
         # ax2 = fig1.add_subplot(122) #, sharey = ax1)
         ax1.loglog()
@@ -89,13 +80,13 @@ if __name__ == "__main__":
             plt.plot(
                 data["t"][:] * 1e6,
                 data["populations"][:] * 1e7,
-                label=f"${freq_pprint(float(data.attrs['frequency']))}$",
+                label=f"{freq_pprint(float(data.attrs['frequency']))}",
             )
 
-        ax2.set_xlabel(r"Evolution time t (\si{\micro\s})")
+        ax2.set_xlabel("Evolution time t (ms)")
         ax2.set_ylabel("Relative ion population ($10^{-7}$)")
-        ax2.set_xlim((0, 1e-5 * 1e6))
-        ax2.set_ylim((-.4, 4.9))
+        # ax2.set_xlim((0, 1e-5 * 1e6))
+        # ax2.set_ylim((-.4, 4.9))
         ax2.legend(ncol=5, loc="upper center")
 
     # plt.show()

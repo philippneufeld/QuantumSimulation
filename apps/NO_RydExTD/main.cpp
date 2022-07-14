@@ -45,25 +45,6 @@ public:
         m_system.SetLevel(3, m_system.GetLevel(2) + SpeedOfLight_v / 834.92e-9);
         m_system.SetLevel(4, 9.27 * ElementaryCharge_v / PlanckConstant_v);
 
-        // add dipole matrix elements
-        m_system.SetDipoleElement(0, 1, 0.1595 * Debye_v); // https://doi.org/10.1093/mnras/stx1211
-        m_system.SetDipoleElement(1, 2, 1e-2 * Debye_v);
-        m_system.SetDipoleElement(2, 3, 1e-1 * Debye_v);
-
-        // add coupling lasers
-        using TLaser = ModulatedNLevelLaser;
-        double uvInt = TLaser::PowerToIntensity(0.05, m_beamRadius); // 50mW
-        double greenInt = TLaser::PowerToIntensity(1.0, m_beamRadius); // 1W
-        double redInt = TLaser::PowerToIntensity(0.5, m_beamRadius); // 500mW
-        m_system.AddLaser(TLaser({0, 1}, uvInt, 1.0));
-        m_system.AddLaser(TLaser({1, 2}, greenInt, -1.0));
-        m_system.AddLaser(TLaser({2, 3}, redInt, -1.0));
-
-        // print rabis
-        std::cout << "UV Rabi:" << TLaser::IntensityToRabi(std::real(m_system.GetDipoleElement(0, 1)), uvInt) / 1e6 << "MHz" << std::endl;
-        std::cout << "Green Rabi:" << TLaser::IntensityToRabi(std::real(m_system.GetDipoleElement(1, 2)), greenInt) / 1e6 << "MHz" << std::endl;
-        std::cout << "Red Rabi:" << TLaser::IntensityToRabi(std::real(m_system.GetDipoleElement(2, 3)), redInt) / 1e6 << "MHz" << std::endl;
-
         // set level decays
         m_system.AddDecay(1, 0, 13.8e6); // https://doi.org/10.1063/1.454958
         m_system.AddDecay(2, 1, 1.0e6);
@@ -91,8 +72,25 @@ public:
         std::cout << "GS collision rate: " << GetCollisionRate(2*xRadius) / 1e6 << "MHz" << std::endl;
 
         // initialize helper variables
-        m_transitions = m_system.GetTransitionFreqs();
-        m_laserDirs = m_system.GetLaserDirs();
+        m_laserDirs = Vector3d{1.0, -1.0, -1.0};
+    }
+
+    static void SetCouplings(TNLevelSystem<5, true>& sys, double greenModFreq)
+    {
+        sys.ClearCouplings();
+
+        sys.AddCoupling(0, 1, [](double) { return 3.5e6; });
+
+        double greenRabi = 1.0e6;
+        if (greenModFreq == 0)
+            sys.AddCoupling(1, 2, [=](double t){ return 1.0; });
+        else
+        {
+            double modPeriod = 1.0 / greenModFreq;
+            sys.AddCoupling(1, 2, [=](double t){ t = std::fmod(t, modPeriod); return t <= modPeriod / 2 ? 1.0 : 0.0; });
+        }
+
+        sys.AddCoupling(2, 3, [](double) { return 2.0e6; });
     }
 
     double GetCollisionRate(double rEff) const
@@ -113,17 +111,8 @@ public:
         auto sys = m_system;
 
         // modulate green laser
-        modFreq = std::abs(modFreq);
-        if (modFreq == 0)
-        {
-            sys.GetLaser(1).SetModulationFunc([=](double t){ return 1.0; });
-        }
-        else
-        {
-            double modPeriod = 1.0 / modFreq;
-            auto modFunc = [=](double t){ t = std::fmod(t, modPeriod); return t <= modPeriod / 2 ? 1.0 : 0.0; };
-            sys.GetLaser(1).SetModulationFunc(modFunc);
-        }     
+        SetCouplings(sys, std::abs(modFreq));
+        Vector3d resonanceFreqs = sys.GetCouplingResonanceFreqs();
 
         // calculate ionization rate (rate0 + rate1*rho_ion)
         double rate0 = GetCollisionRate(rydRadius + xRadius); // constant term
@@ -131,6 +120,7 @@ public:
 
         // starting point of the calculation
         auto rho0 = sys.CreateGroundState();
+        using Rho_t = decltype(rho0);
 
         // calculate appropriate amount of steps to obtain a dt near to the required dt
         unsigned int steps = static_cast<unsigned int>(std::ceil(t / dt));
@@ -151,24 +141,22 @@ public:
 
             // calculate laser frequencies
             Vector3d detunings(uvDet, greenDet, redDet);
-            Vector3d laserFreqs = m_transitions + detunings;
+            Vector3d laserFreqs = resonanceFreqs + detunings;
             
             // adjust laser frequencies for doppler shift
             laserFreqs = doppler.ShiftFrequencies(laserFreqs, m_laserDirs, vel);
-            const auto auxData = sys.GetHamiltonianAux(laserFreqs);
 
             // define function to be integrated (non-linearity included)
-            auto func = [&](double x, const decltype(rho0)& rho) 
+            auto func = [&](double x, const Rho_t& rho) 
             {
                 // non-linear dependece on ion population
                 double rhoIon = std::real(rho(4, 4));
                 sys.SetDecay(3, 4, rate0 + rate1*rhoIon);
 
-                return sys.GetDensityOpDerivativeFast(auxData, rho, x); 
+                return sys.GetDensityOpDerivative(laserFreqs, rho, x); 
             };
 
             // integrate trajectory
-            // TODEIntegrator<ODERK4Policy> integrator;
             TODEIntegrator<ODEAd54DPPolicy> integrator;
             auto rho = rho0;
             double dtEff = dt; // dt that is controlled by the adaptive stepsize control
@@ -190,7 +178,7 @@ public:
     }
 
 private:
-    TNLevelSystemSC<5, true> m_system;
+    TNLevelSystem<5, true> m_system;
 
     // environmental parameters
     double m_temperature;
@@ -199,7 +187,6 @@ private:
 
     // laser variables
     double m_beamRadius;
-    Vector3d m_transitions;
     Vector3d m_laserDirs;
 };
 

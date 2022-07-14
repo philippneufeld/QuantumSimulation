@@ -26,7 +26,8 @@ public:
         : m_beamRadius(1e-3), 
         m_mass(30.0061 * AtomicMassUnit_v), 
         m_temperature(300), 
-        m_pressure(10.0) // 1e-3 mbar = 100Pa
+        // m_pressure(10.0) // 1e-1 mbar = 10Pa
+        m_pressure(100.0) // 1 mbar = 100Pa
     {
         m_mass = 30.0061 * AtomicMassUnit_v;
         
@@ -37,18 +38,10 @@ public:
         m_system.SetLevel(3, m_system.GetLevel(2) + SpeedOfLight_v / 834.92e-9);
         m_system.SetLevel(4, 9.27 * ElementaryCharge_v / PlanckConstant_v);
 
-        // add dipole matrix elements
-        m_system.SetDipoleElement(0, 1, 0.1595 * Debye_v); // https://doi.org/10.1093/mnras/stx1211
-        m_system.SetDipoleElement(1, 2, 1e-2 * Debye_v);
-        m_system.SetDipoleElement(2, 3, 1e-1 * Debye_v);
-
         // add coupling lasers
-        double uvInt = NLevelLaser::PowerToIntensity(0.05, m_beamRadius); // 50mW
-        double greenInt = NLevelLaser::PowerToIntensity(1.0, m_beamRadius); // 1W
-        double redInt = NLevelLaser::PowerToIntensity(0.5, m_beamRadius); // 500mW
-        m_system.AddLaser(NLevelLaser({0, 1}, uvInt, 1.0));
-        m_system.AddLaser(NLevelLaser({1, 2}, greenInt, -1.0));
-        m_system.AddLaser(NLevelLaser({2, 3}, redInt, -1.0));
+        m_system.AddCoupling(0, 1, 3.5e6);
+        m_system.AddCoupling(1, 2, 1.0e6);
+        m_system.AddCoupling(2, 3, 2.0e6);
 
         // set level decays
         m_system.AddDecay(1, 0, 13.8e6); // https://doi.org/10.1063/1.454958
@@ -72,8 +65,8 @@ public:
         m_system.AddDecay(4, 0, rateRX);
 
         // initialize helper variables
-        m_transitions = m_system.GetTransitionFreqs();
-        m_laserDirs = m_system.GetLaserDirs();
+        m_resonanceFreqs = m_system.GetCouplingResonanceFreqs();
+        m_laserDirs = Vector3d{1.0, -1.0, -1.0};
     }
 
     double GetCollisionRate(double rEff) const
@@ -103,7 +96,7 @@ public:
         {
             // calculate laser frequencies
             Vector3d detunings(uvDet, greenDet, redDet);
-            Vector3d laserFreqs = m_transitions + detunings;
+            Vector3d laserFreqs = m_resonanceFreqs + detunings;
             
             // adjust laser frequencies for doppler shift
             laserFreqs = doppler.ShiftFrequencies(laserFreqs, m_laserDirs, vel);
@@ -131,7 +124,7 @@ public:
     }
 
 private:
-    TNLevelSystemQM<5> m_system;
+    TNLevelSystem<5> m_system;
 
     // environmental parameters
     double m_temperature;
@@ -140,7 +133,7 @@ private:
 
     // laser variables
     double m_beamRadius;
-    Vector3d m_transitions;
+    Vector3d m_resonanceFreqs;
     Vector3d m_laserDirs;
 };
 
