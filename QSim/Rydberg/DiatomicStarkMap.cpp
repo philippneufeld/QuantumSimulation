@@ -56,7 +56,8 @@ namespace QSim
                 // self dipole and self multielectron interaction
                 double selfDip = system.GetSelfDipoleME(m_basis[i1], m_basis[i2]);
                 double selfMulti = system.GetSelfMultiElectronME(m_basis[i1], m_basis[i2]);
-                m_hamiltonian0(i1, i2) += selfDip + selfMulti; // TODO: Fix
+                double selfEl = system.GetCoreInteractionME(m_basis[i1], m_basis[i2]);
+                m_hamiltonian0(i1, i2) += selfEl + selfDip; // TODO: Fix
                 m_hamiltonian0(i2, i1) = m_hamiltonian0(i1, i2);
 
                 // stark operators

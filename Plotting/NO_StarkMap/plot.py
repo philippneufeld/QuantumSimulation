@@ -149,7 +149,7 @@ def plot_starkmap_lines3(path):
     ax = fig.add_subplot(111)
 
     with h5py.File(path) as file:
-        keys = [k for k in file.keys() if k.isdecimal() and 0 <= int(k) <= 800]
+        keys = [k for k in file.keys() if k.isdecimal()]
         
         efields = np.empty(len(keys))
         stark_map = []
@@ -170,18 +170,19 @@ def plot_starkmap_lines3(path):
                     if stark_map[i][-1][0] != c:
                         stark_map[i].append((c, [energies[i]]))
 
-    for line in tqdm.tqdm(stark_map):
+    GHz = 299792458 * 1e-9 * 100
+    for line in stark_map:
         idx = 0
         for c, subline in line:
-            plt.plot(efields[idx: idx+len(subline)], subline, '-', color=COLOR_PALETTE[int(c), :])
+            plt.plot(efields[idx: idx+len(subline)], np.array(subline) * GHz, '-', color=COLOR_PALETTE[int(c), :])
             idx += len(subline) - 1
 
     # ax.set_xlim((0, 25))
     # ax.set_ylim((-66.5, -61.5))
-    ax.set_xlim((0, 2.5))
-    ax.set_ylim((-65, -63.6))
+    ax.set_xlim((0, 16))
+    ax.set_ylim((-2673, -2655))
     ax.set_xlabel("Electric field (V / cm)")
-    ax.set_ylabel("Energy / $hc$ (cm${}^{-1}$)")
+    ax.set_ylabel("Energy / $h$ (GHz)")
     fig.tight_layout()
 
     return fig, ax
@@ -195,9 +196,11 @@ if __name__ == '__main__':
         "panama": "/mnt/Data/pneufeld/Masterarbeit/06_StarkMap/03_NO/",
     }
     dir_path = dir_paths[socket.gethostname()]
-    paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-1:]
-
+    paths = sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-2:]
+    
     for path in paths:
+        print(path)
+
         # fig, ax = plot_starkmap_scatter(path)
         fig, ax = plot_starkmap_lines3(path)
         # fig, ax = plot_starkmap_lines2(path)

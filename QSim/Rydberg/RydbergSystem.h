@@ -46,8 +46,10 @@ namespace QSim
             std::size_t steps, std::size_t peakStepThreshold) const;
 
         // Helper for the calculation of the radial dipole matrix elements
+        static constexpr std::size_t s_defaultIntStepsPerOsc = 50;
+        double GetIntegrationRange(int n) const;
         double GetDipMeRadHelper(
-            const State& state1, const State& state2,
+            const State& state1, const State& state2, double rExp,
             double rmax1, double rmax2, std::size_t stepsPerOscillation) const;
 
     private:
@@ -174,12 +176,18 @@ namespace QSim
     }
 
     template<typename State>
+    double TRydbergSystem<State>::GetIntegrationRange(int n) const
+    {
+        return 3*(n+15)*n*BohrRadius_v;
+    }
+
+    template<typename State>
     double TRydbergSystem<State>::GetDipMeRadHelper(
-        const State& state1, const State& state2,
+        const State& state1, const State& state2, double rExp,
         double rmax1, double rmax2, std::size_t stepsPerOscillation) const
     {
         if (rmax1 > rmax2)
-            return this->GetDipMeRadHelper(state2, state1, rmax2, rmax1, stepsPerOscillation);
+            return this->GetDipMeRadHelper(state2, state1, rExp, rmax2, rmax1, stepsPerOscillation);
 
         double dx = std::sqrt(BohrRadius_v / (stepsPerOscillation * stepsPerOscillation));
         int cnt1 = static_cast<int>(std::ceil(std::sqrt(rmax1) / dx));
@@ -190,9 +198,9 @@ namespace QSim
         auto [x1, f1] = GetRadialWFTransformed(state1, dx, cnt1*dx, cnt1, peakStepThreshold);
         auto [x2, f2] = GetRadialWFTransformed(state2, dx, cnt2*dx, cnt2, peakStepThreshold);
         
-        auto x1Quad = x1.array().square().square().matrix();
+        auto x1Pow = x1.array().pow(2*(rExp + 1)).matrix();
         auto overlap = f1.cwiseProduct(f2.tail(cnt1));
-        auto integrand = overlap.cwiseProduct(x1Quad);
+        auto integrand = overlap.cwiseProduct(x1Pow);
 
         return 2 * QuadSimpsonPolicy::Integrate(integrand, dx);
     }

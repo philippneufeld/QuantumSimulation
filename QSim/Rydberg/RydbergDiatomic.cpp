@@ -6,6 +6,7 @@
 #include "../Constants.h"
 #include "QuantumDefects.h"
 
+#include <iostream> // TODO: Remove
 
 namespace QSim
 {
@@ -68,9 +69,9 @@ namespace QSim
             return 0.0;
 
         // radial rydberg matrix element
-        double rmax1 = 3*(n1+15)*n1*BohrRadius_v;
-        double rmax2 = 3*(n2+15)*n2*BohrRadius_v;
-        dip *= this->GetDipMeRadHelper(state1, state2, rmax1, rmax2, 50);
+        double rmax1 = this->GetIntegrationRange(n1);
+        double rmax2 = this->GetIntegrationRange(n2);
+        dip *= this->GetDipMeRadHelper(state1, state2, 1.0, rmax1, rmax2, s_defaultIntStepsPerOsc);
         dip *= std::sqrt(std::max(l1, l2)) * (l2 > l1 ? -1 : 1);
 
         return dip * ElementaryCharge_v;
@@ -102,10 +103,11 @@ namespace QSim
         double nu2 = n2 - mu2;
         double lambda1 = l1 - mu1;
         double lambda2 = l2 - mu2;
+        double dlambda = lambda1 - lambda2;
 
         // approximation: see Phys. Chem. Chem. Phys.,2021, 23, 18806
         double rad = 2.0 / (a0*a0 * std::pow(nu1*nu2, 1.5) * (lambda1 + lambda2 + 1));
-        rad *= std::sin(Pi_v * (lambda1 - lambda2)) / (Pi_v*(lambda1 - lambda2));
+        rad *= std::sin(Pi_v*dlambda) / (Pi_v*dlambda);
 
         return k * mu * rad * f;
     }
@@ -117,10 +119,10 @@ namespace QSim
         const auto [n2, l2, R2, N2, mN2] = state2;
 
         // selection rules
-        if (N1 != N2 || mN1 != mN2 || std::abs(R1-R2) != 2) // TODO: Delta R selection rule correct here?
+        if (N1 != N2 || mN1 != mN2 || (std::abs(R1-R2) != 2 && R1 != R2)) // TODO: Delta R selection rule correct here?
             return 0.0;
 
-        double hcoeff = this->GetConfigurationMixingCoeff(l1, R1, l2, R2, N1);
+        double hcoeff = this->GetConfigurationMixingCoeff(n1, n2, l1, R1, l2, R2, N1);
         if (hcoeff == 0.0)
             return 0.0;
         
@@ -191,8 +193,9 @@ namespace QSim
         return 0.4 * Debye_v;
     }
 
-    double NitricOxide::GetConfigurationMixingCoeff(int l1, int R1, int l2, int R2, int N) const
+    double NitricOxide::GetConfigurationMixingCoeff(int n1, int n2, int l1, int R1, int l2, int R2, int N) const
     {
+        // TODO: Remove
         const static std::array<const double*, 4> quantumDefects = {
             s_l0quantumDefects.data(), s_l1quantumDefects.data(),
             s_l2quantumDefects.data(), s_l3quantumDefects.data()
@@ -224,6 +227,73 @@ namespace QSim
         }
 
         return result;
+    }
+
+    double NitricOxide::GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
+            const RydbergDiatomicState_t& state2) const
+    {
+        const auto [n1, l1, R1, N1, mN1] = state1;
+        const auto [n2, l2, R2, N2, mN2] = state2;
+
+        // diagonal in N and mN
+        if (N1 != N2 || mN1 != mN2)
+            return 0.0;
+
+        // convert from Hund's case (b) to (d)
+        double result = 0;
+        for (int lambda = 0; lambda <= s_quantumDefectsLmax; lambda++)
+        {
+            double hcb = this->GetCoreInteractionHcb(n1, l1, R1, n2, l2, R2, lambda, N1);
+            double a1 = this->GetHcbToHcdCoeff(N1, l1, R1, lambda);
+            double a2 = this->GetHcbToHcdCoeff(N2, l2, R2, lambda);
+            result += hcb * a1 * a2;
+        }
+
+        return result;
+    }
+
+    double NitricOxide::GetCoreInteractionHcb(int n1, int l1, int R1, int n2, int l2, int R2, int lambda, int N) const
+    {
+        const static std::array<const double*, 4> quantumDefects = {
+            s_l0quantumDefects.data(), s_l1quantumDefects.data(),
+            s_l2quantumDefects.data(), s_l3quantumDefects.data()
+        };
+
+        // unphysical or no data available
+        if (l1 > lambda || l2 > lambda || lambda > quantumDefects.size())
+            return 0.0;
+
+        double result = 0;
+        
+        // diagonal part and l-l coupling
+        if (l1 == l2 && (R1 == R2 || std::abs(R1 - R2) == 2))
+            result = -quantumDefects[l1][lambda];
+        
+        // s-d mixing
+        if (R1 == R2 && lambda == 0)
+        {
+            constexpr double mixingAngle = -38.7 * Pi_v / 180.0;
+            double c = std::cos(mixingAngle);
+            double c2 = c*c;
+            double s2 = 1-c2;
+
+            if (l1 == 0 && l2 == 0)
+                result = -(c2*quantumDefects[0][0] + s2*quantumDefects[2][0]);
+            else if (l1 == 2 && l2 == 2)
+                result = -(c2*quantumDefects[2][0] + s2*quantumDefects[0][0]);
+            else if ((l1 == 0 && l2 == 2) || (l1 == 2 && l2 == 0))
+                result = -0.5 * std::sin(2*mixingAngle)*(quantumDefects[0][0] - quantumDefects[2][0]);  
+        }
+
+        // include prefactor in order to have units of energy and correct for
+        // electron-core distance scaling with the principal quantum numbers
+        double prefactor = 2 * SpeedOfLight_v * PlanckConstant_v;
+        double nEff1 = n1 - quantumDefects[l1][lambda];
+        double nEff2 = n2 - quantumDefects[l2][lambda];
+        prefactor *= this->GetScaledRydbergConstant() / std::pow(nEff1*nEff2, 1.5);
+        result *= prefactor;
+
+        return result; 
     }
 
 

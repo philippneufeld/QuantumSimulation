@@ -35,9 +35,9 @@ namespace QSim
         if (dip != 0)
         {
             // radial dipole matrix element
-            double rmax1 = 3*(n1+15)*n1*BohrRadius_v;
-            double rmax2 = 3*(n2+15)*n2*BohrRadius_v;
-            dip *= this->GetDipMeRadHelper(state1, state2, rmax1, rmax2, 50);
+            double rmax1 = this->GetIntegrationRange(n1);
+            double rmax2 = this->GetIntegrationRange(n2);
+            dip *= this->GetDipMeRadHelper(state1, state2, 1.0, rmax1, rmax2, s_defaultIntStepsPerOsc);
         }
 
         return dip * ElementaryCharge_v;

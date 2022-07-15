@@ -29,7 +29,9 @@ namespace QSim
         virtual double GetCoreDipoleMoment() const = 0;
 
         // coefficients needed for the multielectron correction
-        virtual double GetConfigurationMixingCoeff(int l1, int R1, int l2, int R2, int N) const = 0;
+        virtual double GetConfigurationMixingCoeff(int n1, int n2, int l1, int R1, int l2, int R2, int N) const = 0;
+        virtual double GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
+            const RydbergDiatomicState_t& state2) const = 0;
 
         virtual double GetEnergy(const RydbergDiatomicState_t& state) const override;
         virtual double GetPotential(double r, const RydbergDiatomicState_t& state) const override;
@@ -54,6 +56,7 @@ namespace QSim
         constexpr static std::array<double, 2> s_l1quantumDefects = { 0.7038, 0.7410 };
         constexpr static std::array<double, 3> s_l2quantumDefects = { 0.050, -0.053, 0.089 };
         constexpr static std::array<double, 4> s_l3quantumDefects = { 0.0182, 0.0172, 0.00128, 0.0057 };
+        constexpr static int s_quantumDefectsLmax = 3;
     public:
         NitricOxide();
         
@@ -62,7 +65,12 @@ namespace QSim
         virtual double GetCentrifugalDistConstant() const override;
         virtual double GetCoreDipoleMoment() const override;
 
-        virtual double GetConfigurationMixingCoeff(int l1, int R1, int l2, int R2, int N) const override;
+        virtual double GetConfigurationMixingCoeff(int n1, int n2, int l1, int R1, int l2, int R2, int N) const override;
+
+        virtual double GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
+            const RydbergDiatomicState_t& state2) const override;
+        double GetCoreInteractionHcb(int n1, int l1, int R1, int n2, int l2, int R2, int lambda, int N) const;
+        
     };
 
 }

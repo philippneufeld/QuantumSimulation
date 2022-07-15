@@ -45,16 +45,18 @@ public:
     void RunCalculation(const VectorXd& eField)
     {
         // constexpr double dE = 3.25 * EnergyInverseCm_v;
-        constexpr double dE = 1.0 * EnergyInverseCm_v;
+        constexpr double dE = 8.0 * EnergyInverseCm_v;
 
         // initialize calculation
         NitricOxide molecule;
-        RydbergDiatomicState_t state(38, 2, 2, 4, 0);
+        RydbergDiatomicState_t state(33, 2, 2, 0, 0);
         DiatomicStarkMap starkMap(molecule, state, 20, 70, 2, dE);
 
         // process basis
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
         AnalyzeBasis(basis);
+
+        std::cout << "Basis size: " << basis.size() << std::endl;
 
         // start i/o thread
         m_ioThread.Start(state, basis, dE);
@@ -296,7 +298,7 @@ int main(int argc, const char* argv[])
 
     // Run calculation
     NOStarkMapApp app(args.GetOptionStringValue("file"));
-    VectorXd eField = VectorXd::LinSpaced(500, 0.0, 2.5); // V cm^-1
+    VectorXd eField = VectorXd::LinSpaced(200, 0.0, 16.0); // V cm^-1
     app.RunCalculation(eField);
 
     return 0;
