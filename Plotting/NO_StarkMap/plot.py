@@ -174,13 +174,14 @@ def plot_starkmap_lines3(path):
     for line in stark_map:
         idx = 0
         for c, subline in line:
-            plt.plot(efields[idx: idx+len(subline)], np.array(subline) * GHz, '-', color=COLOR_PALETTE[int(c), :])
+            plt.plot(efields[idx: idx+len(subline)], np.array(subline) * GHz, '-', color=COLOR_PALETTE[np.clip(int(c), 0, len(COLOR_PALETTE)-1), :])
             idx += len(subline) - 1
 
     # ax.set_xlim((0, 25))
     # ax.set_ylim((-66.5, -61.5))
     ax.set_xlim((0, 16))
-    ax.set_ylim((-2673, -2655))
+    # ax.set_ylim((-2674, -2654))
+    ax.set_ylim((-1245, -1225))
     ax.set_xlabel("Electric field (V / cm)")
     ax.set_ylabel("Energy / $h$ (GHz)")
     fig.tight_layout()

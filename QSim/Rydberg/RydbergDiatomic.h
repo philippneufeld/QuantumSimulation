@@ -29,7 +29,6 @@ namespace QSim
         virtual double GetCoreDipoleMoment() const = 0;
 
         // coefficients needed for the multielectron correction
-        virtual double GetConfigurationMixingCoeff(int n1, int n2, int l1, int R1, int l2, int R2, int N) const = 0;
         virtual double GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const = 0;
 
@@ -41,9 +40,7 @@ namespace QSim
 
         double GetSelfDipoleME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const;
-        double GetSelfMultiElectronME(const RydbergDiatomicState_t& state1, 
-            const RydbergDiatomicState_t& state2) const;
-
+        
     protected:
         double GetHcbToHcdCoeff(int N, int l, int R, int lambda) const;
     };
@@ -64,8 +61,6 @@ namespace QSim
         virtual double GetRotationalConstant() const override;
         virtual double GetCentrifugalDistConstant() const override;
         virtual double GetCoreDipoleMoment() const override;
-
-        virtual double GetConfigurationMixingCoeff(int n1, int n2, int l1, int R1, int l2, int R2, int N) const override;
 
         virtual double GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const override;

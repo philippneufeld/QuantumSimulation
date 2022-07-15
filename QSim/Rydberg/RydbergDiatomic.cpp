@@ -112,28 +112,6 @@ namespace QSim
         return k * mu * rad * f;
     }
 
-    double RydbergDiatomic::GetSelfMultiElectronME(const RydbergDiatomicState_t& state1, 
-        const RydbergDiatomicState_t& state2) const
-    {
-        const auto [n1, l1, R1, N1, mN1] = state1;
-        const auto [n2, l2, R2, N2, mN2] = state2;
-
-        // selection rules
-        if (N1 != N2 || mN1 != mN2 || (std::abs(R1-R2) != 2 && R1 != R2)) // TODO: Delta R selection rule correct here?
-            return 0.0;
-
-        double hcoeff = this->GetConfigurationMixingCoeff(n1, n2, l1, R1, l2, R2, N1);
-        if (hcoeff == 0.0)
-            return 0.0;
-        
-        // adjusted quantum number n
-        double nu1 = n1 - this->GetQuantumDefect(state1);
-        double nu2 = n2 - this->GetQuantumDefect(state2);
-
-        constexpr double k = -2 * PlanckConstant_v * SpeedOfLight_v;
-        return k * this->GetScaledRydbergConstant() / std::pow(nu1*nu2, 1.5) * hcoeff;
-    }
-
     double RydbergDiatomic::GetHcbToHcdCoeff(int N, int l, int R, int lambda) const
     {
         double kronL0 = (lambda == 0 ? 1 : 0);
@@ -193,42 +171,6 @@ namespace QSim
         return 0.4 * Debye_v;
     }
 
-    double NitricOxide::GetConfigurationMixingCoeff(int n1, int n2, int l1, int R1, int l2, int R2, int N) const
-    {
-        // TODO: Remove
-        const static std::array<const double*, 4> quantumDefects = {
-            s_l0quantumDefects.data(), s_l1quantumDefects.data(),
-            s_l2quantumDefects.data(), s_l3quantumDefects.data()
-        };
-
-        constexpr double mixingAngle = -38.7 * Pi_v / 180.0;
-        double c = std::cos(mixingAngle);
-        double s = std::sin(mixingAngle);
-        double s2 = 0.5 * std::sin(2*mixingAngle);
-
-        double result = 0.0;
-        for (int lambda = 0; lambda < quantumDefects.size(); lambda++)
-        {
-            double hinner = 0.0;
-            if (lambda == 0 && ((l1 == 0 && l2 == 2) || (l1 == 2 && l2 == 0)))
-                    hinner = s2 * (quantumDefects[0][0] + quantumDefects[2][0]);
-            else if (lambda == 0 && l1 == 0 && l2 == 0)
-                    hinner = c*c*quantumDefects[0][0] + s*s*quantumDefects[2][0];
-            else if (lambda == 0 && l1 == 2 && l2 == 2)
-                    hinner = s*s*quantumDefects[0][0] + c*c*quantumDefects[2][0];
-            else if (l1 == l2 && l1 <= lambda)
-                hinner = quantumDefects[l1][lambda];
-            else
-                continue;
-            
-            result += hinner * 
-                this->GetHcbToHcdCoeff(N, l1, R1, lambda) * 
-                this->GetHcbToHcdCoeff(N, l2, R2, lambda);
-        }
-
-        return result;
-    }
-
     double NitricOxide::GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const
     {
@@ -268,7 +210,7 @@ namespace QSim
         // diagonal part and l-l coupling
         if (l1 == l2 && (R1 == R2 || std::abs(R1 - R2) == 2))
             result = -quantumDefects[l1][lambda];
-        
+
         // s-d mixing
         if (R1 == R2 && lambda == 0)
         {
@@ -282,7 +224,7 @@ namespace QSim
             else if (l1 == 2 && l2 == 2)
                 result = -(c2*quantumDefects[2][0] + s2*quantumDefects[0][0]);
             else if ((l1 == 0 && l2 == 2) || (l1 == 2 && l2 == 0))
-                result = -0.5 * std::sin(2*mixingAngle)*(quantumDefects[0][0] - quantumDefects[2][0]);  
+                result = -0.5 * std::sin(2*mixingAngle)*(quantumDefects[0][0] - quantumDefects[2][0]);
         }
 
         // include prefactor in order to have units of energy and correct for
