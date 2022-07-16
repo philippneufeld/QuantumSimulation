@@ -201,21 +201,31 @@ namespace QSim
             s_l2quantumDefects.data(), s_l3quantumDefects.data()
         };
 
+        constexpr double hc = SpeedOfLight_v * PlanckConstant_v;
+        double hcR = hc * this->GetScaledRydbergConstant();
+
         // unphysical or no data available
         if (l1 > lambda || l2 > lambda || lambda > quantumDefects.size())
             return 0.0;
 
+        double nEff1 = n1 - quantumDefects[l1][lambda];
+        double nEff2 = n2 - quantumDefects[l2][lambda];
+
         double result = 0;
+        constexpr double sdAngle = -38.7 * Pi_v / 180.0;
         
-        // diagonal part and l-l coupling
+        // diagonal terms already included
+        if (n1==n2 && l1==l2 && R1==R2)
+            return 0.0;
+
+        // l-l coupling
         if (l1 == l2 && (R1 == R2 || std::abs(R1 - R2) == 2))
             result = -quantumDefects[l1][lambda];
 
         // s-d mixing
         if (R1 == R2 && lambda == 0)
         {
-            constexpr double mixingAngle = -38.7 * Pi_v / 180.0;
-            double c = std::cos(mixingAngle);
+            double c = std::cos(sdAngle);
             double c2 = c*c;
             double s2 = 1-c2;
 
@@ -224,16 +234,12 @@ namespace QSim
             else if (l1 == 2 && l2 == 2)
                 result = -(c2*quantumDefects[2][0] + s2*quantumDefects[0][0]);
             else if ((l1 == 0 && l2 == 2) || (l1 == 2 && l2 == 0))
-                result = -0.5 * std::sin(2*mixingAngle)*(quantumDefects[0][0] - quantumDefects[2][0]);
+                result = -0.5 * std::sin(2*sdAngle)*(quantumDefects[0][0] - quantumDefects[2][0]);
         }
 
         // include prefactor in order to have units of energy and correct for
         // electron-core distance scaling with the principal quantum numbers
-        double prefactor = 2 * SpeedOfLight_v * PlanckConstant_v;
-        double nEff1 = n1 - quantumDefects[l1][lambda];
-        double nEff2 = n2 - quantumDefects[l2][lambda];
-        prefactor *= this->GetScaledRydbergConstant() / std::pow(nEff1*nEff2, 1.5);
-        result *= prefactor;
+        result *= 2 * hcR / std::pow(nEff1*nEff2, 1.5);
 
         return result; 
     }

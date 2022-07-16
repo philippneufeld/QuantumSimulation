@@ -51,12 +51,12 @@ namespace QSim
         m_dipoleOperator = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
         for (int i1 = 0; i1 < stateCnt; i1++)
         {
-            for (int i2 = 0; i2 < i1; i2++)
+            for (int i2 = 0; i2 <= i1; i2++)
             {
                 // self dipole and self multielectron interaction
                 double selfDip = system.GetSelfDipoleME(m_basis[i1], m_basis[i2]);
                 double selfEl = system.GetCoreInteractionME(m_basis[i1], m_basis[i2]);
-                m_hamiltonian0(i1, i2) += selfEl + selfDip; // TODO: Fix
+                m_hamiltonian0(i1, i2) += selfEl + selfDip;
                 m_hamiltonian0(i2, i1) = m_hamiltonian0(i1, i2);
 
                 // stark operators
