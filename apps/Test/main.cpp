@@ -22,7 +22,7 @@ int main(int argc, const char *argv[])
     int n = 4;
     for (int i = n; i<50; i++)
     {
-        double rydberg = molecule.GetEnergy(std::make_tuple(i, 3, 5, 0, 0));
+        double rydberg = molecule.GetEnergy(std::make_tuple(i, 3, 3, 0, 0));
         double lambda0 = SpeedOfLight_v * PlanckConstant_v / (rydberg - hstate) * 1e9;
         double err = std::abs(lambda-redLaserWL);
         

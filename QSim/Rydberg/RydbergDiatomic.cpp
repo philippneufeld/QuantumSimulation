@@ -214,7 +214,7 @@ namespace QSim
         double result = 0;
         constexpr double sdAngle = -38.7 * Pi_v / 180.0;
         
-        // diagonal terms already included
+        // diagonal terms already included TODO: Correct?
         if (n1==n2 && l1==l2 && R1==R2)
             return 0.0;
 

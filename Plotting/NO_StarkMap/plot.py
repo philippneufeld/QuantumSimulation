@@ -7,9 +7,11 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as col
+from matplotlib.collections import LineCollection
 from glob import glob
 
-COLOR_PALETTE = np.array([col.to_rgb(c) for c in ("black", "blue", "red", "green", "purple", "orange", "grey")])
+wavenumber_GHz = 299792458 * 1e-9 * 100
+COLOR_PALETTE = np.array([col.to_rgba(c) for c in ("black", "blue", "red", "green", "purple", "orange", "grey")])
 
 def plot_starkmap_scatter(path):
 
@@ -34,89 +36,46 @@ def plot_starkmap_scatter(path):
 
     return fig, ax
 
-def plot_starkmap_lines(path, color_mode=2):
+def color_rot(datagroup, basis):
+    return COLOR_PALETTE[np.clip(datagroup["Character"][:, 2].astype(int), 0, len(COLOR_PALETTE)-1)]
+
+def color_fcharacter(datagroup, basis):
+    mask = basis[:, 1] == 3
+    # mask = np.logical_or(basis[:, 1] == 3, basis[:, 1] == 1)
+    states = datagroup["States"][:,:]
+    fchar = np.clip(np.sum((states[mask,:]**2), axis=0), 0, 1)
+    return np.array([[1.0, 0.0, 0.0, x] for x in fchar])
+
+def plot_starkmap_lines(path, color_func, ymin=None, ymax=None):
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
     with h5py.File(path) as file:
         keys = [k for k in file.keys() if k.isdecimal()]
-        
         efields = np.empty(len(keys))
-        stark_map = []
+        stark_map = np.empty((len(file[keys[0]]["Energies"][:, 0]), len(keys)))
+        colors = np.empty((*stark_map.shape, 4))
+        basis = file["Basis"][:,:]
 
         for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
-            # load data from file
             efields[idx] = float(datagroup.attrs["Electric_Field"])
-            energies = np.array(datagroup["Energies"][:, 0])
-            characters = np.array(datagroup["Character"])
+            stark_map[:, idx] = np.array(datagroup["Energies"][:, 0]) * wavenumber_GHz
+            colors[:, idx, :] = color_func(datagroup, basis)
+            
+    for idx in range(len(stark_map)):
+        vertices = np.array([efields, stark_map[idx,:]]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([vertices[:-1], vertices[1:]], axis=1)
+        lc = LineCollection(segments, colors=colors[idx])
+        ax.add_collection(lc)
 
-            if idx == 0:
-                stark_map = [[(c, [e])] for c, e in zip(characters[:, color_mode], energies)]
-            else:
-                for i in range(len(stark_map)):
-                    c = characters[i, color_mode]
-                    stark_map[i][-1][1].append(energies[i])
-                    if stark_map[i][-1][0] != c:
-                        stark_map[i].append((c, [energies[i]]))
+    if ymin is None:
+        ymin = np.min(stark_map)
+    if ymax is None:
+        ymax = np.max(stark_map)
 
-    GHz = 299792458 * 1e-9 * 100
-    for line in stark_map:
-        idx = 0
-        for c, subline in line:
-            plt.plot(efields[idx: idx+len(subline)], np.array(subline) * GHz, '-', color=COLOR_PALETTE[np.clip(int(c), 0, len(COLOR_PALETTE)-1), :])
-            idx += len(subline) - 1
-
-    ax.set_xlim((0, 16))
-    ax.set_ylim((-4450, -4415))
-    ax.set_xlabel("Electric field (V / cm)")
-    ax.set_ylabel("Energy / $h$ (GHz)")
-    ax.set_title(os.path.basename(path))
-    fig.tight_layout()
-
-    return fig, ax
-
-
-def plot_starkmap_lines(path, color_mode=2):
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    with h5py.File(path) as file:
-        keys = [k for k in file.keys() if k.isdecimal()]
-        
-        efields = np.empty(len(keys))
-        stark_map = []
-
-        for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
-            # load data from file
-            efields[idx] = float(datagroup.attrs["Electric_Field"])
-            energies = np.array(datagroup["Energies"][:, 0])
-            states = np.array(datagroup["States"][:,:])
-            characters = np.array(datagroup["Character"])
-
-            if idx == 0:
-                stark_map = [[(c, [e])] for c, e in zip(characters[:, color_mode], energies)]
-            else:
-                for i in range(len(stark_map)):
-                    c = characters[i, color_mode]
-                    stark_map[i][-1][1].append(energies[i])
-                    if stark_map[i][-1][0] != c:
-                        stark_map[i].append((c, [energies[i]]))
-
-    GHz = 299792458 * 1e-9 * 100
-    for line in stark_map:
-        idx = 0
-        for c, subline in line:
-            plt.plot(efields[idx: idx+len(subline)], np.array(subline) * GHz, '-', color=COLOR_PALETTE[np.clip(int(c), 0, len(COLOR_PALETTE)-1), :])
-            idx += len(subline) - 1
-
-    ax.set_xlim((0, 16))
-    ax.set_ylim((-4450, -4415))
-    ax.set_xlabel("Electric field (V / cm)")
-    ax.set_ylabel("Energy / $h$ (GHz)")
-    ax.set_title(os.path.basename(path))
-    fig.tight_layout()
+    ax.set_xlim((np.min(efields), np.max(efields)))
+    ax.set_ylim((ymin, ymax))
 
     return fig, ax
 
@@ -133,7 +92,8 @@ if __name__ == '__main__':
     
     for path in paths:
         print(path)
-        fig, ax = plot_starkmap_lines(path)
+        fig, ax = plot_starkmap_lines(path, color_fcharacter) # , -4450, -4415)
+        fig, ax = plot_starkmap_lines(path, color_rot)
 
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".pdf"))
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".png"))
