@@ -44,8 +44,7 @@ public:
 
     void RunCalculation(const VectorXd& eField)
     {
-        // constexpr double dE = 3.25 * EnergyInverseCm_v;
-        constexpr double dE = 3.5 * EnergyInverseCm_v;
+        constexpr double dE = 1.5 * EnergyInverseCm_v;
 
         // initialize calculation
         NitricOxide molecule;
@@ -53,7 +52,11 @@ public:
         // DiatomicStarkMap starkMap(molecule, state, 10, 70, 2, dE);
         // RydbergDiatomicState_t state(33, 10, 5, 0, 0);
         // DiatomicStarkMap starkMap(molecule, state, 32, 34, 5, dE);
-        RydbergDiatomicState_t state(25, 2, 2, 0, 0);
+        // RydbergDiatomicState_t state(25, 2, 2, 0, 0);
+        // DiatomicStarkMap starkMap(molecule, state, 10, 70, 7, dE);
+        // RydbergDiatomicState_t state(40, 2, 0, 0, 0);
+        // DiatomicStarkMap starkMap(molecule, state, 10, 70, 4, dE);
+        RydbergDiatomicState_t state(27, 2, 4, 0, 0);
         DiatomicStarkMap starkMap(molecule, state, 10, 70, 7, dE);
 
         // process basis

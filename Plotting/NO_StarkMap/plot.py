@@ -40,11 +40,11 @@ def color_rot(datagroup, basis):
     return COLOR_PALETTE[np.clip(datagroup["Character"][:, 2].astype(int), 0, len(COLOR_PALETTE)-1)]
 
 def color_fcharacter(datagroup, basis):
-    mask = basis[:, 1] == 3
     # mask = np.logical_or(basis[:, 1] == 3, basis[:, 1] == 1)
     states = datagroup["States"][:,:]
-    fchar = np.clip(np.sum((states[mask,:]**2), axis=0), 0, 1)
-    return np.array([[1.0, 0.0, 0.0, x] for x in fchar])
+    pchar = np.clip(np.sum((states[basis[:, 1] == 1,:]**2), axis=0), 0, 1)
+    fchar = np.clip(np.sum((states[basis[:, 1] == 3,:]**2), axis=0), 0, 1)
+    return np.array([[0.5*(1+f), 0.0, 0.5*(1+p), f+p] for p, f in zip(pchar, fchar)])
 
 def plot_starkmap_lines(path, color_func, ymin=None, ymax=None):
 
@@ -92,8 +92,11 @@ if __name__ == '__main__':
     
     for path in paths:
         print(path)
-        fig, ax = plot_starkmap_lines(path, color_fcharacter) # , -4450, -4415)
-        fig, ax = plot_starkmap_lines(path, color_rot)
+        # fig, ax = plot_starkmap_lines(path, color_fcharacter) # , -4450, -4415)
+        # fig, ax = plot_starkmap_lines(path, color_rot) # , -1245, -1225)
+
+        fig, ax = plot_starkmap_lines(path, color_fcharacter) # , -8370, -8360)
+        fig, ax = plot_starkmap_lines(path, color_rot) # , -8370, -8360)
 
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".pdf"))
         # fig.savefig(os.path.join(dir_path, os.path.basename(path) + ".png"))

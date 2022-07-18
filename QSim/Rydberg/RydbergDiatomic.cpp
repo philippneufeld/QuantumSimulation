@@ -201,47 +201,52 @@ namespace QSim
             s_l2quantumDefects.data(), s_l3quantumDefects.data()
         };
 
-        constexpr double hc = SpeedOfLight_v * PlanckConstant_v;
-        double hcR = hc * this->GetScaledRydbergConstant();
-
-        // unphysical or no data available
-        if (l1 > lambda || l2 > lambda || lambda > quantumDefects.size())
+        // no data available
+        if (lambda >= quantumDefects.size())
             return 0.0;
 
-        double nEff1 = n1 - quantumDefects[l1][lambda];
-        double nEff2 = n2 - quantumDefects[l2][lambda];
-
         double result = 0;
-        constexpr double sdAngle = -38.7 * Pi_v / 180.0;
         
-        // diagonal terms already included TODO: Correct?
+        // diagonal terms already included
+        // 1 / (n - mu)^2 = 1/n^2 - 2*mu/n^3 + ...
         if (n1==n2 && l1==l2 && R1==R2)
             return 0.0;
 
-        // l-l coupling
-        if (l1 == l2 && (R1 == R2 || std::abs(R1 - R2) == 2))
-            result = -quantumDefects[l1][lambda];
-
-        // s-d mixing
-        if (R1 == R2 && lambda == 0)
+        // l-l coupling and s-d mixing (dR = even) see Vrakking et. al.
+        if (std::abs(R1 - R2) % 2 == 0)
         {
-            double c = std::cos(sdAngle);
-            double c2 = c*c;
-            double s2 = 1-c2;
+            // s-d mixing
+            if ((l1==0||l1==2) && (l2==0||l2==2) && lambda == 0)
+            {
+                constexpr double sdAngle = -38.7 * Pi_v / 180.0;
+                double c2 = [](double x){ return x*x; }(std::cos(sdAngle));
+                double s2 = 1 - c2;
 
-            if (l1 == 0 && l2 == 0)
-                result = -(c2*quantumDefects[0][0] + s2*quantumDefects[2][0]);
-            else if (l1 == 2 && l2 == 2)
-                result = -(c2*quantumDefects[2][0] + s2*quantumDefects[0][0]);
-            else if ((l1 == 0 && l2 == 2) || (l1 == 2 && l2 == 0))
-                result = -0.5 * std::sin(2*sdAngle)*(quantumDefects[0][0] - quantumDefects[2][0]);
+                double mus = quantumDefects[0][0];
+                double mud = quantumDefects[2][0];
+
+                if (l1 == 0 && l2 == 0)
+                    result = -(c2*mus + s2*mud);
+                else if (l1 == 2 && l2 == 2)
+                    result = -(c2*mud + s2*mus);
+                else
+                    result = -0.5*std::sin(2*sdAngle) * (mus - mud);
+
+                result /= std::pow((n1-mus)*(n1-mud)*(n2-mus)*(n2-mud), 0.75);
+            }
+            
+            // l-l coupling
+            else if (l1 == l2 && l1 <= lambda)
+            {
+                double mu = quantumDefects[l1][lambda];
+                result = -mu / std::pow((n1-mu)*(n2-mu), 1.5);
+            }
         }
 
-        // include prefactor in order to have units of energy and correct for
-        // electron-core distance scaling with the principal quantum numbers
-        result *= 2 * hcR / std::pow(nEff1*nEff2, 1.5);
-
-        return result; 
+        // unit correction
+        constexpr double hc = SpeedOfLight_v * PlanckConstant_v;
+        double hcR = hc * this->GetScaledRydbergConstant();
+        return 2 * hcR * result; 
     }
 
 

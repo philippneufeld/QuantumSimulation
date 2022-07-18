@@ -17,7 +17,7 @@ namespace QSim
         // generate basis
         for (int n = nMin; n <= nMax; n++)
         {
-            for (int l = 0; l <= n; l++)
+            for (int l = 0; l < n; l++)
             {
                 for (int R = 0; R <= RMax; R++)
                 {

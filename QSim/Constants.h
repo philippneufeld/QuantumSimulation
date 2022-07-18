@@ -41,6 +41,7 @@ namespace QSim
 
     // Unit conversions
     constexpr static double EnergyInverseCm_v = 100 * PlanckConstant_v * SpeedOfLight_v; // cm^-1 -> J
+    constexpr static double EnergyGHz_v = 1e9 * PlanckConstant_v; // cm^-1 -> J
 
 }
 

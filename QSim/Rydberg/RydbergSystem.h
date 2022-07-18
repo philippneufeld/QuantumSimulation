@@ -30,7 +30,7 @@ namespace QSim
         virtual double GetPotential(double r, const State& state) const = 0;
         virtual double GetDipoleME(const State& state1, const State& state2) const = 0;
 
-    protected:
+    public: // TODO: protected
         // Rydberg energy helpers
         double GetScaledRydbergConstant() const;
         double GetRydbergEnergy(int n, const State& state) const;
