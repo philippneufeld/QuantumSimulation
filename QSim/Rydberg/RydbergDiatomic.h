@@ -34,6 +34,8 @@ namespace QSim
 
         virtual double GetEnergy(const RydbergDiatomicState_t& state) const override;
         virtual double GetPotential(double r, const RydbergDiatomicState_t& state) const override;
+
+        double GetEnergyApprox(const RydbergDiatomicState_t& state) const;
         
         virtual double GetDipoleME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const override;

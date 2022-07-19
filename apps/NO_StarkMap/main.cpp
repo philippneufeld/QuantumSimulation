@@ -295,8 +295,8 @@ int main(int argc, const char* argv[])
 
     // Run calculation
     NOStarkMapApp app(args.GetOptionStringValue("file"));
-    VectorXd eField = VectorXd::LinSpaced(24, 0.0, 8.0); // V cm^-1
-    app.RunCalculation(100.0 * eField, -64*rcm, 4*rcm, 4, 0);
+    VectorXd eField = VectorXd::LinSpaced(12, 0.0, 12.0); // V cm^-1
+    app.RunCalculation(100.0 * eField, -64*rcm, 9*rcm, 4, 0);
 
     return 0;
 }

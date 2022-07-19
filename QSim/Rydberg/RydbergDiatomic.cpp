@@ -216,7 +216,7 @@ namespace QSim
         // if (std::abs(R1 - R2) % 2 == 0)
         if (std::abs(R1 - R2) == 2)
         {
-            // s-d mixing
+            // s-d mixing in the Lambda=0 channel
             if ((l1==0||l1==2) && (l2==0||l2==2) && lambda == 0)
             {
                 constexpr double sdAngle = -38.7 * Pi_v / 180.0;
@@ -237,12 +237,11 @@ namespace QSim
             }
             
             // l-l coupling
-            // else if (l1 == l2 && l1 <= lambda)
-            // else if (l1 == l2 && l1 <= lambda && (l1==0||l1==2) && (l2==0||l2==2))
-            // {
-            //     double mu = quantumDefects[l1][lambda];
-            //     result = -mu / std::pow((n1-mu)*(n2-mu), 1.5);
-            // }
+            else if (l1 == l2 && l1 >= lambda && l1 < quantumDefects.size())
+            {
+                double mu = quantumDefects[l1][lambda];
+                result = -mu / std::pow((n1-mu)*(n2-mu), 1.5);
+            }
         }
 
         // unit correction
