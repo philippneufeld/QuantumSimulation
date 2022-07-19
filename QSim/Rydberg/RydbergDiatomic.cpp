@@ -6,8 +6,6 @@
 #include "../Constants.h"
 #include "QuantumDefects.h"
 
-#include <iostream> // TODO: Remove
-
 namespace QSim
 {
 
@@ -231,7 +229,7 @@ namespace QSim
                 else if (l1 == 2 && l2 == 2)
                     result = -(c2*mud + s2*mus);
                 else
-                    result = -0.5*std::sin(2*sdAngle) * (mus + mud); // TODO: -
+                    result = -0.5*std::sin(2*sdAngle) * (mus + mud); // TODO: mus - mud
 
                 result /= std::pow((n1-mus)*(n1-mud)*(n2-mus)*(n2-mud), 0.75);
             }

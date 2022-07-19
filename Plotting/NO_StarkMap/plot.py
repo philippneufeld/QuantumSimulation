@@ -103,7 +103,7 @@ if __name__ == '__main__':
     paths = [
         # "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/NOStarkMap_20220719-110258_ludwigsburg.h5", # no additional terms
         # "/home/PI5/pneufeld/remote_home/Masterarbeit/06_StarkMap/03_NO/NOStarkMap_20220719-110542_ludwigsburg.h5", # dipole term
-        *sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-2:]
+        *sorted(glob(f"{dir_path}/NOStarkMap*.h5"))[-1:]
     ]
     
     for path in paths:

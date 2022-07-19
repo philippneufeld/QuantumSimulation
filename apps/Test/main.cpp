@@ -93,6 +93,7 @@ int main(int argc, const char *argv[])
 
     // H state -> 3d state
     // C. Jungen, Rydberg Series in the NO Spectrum: An Interpretation of Quantum Defects and Intensities in the sand d Series
+    constexpr double redLaserWL = 834.92e-9;
     constexpr double hc = SpeedOfLight_v * PlanckConstant_v;
     double threshold = 74720;
     double B = 1e-2 * molecule.GetRotationalConstant();
@@ -118,12 +119,18 @@ int main(int argc, const char *argv[])
 
     std::vector<std::tuple<double, int, int>> quantumNumbers;
 
+    double projectedRyd = hstate + hc / redLaserWL;
+    std::cout << "Approximate Rydberg energy: " 
+        << projectedRyd / EnergyGHz_v << "GHz /" 
+        << projectedRyd / EnergyInverseCm_v << "cm^-1"
+        << std::endl << std::endl;;
+
     for (int n = 4; n<=100; n++)
     {
         for (int R=0; R<=8; R++)
         {
             double rydberg = molecule.GetEnergy(std::make_tuple(n, 3, R, 0, 0));
-            double lambda = hc / (rydberg - hstate) * 1e9;
+            double lambda = hc / (rydberg - hstate);
             quantumNumbers.emplace_back(lambda, n, R);
 
         }
@@ -131,7 +138,6 @@ int main(int argc, const char *argv[])
 
     std::sort(quantumNumbers.begin(), quantumNumbers.end(), [=](auto x1, auto x2) 
     {
-        constexpr double redLaserWL = 834.92;
         auto [l1, n1, R1] = x1;
         auto [l2, n2, R2] = x2;
         return std::abs(l1-redLaserWL) < std::abs(l2-redLaserWL);
@@ -141,7 +147,7 @@ int main(int argc, const char *argv[])
     for (int i=0; i < 15 && i < quantumNumbers.size(); i++)
     {
         auto [lambda, n, R] = quantumNumbers[i];
-        std::cout << "n=" << n << " R=" << R << " (" << lambda << "nm)" << std::endl;
+        std::cout << "n=" << n << " R=" << R << " (" << lambda * 1e9 << "nm)" << std::endl;
     }
 
     return 0;

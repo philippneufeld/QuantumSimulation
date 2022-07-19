@@ -81,7 +81,7 @@ public:
 
         // do post processing
         std::cout << "Overlapping states..." << std::endl;
-        MatchStates(eFields);
+        MatchStates(eFields, basis.size());
 
         std::cout << "Data stored successfully (" << m_path << ")" << std::endl;
     }
@@ -147,20 +147,36 @@ protected:
         return character;
     }
     
-    void MatchStates(const VectorXd& eField)
+    void MatchStates(const VectorXd& eFields, int basisSize)
     {
         MatrixXd prevStates;
         VectorXd prevEnergies, prevEnergies2, extrEnergies;
+        
+        ProgressBar progress(eFields.size() - 1);
 
-        std::set<int> matched;
-        std::vector<int> indices;
-        ProgressBar progress(eField.size() - 1);
+        // Allocate memory
+        std::vector<double> overlapMax(basisSize);
+        std::vector<double> heuristicMax(basisSize);
+        std::vector<int> overlapIndices(basisSize);
+        std::vector<int> stateIndices(basisSize);
+
+        VectorXd energiesOrdered(basisSize);
+        MatrixXd statesOrdered(basisSize, basisSize);
+        Matrix<double, Dynamic, 4> characterOrdered(basisSize, 4);
+
+        MatrixXd overlaps(basisSize, basisSize);
+        MatrixXd energyDiffs(basisSize, basisSize);
+        MatrixXd heuristics;
+
+        std::vector<int> indices(basisSize);
+        for (int i=0; i<indices.size();i++)
+            indices[i] = i;
 
         auto nextDataPromise = m_ioThread.LoadData(0);
-        for(int i=0; i<eField.size(); i++)
+        for(int i=0; i<eFields.size(); i++)
         {
             auto [idx, ef, energies, states, character] = nextDataPromise.get();
-            if (i < eField.size() - 1)
+            if (i < eFields.size() - 1)
                 nextDataPromise = m_ioThread.LoadData(i + 1);
 
             // prepare ordering auxilliary variables
@@ -169,38 +185,26 @@ protected:
                 prevEnergies = energies;
                 prevEnergies2 = prevEnergies;
                 prevStates = states;
-                indices.resize(states.rows());
-                for (int i=0; i<states.rows();i++)
-                    indices[i] = i;
                 continue;
             }
-            matched.clear();
-            
-            VectorXd energiesOrdered(states.rows());
-            MatrixXd statesOrdered(states.rows(), states.cols());
-            Matrix<double, Dynamic, 4> characterOrdered(states.rows(), 4);
 
             // calculate heuristic matching criteria
-            MatrixXd overlaps = (states.transpose() * prevStates).cwiseAbs();
-            MatrixXd energyDiffs(overlaps.rows(), overlaps.cols());
+            overlaps = (states.transpose() * prevStates).cwiseAbs();
+            energyDiffs(overlaps.rows(), overlaps.cols());
             for (int i1=0; i1<energyDiffs.rows(); i1++)
             {
                 for (int i2=0; i2<energyDiffs.rows(); i2++)
                 {
                     extrEnergies = prevEnergies2;
                     if (i > 1)
-                        extrEnergies += (prevEnergies - prevEnergies2) / (eField[i-1] - eField[i - 2]) * (eField[i] - eField[i-2]);
+                        extrEnergies += (prevEnergies - prevEnergies2) / (eFields[i-1] - eFields[i - 2]) * (eFields[i] - eFields[i-2]);
                     energyDiffs(i1, i2) = std::abs(energies[i1] - extrEnergies[i2]);
                 }
             }
             energyDiffs /= energyDiffs.maxCoeff();
-            MatrixXd heuristics = overlaps - energyDiffs.cwiseSqrt();
+            heuristics = overlaps - energyDiffs.cwiseSqrt();
 
             // determine order in which states are processed
-            std::vector<double> overlapMax(states.rows());
-            std::vector<double> heuristicMax(states.rows());
-            std::vector<int> overlapIndices(states.rows());
-            std::vector<int> stateIndices(states.rows());
             for(int j=0; j<states.rows(); j++)
             {
                 stateIndices[j]= j;
@@ -208,16 +212,16 @@ protected:
                 heuristicMax[j] = heuristics.col(j).maxCoeff();
             }
 
-            std::stable_sort(stateIndices.begin(), stateIndices.end(), 
-                [&](int i1, int i2){ return overlapMax[i1]>overlapMax[i2]; });
-            
-            constexpr double threshold = 1 + 0.70710678118;
+            constexpr double threshold = 0.70710678118;
             auto it = stateIndices.begin();
+            std::sort(it, stateIndices.end(), 
+                [&](int i1, int i2){ return overlapMax[i1]>overlapMax[i2]; });
             for(; it < stateIndices.end() && overlapMax[*it] > threshold; it++);
-            std::stable_sort(it, stateIndices.end(), 
+            std::sort(it, stateIndices.end(), 
                 [&](int i1, int i2){ return heuristicMax[i1]>heuristicMax[i2]; });
 
             // do the actual matching procedure
+            std::set<int> matched;
             for(int j: stateIndices)
             {
                 auto overlap = overlaps.col(j);
@@ -228,7 +232,7 @@ protected:
                 // not already taken
                 if (overlapMax[j] <= threshold || matched.find(idx) != matched.end())
                 {
-                    std::stable_sort(indices.begin(), indices.end(), 
+                    std::sort(indices.begin(), indices.end(), 
                         [&](int i1, int i2){ return heuristic[i1]<heuristic[i2]; });
                     int k = indices.size();
                     while (matched.find(indices[--k]) != matched.end() && k >= 0);
@@ -295,8 +299,8 @@ int main(int argc, const char* argv[])
 
     // Run calculation
     NOStarkMapApp app(args.GetOptionStringValue("file"));
-    VectorXd eField = VectorXd::LinSpaced(12, 0.0, 12.0); // V cm^-1
-    app.RunCalculation(100.0 * eField, -64*rcm, 9*rcm, 4, 0);
+    VectorXd eFields = VectorXd::LinSpaced(250, 0.0, 25.0); // V cm^-1
+    app.RunCalculation(100.0 * eFields, -64*rcm, 20*rcm, 4, 0);
 
     return 0;
 }

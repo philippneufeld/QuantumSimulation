@@ -69,7 +69,6 @@ namespace QSim
 
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver;
         solver.compute(hamiltonian);
-
         Eigen::VectorXd energies = solver.eigenvalues();
         Eigen::MatrixXd states = solver.eigenvectors();
         
