@@ -7,13 +7,9 @@ namespace QSim
 {
     DiatomicStarkMap::DiatomicStarkMap(
         const RydbergDiatomic& system, 
-        const RydbergDiatomicState_t& state, int nMin, int nMax, int RMax, double maxEnergyDist)
+        int nMin, int nMax, int RMax, int mN, 
+        double centerEnergy, double maxEnergyDist)
     {
-        m_referenceStateIdx = -1;
-
-        auto [n, l, R, N, mN] = state;
-        double energy = system.GetEnergy(state);
-
         // generate basis
         for (int n = nMin; n <= nMax; n++)
         {
@@ -27,18 +23,13 @@ namespace QSim
                         if (std::abs(mN) <= N)
                         {
                             RydbergDiatomicState_t s(n, l, R, N, mN);
-                            
-                            if (std::abs(system.GetEnergy(s) - energy) <= maxEnergyDist)
+                            if (std::abs(system.GetEnergy(s) - centerEnergy) <= maxEnergyDist)
                                 m_basis.emplace_back(s);
                         }
                     }
                 }
             }
         }
-
-        auto it = std::find(m_basis.begin(), m_basis.end(), state);
-        if (it == m_basis.end()) m_basis.push_back(state);
-        m_referenceStateIdx = it - m_basis.begin();
 
         int stateCnt = m_basis.size();
 

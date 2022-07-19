@@ -20,8 +20,8 @@ public:
     IOThread(const std::string& path);
     ~IOThread();
 
-    bool Start(const QSim::RydbergDiatomicState_t& state, 
-        const std::vector<QSim::RydbergDiatomicState_t>& basis, double dE);
+    bool Start(const std::vector<QSim::RydbergDiatomicState_t>& basis, 
+        double energyCenter, double dE);
     void Stop();
 
     void StoreData(int i, double eField,

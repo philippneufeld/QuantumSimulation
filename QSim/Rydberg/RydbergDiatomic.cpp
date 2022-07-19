@@ -213,7 +213,8 @@ namespace QSim
             return 0.0;
 
         // l-l coupling and s-d mixing (dR = even) see Vrakking et. al.
-        if (std::abs(R1 - R2) % 2 == 0)
+        // if (std::abs(R1 - R2) % 2 == 0)
+        if (std::abs(R1 - R2) == 2)
         {
             // s-d mixing
             if ((l1==0||l1==2) && (l2==0||l2==2) && lambda == 0)
@@ -230,17 +231,18 @@ namespace QSim
                 else if (l1 == 2 && l2 == 2)
                     result = -(c2*mud + s2*mus);
                 else
-                    result = -0.5*std::sin(2*sdAngle) * (mus - mud);
+                    result = -0.5*std::sin(2*sdAngle) * (mus + mud); // TODO: -
 
                 result /= std::pow((n1-mus)*(n1-mud)*(n2-mus)*(n2-mud), 0.75);
             }
             
             // l-l coupling
-            else if (l1 == l2 && l1 <= lambda)
-            {
-                double mu = quantumDefects[l1][lambda];
-                result = -mu / std::pow((n1-mu)*(n2-mu), 1.5);
-            }
+            // else if (l1 == l2 && l1 <= lambda)
+            // else if (l1 == l2 && l1 <= lambda && (l1==0||l1==2) && (l2==0||l2==2))
+            // {
+            //     double mu = quantumDefects[l1][lambda];
+            //     result = -mu / std::pow((n1-mu)*(n2-mu), 1.5);
+            // }
         }
 
         // unit correction

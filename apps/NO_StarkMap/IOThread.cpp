@@ -20,8 +20,8 @@ IOThread::~IOThread()
     Stop();
 }
 
-bool IOThread::Start(const QSim::RydbergDiatomicState_t& state, 
-        const std::vector<QSim::RydbergDiatomicState_t>& basis, double dE)
+bool IOThread::Start(const std::vector<QSim::RydbergDiatomicState_t>& basis, 
+    double energyCenter, double dE)
 {
     DataFile file;
     if (!file.Open(m_path, DataFile_DEFAULT))
@@ -29,7 +29,7 @@ bool IOThread::Start(const QSim::RydbergDiatomicState_t& state,
     
     // write stark map parameters
     auto root = file.OpenRootGroup();
-    root.SetAttribute("State", StateToArray(state));
+    root.SetAttribute("Energy_Center", energyCenter);
     root.SetAttribute("Energy_Range", dE);
 
     // store basis

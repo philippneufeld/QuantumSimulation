@@ -42,22 +42,10 @@ public:
     NOStarkMapApp(const std::string path)
         : m_path(path), m_ioThread(path) { }
 
-    void RunCalculation(const VectorXd& eField)
+    void RunCalculation(const VectorXd& eFields, double energy, double dE, int Rmax, int mN)
     {
-        constexpr double dE = 1.5 * EnergyInverseCm_v;
-
         // initialize calculation
-        NitricOxide molecule;
-        // RydbergDiatomicState_t state(33, 10, 2, 0, 0);
-        // DiatomicStarkMap starkMap(molecule, state, 10, 70, 2, dE);
-        // RydbergDiatomicState_t state(33, 10, 5, 0, 0);
-        // DiatomicStarkMap starkMap(molecule, state, 32, 34, 5, dE);
-        // RydbergDiatomicState_t state(25, 2, 2, 0, 0);
-        // DiatomicStarkMap starkMap(molecule, state, 10, 70, 7, dE);
-        // RydbergDiatomicState_t state(40, 2, 0, 0, 0);
-        // DiatomicStarkMap starkMap(molecule, state, 10, 70, 4, dE);
-        RydbergDiatomicState_t state(27, 2, 4, 0, 0);
-        DiatomicStarkMap starkMap(molecule, state, 10, 70, 7, dE);
+        DiatomicStarkMap starkMap(NitricOxide{}, 1, 100, Rmax, mN, energy, dE);
 
         // process basis
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
@@ -66,24 +54,23 @@ public:
         std::cout << "Basis size: " << basis.size() << std::endl;
 
         // start i/o thread
-        m_ioThread.Start(state, basis, dE);
+        m_ioThread.Start(basis, energy, dE);
 
         // do the actual calculation
         ThreadPool pool(GetNumberOfCalcThreads());
-        ProgressBar progress(eField.size());
-        for (int i=0; i<eField.size(); i++)
+        ProgressBar progress(eFields.size());
+        for (int i=0; i<eFields.size(); i++)
         {
             pool.Submit([&,i=i]()
             {
                 // calculate eigenenergies and eigenstates
-                auto [energies, states] = starkMap.GetEnergiesAndStates(eField[i] * 100);
-                energies /= EnergyInverseCm_v;
+                auto [energies, states] = starkMap.GetEnergiesAndStates(eFields[i]);
                 
                 // get character of the states
                 auto character = DetermineStateCharacter(states);
 
                 // Store data
-                m_ioThread.StoreData(i, eField[i], energies, states, character);
+                m_ioThread.StoreData(i, eFields[i], energies, states, character);
                 progress.IncrementCount();
             });
         }
@@ -94,7 +81,7 @@ public:
 
         // do post processing
         std::cout << "Overlapping states..." << std::endl;
-        MatchStates(eField);
+        MatchStates(eFields);
 
         std::cout << "Data stored successfully (" << m_path << ")" << std::endl;
     }
@@ -303,10 +290,13 @@ int main(int argc, const char* argv[])
         return 0;
     }
 
+    constexpr double rcm = EnergyInverseCm_v;
+    constexpr double GHz = EnergyGHz_v;
+
     // Run calculation
     NOStarkMapApp app(args.GetOptionStringValue("file"));
-    VectorXd eField = VectorXd::LinSpaced(200, 0.0, 16.0); // V cm^-1
-    app.RunCalculation(eField);
+    VectorXd eField = VectorXd::LinSpaced(24, 0.0, 8.0); // V cm^-1
+    app.RunCalculation(100.0 * eField, -64*rcm, 4*rcm, 4, 0);
 
     return 0;
 }

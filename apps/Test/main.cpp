@@ -101,7 +101,7 @@ int main(int argc, const char *argv[])
     double Ja = Jx - 1;
     double Jh = Ja + 1;
 
-    double xstate = (-threshold + B*Jx*(Jx+1)) * EnergyInverseCm_v;
+    double xstate = (-threshold + B*Jx*(Jx+1) - B*0.5*1.5) * EnergyInverseCm_v;
     double astate = (-threshold + 44200 + B*Ja*(Ja+1)) * EnergyInverseCm_v;
     double hstate = (-threshold + 62705 + B*Jh*(Jh+1)) * EnergyInverseCm_v;
 
