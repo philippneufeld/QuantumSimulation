@@ -33,7 +33,7 @@ namespace QSim
         : m_stopThread(false), 
         m_startTs(std::chrono::high_resolution_clock::now()), 
         m_total(total), m_cnt(0), 
-        m_title(title), m_width(GetCLIWidth()), m_progressChar('#') 
+        m_title(title), m_progressChar('#') 
         { 
             m_currTs = m_startTs;
             m_thread = std::thread([&]() { WorkerThread(); });
@@ -190,12 +190,13 @@ namespace QSim
         
         std::unique_lock<std::mutex> lock(m_mutex);
 
+        std::size_t prevWidth = 0;
+
         while (!m_stopThread)
         {
             // store counts to local variables
             std::size_t cnt = m_cnt;
             std::size_t tot = m_total;
-            std::size_t width = m_width;
 
             // check exit condition (finish the loop iteration anyways)
             if (cnt >= tot)
@@ -212,7 +213,7 @@ namespace QSim
 
             // generate new bar string and print it if it differs 
             // from the previously printed string
-            std::string bar = GenerateBar(width, cnt, tot, elT, estTot - elT, cnt < tot);
+            std::string bar = GenerateBar(GetCLIWidth(), cnt, tot, elT, estTot - elT, cnt < tot);
             if (bar != currBar)
             {
                 std::cout << "\u001b[1000D" << bar << std::flush;
@@ -220,7 +221,7 @@ namespace QSim
             }
 
             // reaquire lock
-            lock.lock(); 
+            lock.lock();
             
             if (m_stopThread)
                 break;

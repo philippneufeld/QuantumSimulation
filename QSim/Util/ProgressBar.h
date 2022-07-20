@@ -53,7 +53,6 @@ namespace QSim
         // Constants (no need for mutex)
         const Timestamp_t m_startTs;
         const std::size_t m_total; 
-        const std::size_t m_width; 
         const std::string m_title;
         const char m_progressChar;
     };
