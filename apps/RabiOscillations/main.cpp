@@ -4,55 +4,62 @@
 
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
-
-#ifdef QSIM_PYTHON3
-#include <QSim/Python/Plotting.h>
-#endif
+#include <QSim/Util/DataFile.h>
 
 using namespace QSim;
 using namespace Eigen;
 
-int main(int argc, const char* argv[])
+std::pair<VectorXd, VectorXd> CalculateTrajectory(
+    double f0, double detuning, double rabi, double gamma, double tmax)
 {
-    double modPeriod = 1e-6;
-    auto rabiFunc = [=](double t){ t = std::fmod(t, modPeriod); return 30.5e6 * (t <= modPeriod / 2 ? 1.0 : 0.0); }; 
-
-    TNLevelSystem<DynamicDim_v, true> system(2);
-    system.SetLevel(0, 0.0);
-    system.SetLevel(1, SpeedOfLight_v / 780.241e-9);
-    system.SetDecay(1, 0, 6.065e6);
-    system.AddCoupling(0, 1, rabiFunc);
-
-    double dt = 2e-10;
-    auto rho0 = system.CreateGroundState();
-    
-    TDopplerIntegrator<> doppler;
-    doppler.SetMass(1.44316060e-25);
-    doppler.SetTemperature(0);
+    TNLevelSystem<2> system;
+    system.SetLevel(0, 0);
+    system.SetLevel(1, f0);
+    system.AddCoupling(0, 1, rabi);
+    system.AddDecay(1, 0, gamma);
 
     // get properties of the system and the lasers
-    VectorXd resonanceFreqs = system.GetCouplingResonanceFreqs();
-    VectorXd dirs = VectorXd::Ones(resonanceFreqs.size());
+    VectorXd laserFreqs = system.GetCouplingResonanceFreqs().array() + detuning;
 
-    auto traj = doppler.Integrate([&](double vel)
-    { 
-        VectorXd laserFreqs = doppler.ShiftFrequencies(resonanceFreqs, dirs, vel);
-        auto rhos = system.GetTrajectory(laserFreqs, rho0, 0.0, 2e-6, dt);
-        VectorXd pops(rhos.size());
-        for (int i=0; i<rhos.size(); i++) 
-            pops[i] = std::real(rhos[i](1, 1));
-        return pops;
-    });
+    // simulate trajectory
+    double dt = 1.0e-2 / std::max(rabi, gamma);
+    auto rhos = system.GetTrajectory(laserFreqs, system.CreateGroundState(), 0.0, tmax, dt);
+    auto ts = system.GetTrajectoryTimeaxis(0.0, dt, rhos.size());
+    
+    VectorXd pops(rhos.size());
+    for (int i=0; i<rhos.size(); i++) 
+        pops[i] = std::real(rhos[i](1, 1));
 
-    auto ts = system.GetTrajectoryTimeaxis(0.0, dt, traj.size());
+    return std::make_pair(ts, pops);
+}
 
-#ifdef QSIM_PYTHON3
-    PythonMatplotlib matplotlib;
-    auto fig = matplotlib.CreateFigure();
-    auto ax = fig.AddSubplot();
-    ax.Plot(ts.data(), traj.data(), ts.size());
-    matplotlib.RunGUILoop();
-#endif
+int main(int argc, const char* argv[])
+{
+    double rabi = 10.0e6;
+
+    std::map<std::string, std::pair<double, double>> sims;
+    sims["R0G0"] = {0*rabi, 0.0};
+    sims["R1G0"] = {1*rabi, 0.0};
+    sims["R2G0"] = {2*rabi, 0.0};
+    sims["R0G.1"] = {0*rabi, 0.1*rabi};
+    sims["R1G.1"] = {1*rabi, 0.1*rabi};
+    sims["R2G.1"] = {2*rabi, 0.1*rabi};
+
+    DataFile file;
+    file.Open("RabiOscillations.h5", DataFile_TRUNCATE);
+    auto root = file.OpenRootGroup();
+
+    for (auto it=sims.begin(); it!=sims.end(); it++)
+    {
+        auto [det, gamma] = it->second;
+        auto grp = root.CreateSubgroup(it->first);
+
+        auto [ts, pops] = CalculateTrajectory(1e15, det, rabi, gamma, 25.0 / rabi);
+        grp.CreateDataset("t", (ts * rabi * TwoPi_v).eval());
+        grp.CreateDataset("pop", pops);
+    }
+        
+    file.Close();
 
     return 0;
 }
