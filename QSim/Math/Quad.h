@@ -165,7 +165,7 @@ namespace QSim
                 auto from = i+1;
                 auto to = y.size() - 2;
 
-                if (from < to)
+                if (from <= to)
                 {
                     TMatrixElementType_t<YTy> resultInner = y[from];
                     for (auto j = from + ccnt; j <= to; j+=ccnt)

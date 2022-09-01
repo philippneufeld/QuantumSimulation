@@ -12,6 +12,12 @@ namespace QSim
     RydbergDiatomic::RydbergDiatomic(double mass) 
         : TRydbergSystem<RydbergDiatomicState_t>(mass) {}
     
+    int RydbergDiatomic::GetPrincipalQN(const RydbergDiatomicState_t& state) const
+    {
+        const auto [n, l, R, N, mN] = state;
+        return n;
+    }
+
     double RydbergDiatomic::GetEnergy(const RydbergDiatomicState_t& state) const
     {
         double energy = 0.0;

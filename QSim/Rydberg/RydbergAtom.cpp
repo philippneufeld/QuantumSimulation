@@ -13,6 +13,13 @@ namespace QSim
     RydbergAtom::RydbergAtom(double mass) 
         : TRydbergSystem<RydbergAtomState_t>(mass) {}
 
+    int RydbergAtom::GetPrincipalQN(const RydbergAtomState_t& state) const
+    {
+        const auto [n, l, j, mj] = state;
+        return n;
+    }
+
+
     double RydbergAtom::GetEnergy(const RydbergAtomState_t& state) const
     {
         const auto [n, l, j, mj] = state;

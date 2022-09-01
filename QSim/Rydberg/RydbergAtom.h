@@ -17,6 +17,8 @@ namespace QSim
     public:
         RydbergAtom(double mass);
 
+        virtual int GetPrincipalQN(const RydbergAtomState_t& state) const override;
+
         virtual double GetEnergy(const RydbergAtomState_t& state) const override;
         virtual double GetPotential(double r, const RydbergAtomState_t& state) const override;
 

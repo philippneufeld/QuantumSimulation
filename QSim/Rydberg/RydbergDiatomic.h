@@ -23,6 +23,8 @@ namespace QSim
     public:
         RydbergDiatomic(double mass);
 
+        virtual int GetPrincipalQN(const RydbergDiatomicState_t& state) const override;
+
         // Retrieve molecule specific constants
         virtual double GetRotationalConstant() const = 0;
         virtual double GetCentrifugalDistConstant() const = 0;

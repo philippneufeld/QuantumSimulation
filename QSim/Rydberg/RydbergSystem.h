@@ -25,12 +25,12 @@ namespace QSim
         double GetReducedMass() const;
 
         // Public interface -> functions must be overwritten by child class
+        virtual int GetPrincipalQN(const State& state) const = 0;
         virtual double GetQuantumDefect(const State& state) const = 0;
         virtual double GetEnergy(const State& state) const = 0;
         virtual double GetPotential(double r, const State& state) const = 0;
         virtual double GetDipoleME(const State& state1, const State& state2) const = 0;
 
-    public: // TODO: protected
         // Rydberg energy helpers
         double GetScaledRydbergConstant() const;
         double GetRydbergEnergy(int n, const State& state) const;
@@ -40,14 +40,19 @@ namespace QSim
         double GetAtomicPotential(double r, int n, int l) const;
         double GetAtomicPotentialFS(double r, int n, int l, double j) const;
 
-        // wavefunction in transformed variables (see function definition)
+        // wavefunction calculation
+        std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWF(
+            const State& state, std::size_t stepsPerOscillation) const;
+
+    protected:
+        // wavefunction calculation (transformed coordinates)
+        double GetIntegrationRange(int n) const;
+        static constexpr std::size_t s_defaultIntStepsPerOsc = 50;
         std::pair<Eigen::VectorXd, Eigen::VectorXd> GetRadialWFTransformed(
             const State& state, double xInner, double xOuter, 
             std::size_t steps, std::size_t peakStepThreshold) const;
-
+        
         // Helper for the calculation of the radial dipole matrix elements
-        static constexpr std::size_t s_defaultIntStepsPerOsc = 50;
-        double GetIntegrationRange(int n) const;
         double GetDipMeRadHelper(
             const State& state1, const State& state2, double rExp,
             double rmax1, double rmax2, std::size_t stepsPerOscillation) const;
@@ -146,6 +151,28 @@ namespace QSim
     }
 
     template<typename State>
+    double TRydbergSystem<State>::GetIntegrationRange(int n) const
+    {
+        return 3*(n+15)*n*BohrRadius_v;
+    }
+
+    template<typename State>
+    std::pair<Eigen::VectorXd, Eigen::VectorXd> TRydbergSystem<State>::GetRadialWF(
+        const State& state, std::size_t stepsPerOscillation) const
+    {
+        double rmax = GetIntegrationRange(GetPrincipalQN(state));
+        double dx = std::sqrt(BohrRadius_v / (stepsPerOscillation * stepsPerOscillation));
+        int cnt = static_cast<int>(std::ceil(std::sqrt(rmax) / dx));
+        
+        std::size_t peakStepThreshold = std::max<std::size_t>(stepsPerOscillation / 4, 3);
+        auto [xs, fs] = GetRadialWFTransformed(state, dx, cnt*dx, cnt, peakStepThreshold);
+
+        return std::make_pair(
+            xs.array().square().matrix().eval(),
+            (xs.array().pow(-1.5)*fs.array()).matrix().eval());
+    }
+
+    template<typename State>
     std::pair<Eigen::VectorXd, Eigen::VectorXd> TRydbergSystem<State>::GetRadialWFTransformed(
         const State& state, double xInner, double xOuter, 
         std::size_t steps, std::size_t peakStepThreshold) const
@@ -176,12 +203,6 @@ namespace QSim
     }
 
     template<typename State>
-    double TRydbergSystem<State>::GetIntegrationRange(int n) const
-    {
-        return 3*(n+15)*n*BohrRadius_v;
-    }
-
-    template<typename State>
     double TRydbergSystem<State>::GetDipMeRadHelper(
         const State& state1, const State& state2, double rExp,
         double rmax1, double rmax2, std::size_t stepsPerOscillation) const
@@ -194,7 +215,6 @@ namespace QSim
         int cnt2 = static_cast<int>(std::ceil(std::sqrt(rmax2) / dx));
 
         std::size_t peakStepThreshold = std::max<std::size_t>(stepsPerOscillation / 4, 3);
-
         auto [x1, f1] = GetRadialWFTransformed(state1, dx, cnt1*dx, cnt1, peakStepThreshold);
         auto [x2, f2] = GetRadialWFTransformed(state2, dx, cnt2*dx, cnt2, peakStepThreshold);
         
