@@ -74,6 +74,8 @@ namespace QSim
 
     public:
         constexpr static bool IsAdaptive_v = true;
+        constexpr static std::size_t OrderLower_v = 1;
+        constexpr static std::size_t OrderHigher_v = 2;
     
         template<typename Func, typename YTy>
         static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
@@ -107,6 +109,8 @@ namespace QSim
 
     public:
         constexpr static bool IsAdaptive_v = true;
+        constexpr static std::size_t OrderLower_v = 2;
+        constexpr static std::size_t OrderHigher_v = 3;
     
         template<typename Func, typename YTy>
         static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
@@ -133,6 +137,44 @@ namespace QSim
         }
     };
 
+    // Cash-Karp ode integrator
+    // https://doi.org/10.1145/79505.79507
+    class ODEAd54CKPolicy
+    {
+    protected:
+        ~ODEAd54CKPolicy() = default;
+
+    public:
+        constexpr static bool IsAdaptive_v = true;
+        constexpr static std::size_t OrderLower_v = 4;
+        constexpr static std::size_t OrderHigher_v = 5;
+    
+        template<typename Func, typename YTy>
+        static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
+            TMatrixMulResultFP_t<YTy, double>
+        {
+            return StepWithErrorEst(func, y, x, dx).first;
+        }
+
+        template<typename Func, typename YTy>
+        static auto StepWithErrorEst(Func&& func, YTy&& y, double x, double dx)
+        {
+            using RTy = TMatrixMulResultFP_t<YTy, double>;
+            
+            auto k1 = func(x, y);
+            auto k2 = func(x + (dx/5), y + (dx/5)*k1);
+            auto k3 = func(x + (3*dx/10), y + (3*dx/40)*k1 + (9*dx/40)*k2);
+            auto k4 = func(x + (3*dx/5), y + (3*dx/10)*k1 - (9*dx/10)*k2 + (6*dx/5)*k3); 
+            auto k5 = func(x + dx, y - (11*dx/54)*k1 + (5*dx/2)*k2 - (70*dx/27)*k3 + (35*dx/27)*k4); 
+            auto k6 = func(x + (7*dx/8), y + (1631*dx/55296)*k1 + (175*dx/512)*k2 + (575*dx/13824)*k3 + (44275*dx/110592)*k4 + (253*dx/4096)*k5); 
+            RTy dy1 = (2825*dx/27648)*k1 + (18575*dx/48384)*k3 + (13525*dx/55296)*k4 + (277*dx/14336)*k5 + (dx/4)*k6;  
+            RTy dy2 = (37*dx/378)*k1 + (250*dx/621)*k3 + (125*dx/594)*k4 + (512*dx/1771)*k6;
+            RTy err = dy2 - dy1;
+
+            return std::make_pair(dy2, err);
+        }
+    };
+
     // Dormand–Prince ode integrator
     // see https://doi.org/10.1016/0771-050X(80)90013-3
     class ODEAd54DPPolicy
@@ -142,6 +184,8 @@ namespace QSim
 
     public:
         constexpr static bool IsAdaptive_v = true;
+        constexpr static std::size_t OrderLower_v = 4;
+        constexpr static std::size_t OrderHigher_v = 5;
     
         template<typename Func, typename YTy>
         static auto Step(Func&& func, YTy&& y, double x, double dx) -> 
@@ -221,27 +265,21 @@ namespace QSim
             : public TODEIntegratorHelperFixed<ODEStepperPolicy>
         {
         public:
-            TODEIntegratorHelper() : m_adjust(std::sqrt(2.0)), 
-                m_lowerThreshold(1e-10), m_upperThreshold(1e-8) {}
+            TODEIntegratorHelper() : m_precision(1e-10), m_safetyFactor(0.95) {}
 
-            void SetAdjustmentFactor(double adjust) { m_adjust = adjust; }
-            void SetLowerThreshold(double lower) { m_lowerThreshold = lower; }
-            void SetUpperThreshold(double upper) { m_upperThreshold = upper; }
+            void SetPrecision(double precision) { m_precision = precision; }
+            void SetSafetyFactor(double safety) { m_safetyFactor = safety; }
 
-            double GetAdjustmentFactor() const { return m_adjust; }
-            double GetLowerThreshold() const { return m_lowerThreshold; }
-            double GetUpperThreshold() const { return m_upperThreshold; }
+            double SetPrecision(double precision) const { return m_precision; }
+            double SetSafetyFactor(double safety) const { return m_safetyFactor; }
 
             template<typename Func, typename Y0Ty>
             auto IntegrateTo(Func&& func, Y0Ty&& y0, double x, double x1, double& dx)
             {
-                using YTy = TMatrixMulResultFP_t<Y0Ty, double>;
-                using YTyAbs = decltype(TMatrixCwiseAbs<YTy>::Get(std::declval<YTy>()));
-                
-                // bounds
-                YTyAbs ones = TMatrixOnesLike<YTyAbs>::Get(TMatrixCwiseAbs<YTy>::Get(y0));
-                YTyAbs maxError = ones * m_upperThreshold;
-                YTyAbs minError = ones * m_lowerThreshold;
+                using YTy = TMatrixMulResultFP_t<Y0Ty, double>;                
+                using YTyAbsMax = TMatrixMulResultFP_t<decltype(TMatrixAbsMax<YTy>::Get(std::declval<YTy>())), double>;
+                constexpr double exponentInc = 1.0 / (ODEStepperPolicy::OrderLower_v);
+                constexpr double exponentDec = 1.0 / (ODEStepperPolicy::OrderLower_v + 1);
 
                 YTy y = std::forward<Y0Ty>(y0);
                 
@@ -249,30 +287,35 @@ namespace QSim
                 {
                     double dxEff = std::min(x1 - x, dx);
                     auto [dy, err] = ODEStepperPolicy::StepWithErrorEst(func, y, x, dxEff);
-                    YTyAbs absErr = TMatrixCwiseAbs<YTy>::Get(err);
+
+                    YTyAbsMax maxErr = TMatrixAbsMax<YTy>::Get(err);
                     
-                    if (TMatrixAnyCwiseLess<YTyAbs>::Get(maxError, absErr))
+                    double adjust = 1.0;
+                    if (maxErr > m_precision)
                     {
-                        dx = dxEff / m_adjust;
+                        // don't accept and decrease step size
+                        adjust = std::max(0.1, m_safetyFactor * std::pow(m_precision / maxErr, exponentDec));    
                     }
                     else
                     {
-                        // accept update update
+                        // increase step size if needed
+                        if (!(dxEff < dx)) // ignore remainder step
+                            adjust = std::min(10.0, m_safetyFactor * std::pow(m_precision / maxErr, exponentInc));
+                        
+                        // accept
                         x += dxEff;
                         y += dy;
-
-                        if (TMatrixAnyCwiseLess<YTyAbs>::Get(absErr, minError) && !(dxEff < dx))
-                            dx *= m_adjust;
                     }
+
+                    dx = dxEff * adjust;
                 }
 
                 return y;
             }
 
         private:
-            double m_adjust;
-            double m_lowerThreshold;
-            double m_upperThreshold;
+            double m_precision;
+            double m_safetyFactor;
         };
     }
 

@@ -238,6 +238,42 @@ namespace QSim
     };
 
     //
+    // TMatrixMax
+    // Implements a unifying interface for calculating the 
+    // maximum value of a matrix of values
+    //
+    template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
+    struct TMatrixMax
+    {
+        static_assert(TIsMatrix_v<Ty>);
+        static auto Get(const Ty& mat) { return mat.max(); }
+    };
+    template<typename Ty>
+    struct TMatrixMax<Ty, false>
+    {
+        static_assert(!TIsMatrix_v<Ty>);
+        static auto Get(const Ty& val) { return val; }
+    };
+
+    //
+    // TMatrixAbsMax
+    // Implements a unifying interface for calculating the 
+    // absolute maximum value of a matrix of values
+    //
+    template<typename Ty, bool isMat=TIsMatrix_v<Ty>>
+    struct TMatrixAbsMax
+    {
+        static_assert(TIsMatrix_v<Ty>);
+        static auto Get(const Ty& mat) { return mat.cwiseAbs().maxCoeff(); }
+    };
+    template<typename Ty>
+    struct TMatrixAbsMax<Ty, false>
+    {
+        static_assert(!TIsMatrix_v<Ty>);
+        static auto Get(const Ty& val) { return std::abs(val); }
+    };
+
+    //
     // TMatrixCwiseAbs
     // Implements a unifying interface for calculating the 
     // componentwise absolute value (works for matrices and scalars)

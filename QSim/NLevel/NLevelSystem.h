@@ -62,6 +62,8 @@ namespace QSim
         bool AddDecay(unsigned int from, unsigned int to, double rate);
 
         // level coupulings
+        Rabi_t& GetCoupling(unsigned int cidx) { return std::get<2>(m_couplings[cidx]); }
+        const Rabi_t& GetCoupling(unsigned int cidx) const { return std::get<2>(m_couplings[cidx]); }
         bool AddCoupling(unsigned int l1, unsigned int l2, Rabi_t rabi);
         void ClearCouplings();
         Eigen::VectorXd GetCouplingResonanceFreqs() const;
@@ -333,7 +335,7 @@ namespace QSim
         dt = (t-t0) / steps;
 
         // define integrator and function to be integrated
-        TODEIntegrator<ODEAd54DPPolicy> integrator;
+        TODEIntegrator<ODEAd54CKPolicy> integrator;
         using YType = MatOp_t;
         auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(laserFreqs, y, x); };
 
@@ -347,7 +349,7 @@ namespace QSim
         double t0, double t, double tav, double dt)
     {
         // define integrator and function to be integrated
-        TODEIntegrator<ODEAd54DPPolicy> integrator;
+        TODEIntegrator<ODEAd54CKPolicy> integrator;
         using YType = MatOp_t;
         auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(laserFreqs, y, x); };
         
@@ -398,7 +400,7 @@ namespace QSim
         trajectory.push_back(rho0);
 
         // define integrator and function to be integrated
-        TODEIntegrator<ODEAd54DPPolicy> integrator;
+        TODEIntegrator<ODEAd54CKPolicy> integrator;
         using YType = MatOp_t;
         auto func = [&](double x, const YType& y) { return GetDensityOpDerivative(laserFreqs, y, x); };
         

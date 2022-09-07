@@ -41,7 +41,7 @@ int main(int argc, const char *argv[])
 {
     NitricOxide molecule;
 
-    int n1 = 33;
+    /*int n1 = 33;
     int n2 = 33;
     int l1 = 1;
     int l2 = 2;
@@ -89,7 +89,7 @@ int main(int argc, const char *argv[])
         }
         std::cout << "______|___________________|" << std::endl;
     }
-    std::cout << std::endl;
+    std::cout << std::endl;*/
 
     // H state -> 3d state
     // C. Jungen, Rydberg Series in the NO Spectrum: An Interpretation of Quantum Defects and Intensities in the sand d Series
