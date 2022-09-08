@@ -249,12 +249,12 @@ int main(int argc, const char* argv[])
     double rabiHR = 1.0e6;
 
     double fmin = 5e4;
-    double fmax = 1e10;
+    double fmax = 1e9;
     
     double dt = 1e-9;
-    double tmin = 1e-4;
+    double tmin = 1e-5;
 
-    std::string filename = RunSimulation(rabiXA, rabiAH, rabiHR, fmin, fmax, 300, tmin, dt, 50);
+    std::string filename = RunSimulation(rabiXA, rabiAH, rabiHR, fmin, fmax, 300, tmin, dt, 2);
 
     std::string dstPath = GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/07_TimeDependence/01_Ion_modG/" + filename;
     if (MoveFile(filename, dstPath))
