@@ -186,8 +186,9 @@ std::pair<VectorXd, VectorXd> GenerateTrace(TNOGasSensor<true> gasSensor, double
 {
     double tsim = std::max(osc / freq, std::ceil(tmin*freq)/freq);
     double period = 1.0 / freq;
+    dt = std::min(0.025*period, dt);
     gasSensor.SetRabiGreen([=](double t){ t = std::fmod(t, period); return t <= period / 2 ? rabiAH : 0.0; });
-    return gasSensor.GetPopulationsTrajectory(0, 0, 0, 5e-6, dt);
+    return gasSensor.GetPopulationsTrajectory(0, 0, 0, tsim, dt);
 }
 
 std::string RunSimulation(double rabiXA, double rabiAH, double rabiHR, double fmin, 
@@ -247,8 +248,8 @@ int main(int argc, const char* argv[])
     double rabiAH = 1.0e6;
     double rabiHR = 1.0e6;
 
-    double fmin = 7.5e4;
-    double fmax = 1e9;
+    double fmin = 5e4;
+    double fmax = 1e10;
     
     double dt = 1e-9;
     double tmin = 1e-4;
