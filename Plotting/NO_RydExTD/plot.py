@@ -23,13 +23,13 @@ def freq_pprint(val):
 
 if __name__ == "__main__":
 
-    filename = "NORydExTD_20220907-233123_calcc"
+    filename = "NORydExTD_20220908-231018_calcc"
     dir_path = (
         "/home/PI5/pneufeld/remote_home/Masterarbeit/07_TimeDependence/01_Ion_modG"
     )
     path = os.path.join(dir_path, filename + ".h5")
 
-    trajs = sorted([40, 80, 120, 260])
+    trajs = sorted([40, 80, 120, 160, 200])
 
     with h5py.File(path) as file:
         fig1, (ax1, ax2) = plt.subplots(
@@ -41,17 +41,14 @@ if __name__ == "__main__":
         freqs = np.zeros(n)
         pops = np.zeros_like(freqs)
         
-        for k, v in file.items():
+        tth = 2e-5
+        for k, v in tqdm.tqdm(file.items()):
             idx = int(k)
             freq = v.attrs["frequency"][0]
             freqs[idx] = freq
-            tmin = np.ceil(v["t"][-1] / 2 * freq) / freq
-            tmax = v["t"][-1]
-            rng = np.logical_and(v["t"][:] >= tmin, v["t"][:] <= tmax)
-            pops[idx] = np.max(v["populations"][:][rng])
+            tmin = np.floor(tth * freq) / freq
+            pops[idx] = np.average(v["populations"][:][v["t"][:] >= tmin])
 
-        # freqs = file["frequencies"][:]
-        # pops = file["populations"][:]
         ax1.loglog()
         ax1.plot(freqs, np.array(pops) * 1e7)
         ax1.set_xlabel("Chop frequency of intermediate laser (Hz)")
@@ -67,7 +64,7 @@ if __name__ == "__main__":
                 label=f"{freq_pprint(float(data.attrs['frequency']))}",
             )
 
-        ax2.set_xlabel("Evolution time t (ms)")
+        ax2.set_xlabel("Evolution time t (\si{\micro s})")
         ax2.set_ylabel("Relative ion population ($10^{-7}$)")
         ax2.legend(ncol=5, loc="upper center")
 
