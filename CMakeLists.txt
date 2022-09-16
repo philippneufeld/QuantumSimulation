@@ -1,6 +1,7 @@
 # Philipp Neufeld, 2021-2022
 
 cmake_minimum_required (VERSION 3.17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # don't allow build in the source directory
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)

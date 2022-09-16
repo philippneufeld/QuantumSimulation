@@ -11,7 +11,7 @@ from matplotlib.collections import LineCollection
 from glob import glob
 
 energyInvCm = 100 * 299792458 * 6.626e-34
-energyGHz = 6.626e-34 * 1e-9
+energyGHz = 6.626e-34 * 1e9
 
 COLOR_PALETTE = np.array([col.to_rgba(c) for c in ("black", "blue", "red", "green", "purple", "orange", "grey")])
 
@@ -86,7 +86,7 @@ def plot_starkmap_lines(path, color_func, unit=energyInvCm, ymin=None, ymax=None
     ax.set_xlabel("Electric field (Vcm^-1)")
     ax.set_ylabel("Energy")
 
-    ax.set_xlim((np.min(efields), np.max([25, *efields])))
+    ax.set_xlim((np.min(efields), np.max([*efields])))
     ax.set_ylim((ymin, ymax))
 
     return fig, ax
@@ -109,6 +109,6 @@ if __name__ == '__main__':
     for path in paths:
         print(path)
         # fig, ax = plot_starkmap_lines(path, color_fcharacter, energyInvCm)
-        fig, ax = plot_starkmap_lines(path, color_rot, energyInvCm, -66.5, -61.5)
+        fig, ax = plot_starkmap_lines(path, color_rot, energyGHz) # , -66.5, -61.5)
 
     plt.show()

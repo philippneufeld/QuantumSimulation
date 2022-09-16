@@ -297,10 +297,15 @@ int main(int argc, const char* argv[])
     constexpr double rcm = EnergyInverseCm_v;
     constexpr double GHz = EnergyGHz_v;
 
+    // find state
+    NitricOxide molecule;
+    double energy = molecule.GetEnergy(RydbergDiatomicState_t(18, 10, 2, 10, 0));
+    std::cout << "State energy: " << energy / EnergyGHz_v << "GHz" << std::endl;
+
     // Run calculation
     NOStarkMapApp app(args.GetOptionStringValue("file"));
-    VectorXd eFields = VectorXd::LinSpaced(250, 0.0, 25.0); // V cm^-1
-    app.RunCalculation(100.0 * eFields, -64*rcm, 20*rcm, 4, 0);
+    VectorXd eFields = VectorXd::LinSpaced(64, 0.0, 7.0); // V cm^-1
+    app.RunCalculation(100.0 * eFields, energy, 15*rcm, 4, 0);
 
     return 0;
 }
