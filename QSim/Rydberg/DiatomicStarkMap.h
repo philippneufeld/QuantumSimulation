@@ -18,7 +18,7 @@ namespace QSim
     public:
         DiatomicStarkMap(
             const RydbergDiatomic& system, 
-            int nMin, int nMax, int RMax, int mN,
+            int nMin, int nMax, int RMin, int RMax, int mN,
             double centerEnergy, double maxEnergyDist);
         
         // getter

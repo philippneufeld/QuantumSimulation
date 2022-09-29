@@ -7,7 +7,7 @@ namespace QSim
 {
     DiatomicStarkMap::DiatomicStarkMap(
         const RydbergDiatomic& system, 
-        int nMin, int nMax, int RMax, int mN, 
+        int nMin, int nMax, int RMin, int RMax, int mN, 
         double centerEnergy, double maxEnergyDist)
     {
         // generate basis
@@ -15,7 +15,7 @@ namespace QSim
         {
             for (int l = 0; l < n; l++)
             {
-                for (int R = 0; R <= RMax; R++)
+                for (int R = RMin; R <= RMax; R++)
                 {
                     for (int N = std::abs(R-l); N <= R+l; N++)
                     {

@@ -42,10 +42,10 @@ public:
     NOStarkMapApp(const std::string path)
         : m_path(path), m_ioThread(path) { }
 
-    void RunCalculation(const VectorXd& eFields, double energy, double dE, int Rmax, int mN)
+    void RunCalculation(const VectorXd& eFields, double energy, double dE, int Rmin, int Rmax, int mN)
     {
         // initialize calculation
-        DiatomicStarkMap starkMap(NitricOxide{}, 1, 100, Rmax, mN, energy, dE);
+        DiatomicStarkMap starkMap(NitricOxide{}, 1, 100, Rmin, Rmax, mN, energy, dE);
 
         // process basis
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
@@ -297,15 +297,20 @@ int main(int argc, const char* argv[])
     constexpr double rcm = EnergyInverseCm_v;
     constexpr double GHz = EnergyGHz_v;
 
+    // parameters
+    int n = 25;
+    int R = 2;
+    double dE = 15*rcm;
+
     // find state
     NitricOxide molecule;
-    double energy = molecule.GetEnergy(RydbergDiatomicState_t(18, 10, 2, 10, 0));
+    double energy = molecule.GetEnergy(RydbergDiatomicState_t(n, 10, R, 10, 0));
     std::cout << "State energy: " << energy / EnergyGHz_v << "GHz" << std::endl;
 
     // Run calculation
     NOStarkMapApp app(args.GetOptionStringValue("file"));
     VectorXd eFields = VectorXd::LinSpaced(64, 0.0, 7.0); // V cm^-1
-    app.RunCalculation(100.0 * eFields, energy, 15*rcm, 4, 0);
+    app.RunCalculation(100.0 * eFields, energy, dE, std::max(0, R-2), R+2, 0);
 
     return 0;
 }
