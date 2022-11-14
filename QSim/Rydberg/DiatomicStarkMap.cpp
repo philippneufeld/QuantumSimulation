@@ -15,7 +15,7 @@ namespace QSim
         {
             for (int l = 0; l < n; l++)
             {
-                for (int R = RMin; R <= RMax; R++)
+                for (int R = RMin; R <= RMax; R+=1)
                 {
                     for (int N = std::abs(R-l); N <= R+l; N++)
                     {
