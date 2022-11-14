@@ -21,8 +21,6 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Math/Wigner.cpp"
     "${QSIM_SOURCE_DIR}/Execution/Progress.cpp"
     "${QSIM_SOURCE_DIR}/Execution/ThreadPool.cpp"
-    "${QSIM_SOURCE_DIR}/Python/PythonInterpreter.cpp"
-    "${QSIM_SOURCE_DIR}/Python/Plotting.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/SimulationApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
@@ -65,14 +63,6 @@ if (EIGEN3_FOUND)
     target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${EIGEN3_INCLUDE_DIR}")
 endif()
 
-# python (optional)
-find_package(Python3 COMPONENTS Interpreter Development NumPy)
-if (Python3_FOUND)
-    target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${Python3_INCLUDE_DIRS}" "${Python3_NumPy_INCLUDE_DIRS}")
-    target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${Python3_LIBRARIES}")
-    target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "-DQSIM_PYTHON3")
-endif()
-
 # GNUC on an ARM system (disable ABI warning)
 if (CMAKE_COMPILER_IS_GNUCC AND ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
     message("ARM system and GNUC compiler detected. Disabling ABI warnings (-Wno-psabi)")
@@ -104,7 +94,6 @@ qsim_add_app("CurveFit")
 qsim_add_app("RabiOscillations")
 qsim_add_app("Rb_2lvl")
 qsim_add_app("Rb_EIT")
-qsim_add_app("NO_RydEx")
 qsim_add_app("NO_RydExTD")
 qsim_add_app("RydbergWF")
 qsim_add_app("Rb_StarkMap")

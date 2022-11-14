@@ -10,10 +10,6 @@
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/ProgressBar.h>
 
-#ifdef QSIM_PYTHON3
-#include <QSim/Python/Plotting.h>
-#endif
-
 using namespace QSim;
 using namespace Eigen;
 
@@ -43,23 +39,7 @@ int main(int argc, const char* argv[])
     }
     progress.WaitUntilFinished();
 
-#ifdef QSIM_PYTHON3
-    PythonMatplotlib matplotlib;
-    auto fig = matplotlib.CreateFigure();
-    auto ax = fig.AddSubplot();
-
-    for (int i=0; i < cnt; i++)
-        ax.ColoredScatter((eField / 100).eval().data(), energies.col(i).eval().data(), 
-            overlaps.col(i).eval().data(), eField.size(), -0.1, 1.0, "Blues");
-
-    ax.SetYLimits(-188.0, -167.5);
-    // ax.SetYLimits(-150.0, -130.0);
-    ax.SetXLimits(0, 600);
-    ax.SetXLabel("Electric Field (V/cm)");
-    ax.SetYLabel("Energy $\\frac{E}{hc}$ (cm$^{-1}$)");    
-
-    matplotlib.RunGUILoop();
-#endif
+    // TODO: Save data
 
     return 0;
 }

@@ -6,10 +6,6 @@
 
 #include <QSim/Math/LM.h>
 
-#ifdef QSIM_PYTHON3
-#include <QSim/Python/Plotting.h>
-#endif
-
 using namespace QSim;
 using namespace Eigen;
 
@@ -46,18 +42,6 @@ int main()
     std::cout << params << std::endl << std::endl;
     std::cout << errs.cwiseQuotient(params) * 100 << std::endl << std::endl;
     std::cout << good << std::endl;
-
-#ifdef QSIM_PYTHON3
-    PythonMatplotlib matplotlib;
-    auto fig = matplotlib.CreateFigure();
-    auto ax = fig.AddSubplot();
-    ax.Plot(x.eval().data(), y.data(), x.size(), "Data", "x");
-    ax.Plot(xfit.data(), yfit.data(), xfit.size(), "Fit");
-    ax.Plot(xfit.data(), yfit2.data(), xfit.size(), "Fit upper");
-    ax.Plot(xfit.data(), yfit3.data(), xfit.size(), "Fit lower");
-    fig.Legend();
-    matplotlib.RunGUILoop();
-#endif
 
     return 0;
 }

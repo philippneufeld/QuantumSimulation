@@ -3,6 +3,7 @@
 #include "PathUtil.h"
 
 #include <filesystem>
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 
@@ -12,6 +13,18 @@
 
 namespace QSim
 {
+    
+    std::string GetHostname()
+    {
+#if defined(QSim_PLATFORM_LINUX)
+        char hostname[1024] = "";
+        gethostname(hostname, sizeof(hostname));
+        return hostname;
+#else
+        return "UNKNOWN"
+#endif
+    }
+
     std::string GetHomeDirPath()
     {
         // get home directory by reading the HOME environment variable
@@ -23,25 +36,44 @@ namespace QSim
         return homeDir;
     }
 
-    std::string GetHomeDirSubfolderPath(const std::string& name)
+    std::string GetMicCellFolder()
     {
-        // find remote_home directory and fallback to normal home if it could not be found
         std::string homeDir = GetHomeDirPath();
-        std::string remoteHome = homeDir + "/" + name;
-        if (!std::filesystem::is_directory(remoteHome))
-            remoteHome = homeDir;
-        return remoteHome;
+        std::string host = GetHostname();
+        
+        // to lowercase
+        std::transform(host.begin(), host.end(), host.begin(),
+            [](unsigned char c){ return std::tolower(c); });
+
+        if (host == "ludwigsburg" || host == "sost")
+            return homeDir + "/MicCells";
+        else if (host.size() == 5 && host.substr(0, 4) == "calc")
+            return "/mnt/groups/MicCells";
+        else
+            return homeDir + "/remote_groups/MicCells";
     }
 
-    std::string GetHostname()
+    std::string GetDefaultAppDir(const std::string& appName, bool create)
     {
-#if defined(QSim_PLATFORM_LINUX)
-        char hostname[1024] = "";
-        gethostname(hostname, sizeof(hostname));
-        return hostname;
-#else
-        return "UNKNOWN"
-#endif
+        std::string path = GetMicCellFolder();
+        path.append("/TraceGasSensing/Simulation/QNOSE_QuantumSimulation/");
+        if (!appName.empty())
+            path.append(appName);
+        else
+            path.append("Unknown");
+
+        if (create)
+            std::filesystem::create_directories(path);
+
+        return path;
+    }
+
+    std::string GetDefaultAppDataDir(const std::string& appName, bool create)
+    {
+        std::string path = GetDefaultAppDir(appName, create) + "/Data";
+        if (create)
+            std::filesystem::create_directories(path);
+        return path;
     }
 
     std::string GetTimestampString()

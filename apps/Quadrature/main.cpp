@@ -3,12 +3,10 @@
 #include <iostream>
 #include <Eigen/Eigen>
 
-// #ifdef QSIM_PYTHON3
 #include <functional>
 #include <QSim/Constants.h>
 #include <QSim/Math/Quad.h>
 #include <QSim/Math/QuadAdapt.h>
-#include <QSim/Python/Plotting.h>
 
 #include <QSim/Util/DataFile.h>
 #include <QSim/Util/PathUtil.h>
@@ -65,7 +63,8 @@ void GetIntegratorSteps(DataFileGroup group, std::function<double(double)> func,
 int main()
 {
     DataFile file;
-    file.Open(GetHomeDirPath() + "/git/Masterarbeit/Data/Quad.h5", DataFile_TRUNCATE);
+    std::string path = GetDefaultAppDataDir("Quadrature") + "/Quad.h5";
+    file.Open(path, DataFile_TRUNCATE);
     auto root = file.OpenRootGroup();
     
     std::function<double(double)> func = [](double x){ return 1 / (Pi_v * (x*x + 1)); };

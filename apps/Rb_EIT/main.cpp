@@ -8,10 +8,6 @@
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/ProgressBar.h>
 
-#ifdef QSIM_PYTHON3
-#include <QSim/Python/Plotting.h>
-#endif
-
 using namespace QSim;
 using namespace Eigen;
 
@@ -59,14 +55,7 @@ int main(int argc, const char* argv[])
     }
     progress.WaitUntilFinished();
 
-    // plot data
-#ifdef QSIM_PYTHON3
-    PythonMatplotlib matplotlib;
-    auto figure = matplotlib.CreateFigure();
-    auto ax = figure.AddSubplot();
-    ax.Plot(detunings.data(), absCoeffs.data(), detunings.size());
-    matplotlib.RunGUILoop();
-#endif
+    // TODO: Save data
 
     return 0;
 }

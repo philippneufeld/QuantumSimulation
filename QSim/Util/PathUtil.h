@@ -10,13 +10,14 @@
 namespace QSim
 {
     std::string GetHomeDirPath();
-    std::string GetHomeDirSubfolderPath(const std::string& name);
+    std::string GetMicCellFolder();
+    std::string GetDefaultAppDir(const std::string& appName, bool create=true);
+    std::string GetDefaultAppDataDir(const std::string& appName, bool create=true);
 
     std::string GetHostname();
     std::string GetTimestampString();
-
     std::string GenerateFilename(const std::string& baseName);
-
+    
     bool MoveFile(const std::string& from, const std::string& to);
 }
 

@@ -276,11 +276,9 @@ int main(int argc, const char* argv[])
     // parsing command line arguments
     ArgumentParser argparse;
 
-    std::string defaultFilename = GetHomeDirSubfolderPath("remote_home") 
-        + "/Masterarbeit/06_StarkMap/03_NO/" + GenerateFilename("NOStarkMap") + ".h5";
-    argparse.AddOptionDefault("file", "HDF5 file path", defaultFilename);
+    std::string filename = GetDefaultAppDataDir("NO_StarkMap") + '/' + GenerateFilename("NOStarkMap") + ".h5";
+    argparse.AddOptionDefault("file", "HDF5 file path", filename);
     argparse.AddOption("help", "Print this help string");
-
     auto args = argparse.Parse(argc, argv);
     
     if (args.IsError())
@@ -293,6 +291,10 @@ int main(int argc, const char* argv[])
         std::cout << argparse.GetHelpString() << std::endl;
         return 0;
     }
+    filename = args.GetOptionStringValue("file");
+
+    std::cout << filename << std::endl;
+    return 0;
 
     constexpr double rcm = EnergyInverseCm_v;
     constexpr double GHz = EnergyGHz_v;
@@ -309,7 +311,7 @@ int main(int argc, const char* argv[])
     std::cout << "State energy: " << energy / EnergyGHz_v << "GHz" << std::endl;
 
     // Run calculation
-    NOStarkMapApp app(args.GetOptionStringValue("file"));
+    NOStarkMapApp app(filename);
     VectorXd eFields = VectorXd::LinSpaced(256, 0.0, 7.0); // V cm^-1
     app.RunCalculation(100.0 * eFields, energy, dE, std::max(0, R-dR), R+dR, 0, 1, 100);
 

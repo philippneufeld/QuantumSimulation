@@ -256,7 +256,7 @@ int main(int argc, const char* argv[])
 
     std::string filename = RunSimulation(rabiXA, rabiAH, rabiHR, fmin, fmax, 300, tmin, dt, 2);
 
-    std::string dstPath = GetHomeDirSubfolderPath("remote_home") + "/Masterarbeit/07_TimeDependence/01_Ion_modG/" + filename;
+    std::string dstPath = GetDefaultAppDataDir("NO_RydExTD") + '/' + filename;
     if (MoveFile(filename, dstPath))
         std::cout << "Finished. Data saved to " << dstPath << std::endl;
     else

@@ -5,6 +5,7 @@
 #include <QSim/NLevel/NLevelSystem.h>
 #include <QSim/NLevel/Doppler.h>
 #include <QSim/Util/DataFile.h>
+#include <QSim/Util/PathUtil.h>
 
 using namespace QSim;
 using namespace Eigen;
@@ -46,7 +47,8 @@ int main(int argc, const char* argv[])
     sims["R2G.1"] = {2*rabi, 0.1*rabi};
 
     DataFile file;
-    file.Open("RabiOscillations.h5", DataFile_TRUNCATE);
+    std::string path = GetDefaultAppDataDir("RabiOscillations") + "/RabiOscillations.h5";
+    file.Open(path, DataFile_TRUNCATE);
     auto root = file.OpenRootGroup();
 
     for (auto it=sims.begin(); it!=sims.end(); it++)

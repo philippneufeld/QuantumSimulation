@@ -12,10 +12,6 @@
 #include <QSim/Execution/ThreadPool.h>
 #include <QSim/Util/ProgressBar.h>
 
-#ifdef QSIM_PYTHON3
-#include <QSim/Python/Plotting.h>
-#endif
-
 using namespace QSim;
 using namespace Eigen;
 
@@ -60,15 +56,7 @@ int main(int argc, const char* argv[])
     for (int i = 0; i < xs.size(); i++)
         ysErr.push_back(std::abs(ys[i] - (2.0/(xs[i]*xs[i]+2))));
 
-#ifdef QSIM_PYTHON3
-    PythonMatplotlib matplotlib;
-    auto fig = matplotlib.CreateFigure();
-    auto ax = fig.AddSubplot();
+    // TODO: Save data
 
-    ax.Plot(xs.data(), ysErr.data(), xs.size(), "", "-C0");
-
-    matplotlib.RunGUILoop();
-#endif
-    
     return 0;
 }
