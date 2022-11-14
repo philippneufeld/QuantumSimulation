@@ -8,7 +8,7 @@ def get_miccell_folder() -> str:
     home = os.getenv("HOME")
 
     if host.startswith("calc") and len(host) == 5:
-        host = "calcmaster"
+        host = "PI5-calcmaster"
 
     paths = {
         "": os.path.join(home, "remote_groups/MicCells"),
