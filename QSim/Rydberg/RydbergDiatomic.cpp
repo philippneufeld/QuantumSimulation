@@ -52,10 +52,7 @@ namespace QSim
             return this->GetQuantumDefectHcb(l1, Lambda);
         }
 
-#ifdef DEBUG_PRINTING
-        std::cout << "Something bad happened" << l1 << " " << l2 << std::endl;
-        abort();
-#endif
+        return 0;
     }
 
     double RydbergDiatomic::GetQuantumDefect(const RydbergDiatomicState_t& state) const
