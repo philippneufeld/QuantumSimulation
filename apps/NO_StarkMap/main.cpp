@@ -38,12 +38,10 @@ class NOStarkMapApp {
     NOStarkMapApp(const std::string path) : m_path(path), m_ioThread(path) {
     }
 
-    void RunCalculation(const VectorXd &eFields, double energy, double dE,
-                        int Rmin, int Rmax, int mN, int nMin = 1,
+    void RunCalculation(const VectorXd &eFields, double energy, double dE, int Rmin, int Rmax, int mN, int nMin = 1,
                         int nMax = 100) {
         // initialize calculation
-        DiatomicStarkMap starkMap(NitricOxide{}, nMin, nMax, Rmin, Rmax, mN,
-                                  energy, dE);
+        DiatomicStarkMap starkMap(NitricOxide{}, nMin, nMax, Rmin, Rmax, mN, energy, dE);
 
         // process basis
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
@@ -60,15 +58,13 @@ class NOStarkMapApp {
         for (int i = 0; i < eFields.size(); i++) {
             pool.Submit([&, i = i]() {
                 // calculate eigenenergies and eigenstates
-                auto [energies, states] =
-                    starkMap.GetEnergiesAndStates(eFields[i]);
+                auto [energies, states] = starkMap.GetEnergiesAndStates(eFields[i]);
 
                 // get character of the states
                 auto character = DetermineStateCharacter(states);
 
                 // Store data
-                m_ioThread.StoreData(i, eFields[i], energies, states,
-                                     character);
+                m_ioThread.StoreData(i, eFields[i], energies, states, character);
                 progress.IncrementCount();
             });
         }
@@ -184,11 +180,9 @@ class NOStarkMapApp {
                 for (int i2 = 0; i2 < energyDiffs.rows(); i2++) {
                     extrEnergies = prevEnergies2;
                     if (i > 1)
-                        extrEnergies += (prevEnergies - prevEnergies2) /
-                                        (eFields[i - 1] - eFields[i - 2]) *
+                        extrEnergies += (prevEnergies - prevEnergies2) / (eFields[i - 1] - eFields[i - 2]) *
                                         (eFields[i] - eFields[i - 2]);
-                    energyDiffs(i1, i2) =
-                        std::abs(energies[i1] - extrEnergies[i2]);
+                    energyDiffs(i1, i2) = std::abs(energies[i1] - extrEnergies[i2]);
                 }
             }
             energyDiffs /= energyDiffs.maxCoeff();
@@ -203,14 +197,10 @@ class NOStarkMapApp {
 
             constexpr double threshold = 0.70710678118;
             auto it = stateIndices.begin();
-            std::sort(it, stateIndices.end(), [&](int i1, int i2) {
-                return overlapMax[i1] > overlapMax[i2];
-            });
+            std::sort(it, stateIndices.end(), [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
             for (; it < stateIndices.end() && overlapMax[*it] > threshold; it++)
                 ;
-            std::sort(it, stateIndices.end(), [&](int i1, int i2) {
-                return heuristicMax[i1] > heuristicMax[i2];
-            });
+            std::sort(it, stateIndices.end(), [&](int i1, int i2) { return heuristicMax[i1] > heuristicMax[i2]; });
 
             // do the actual matching procedure
             std::set<int> matched;
@@ -221,15 +211,11 @@ class NOStarkMapApp {
 
                 // index is already taken? Find greates overlap state that is
                 // not already taken
-                if (overlapMax[j] <= threshold ||
-                    matched.find(idx) != matched.end()) {
+                if (overlapMax[j] <= threshold || matched.find(idx) != matched.end()) {
                     std::sort(indices.begin(), indices.end(),
-                              [&](int i1, int i2) {
-                                  return heuristic[i1] < heuristic[i2];
-                              });
+                              [&](int i1, int i2) { return heuristic[i1] < heuristic[i2]; });
                     int k = indices.size();
-                    while (matched.find(indices[--k]) != matched.end() &&
-                           k >= 0)
+                    while (matched.find(indices[--k]) != matched.end() && k >= 0)
                         ;
                     idx = indices[k];
                 }
@@ -241,8 +227,7 @@ class NOStarkMapApp {
             }
 
             // store processed data back to file
-            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered,
-                                 characterOrdered);
+            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered, characterOrdered);
 
             // shift auxilliary variables
             prevEnergies2 = prevEnergies;
@@ -269,8 +254,7 @@ int main(int argc, const char *argv[]) {
     // parsing command line arguments
     ArgumentParser argparse;
 
-    std::string filename = GetDefaultAppDataDir("NO_StarkMap") + '/' +
-                           GenerateFilename("NOStarkMap") + ".h5";
+    std::string filename = GetDefaultAppDataDir("NO_StarkMap") + '/' + GenerateFilename("NOStarkMap") + ".h5";
     argparse.AddOptionDefault("file", "HDF5 file path", filename);
     argparse.AddOption("help", "Print this help string");
     auto args = argparse.Parse(argc, argv);
@@ -288,10 +272,10 @@ int main(int argc, const char *argv[]) {
     constexpr double GHz = EnergyGHz_v;
 
     // parameters
-    int n = 75;
+    int n = 46;
     int R = 3;
     int dR = 2;
-    double dE = 80 * rcm;
+    double dE = 75 * GHz;
 
     // find state
     NitricOxide molecule;
@@ -301,9 +285,8 @@ int main(int argc, const char *argv[]) {
     // Run calculation
     NOStarkMapApp app(filename);
     // VectorXd eFields = VectorXd::LinSpaced(256, 0.0, 7.0); // V cm^-1
-    VectorXd eFields = VectorXd::LinSpaced(1, 0.0, 0.0); // V cm^-1
-    app.RunCalculation(100.0 * eFields, energy, dE, std::max(0, R - dR), R + dR,
-                       0, 1, 100);
+    VectorXd eFields = VectorXd::LinSpaced(2, 0.0, 0.00001); // V cm^-1
+    app.RunCalculation(100.0 * eFields, energy, dE, std::max(0, R - dR), R + dR, 0, 1, 100);
 
     return 0;
 }
