@@ -1,6 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
 #include "Argparse.h"
+#include "ProgressBar.h" // for GetCLIWidth
 
 namespace QSim
 {
@@ -153,7 +154,7 @@ namespace QSim
     {
         std::string help;
         std::size_t descriptionCol = 25;
-        std::size_t colMax = 80; 
+        std::size_t colMax = std::max(descriptionCol+5, GetCLIWidth()); 
 
         for (auto& opt: m_options)
         {

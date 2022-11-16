@@ -22,7 +22,8 @@
 using namespace QSim;
 using namespace Eigen;
 
-unsigned int GetNumberOfCalcThreads() {
+unsigned int GetNumberOfCalcThreads() 
+{
     std::string hostname = GetHostname();
     unsigned int logical = std::thread::hardware_concurrency();
 
@@ -33,15 +34,15 @@ unsigned int GetNumberOfCalcThreads() {
         return logical;
 }
 
-class NOStarkMapApp {
+class NOStarkMapApp 
+{
   public:
-    NOStarkMapApp(const std::string path) : m_path(path), m_ioThread(path) {
-    }
+    NOStarkMapApp(const std::string path) : m_path(path), m_ioThread(path) {}
 
-    void RunCalculation(const VectorXd &eFields, double energy, double dE, int Rmin, int Rmax, int mN, int nMin = 1,
-                        int nMax = 100) {
+    void RunCalculation(const VectorXd &eFields, double energy, double dE, int Rmin, int Rmax, int mN) 
+    {
         // initialize calculation
-        DiatomicStarkMap starkMap(NitricOxide{}, nMin, nMax, Rmin, Rmax, mN, energy, dE);
+        DiatomicStarkMap starkMap(NitricOxide{}, 1, 100, Rmin, Rmax, mN, energy, dE);
 
         // process basis
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
@@ -55,8 +56,10 @@ class NOStarkMapApp {
         // do the actual calculation
         ThreadPool pool(GetNumberOfCalcThreads());
         ProgressBar progress(eFields.size());
-        for (int i = 0; i < eFields.size(); i++) {
-            pool.Submit([&, i = i]() {
+        for (int i = 0; i < eFields.size(); i++) 
+        {
+            pool.Submit([&, i = i]() 
+            {
                 // calculate eigenenergies and eigenstates
                 auto [energies, states] = starkMap.GetEnergiesAndStates(eFields[i]);
 
@@ -81,14 +84,16 @@ class NOStarkMapApp {
     }
 
   protected:
-    void AnalyzeBasis(const std::vector<RydbergDiatomicState_t> &basis) {
+    void AnalyzeBasis(const std::vector<RydbergDiatomicState_t> &basis) 
+    {
         int basisSize = basis.size();
         m_minn = std::numeric_limits<int>::max();
         int maxn = std::numeric_limits<int>::min();
         int maxR = std::numeric_limits<int>::min();
         int maxL = std::numeric_limits<int>::min();
         int maxN = std::numeric_limits<int>::min();
-        for (const auto &state : basis) {
+        for (const auto &state : basis) 
+        {
             auto [n, l, R, N, mN] = state;
             m_minn = std::min(m_minn, n);
             maxn = std::max(maxn, n);
@@ -102,7 +107,8 @@ class NOStarkMapApp {
         m_lCharMatrix = MatrixXd::Zero(maxL + 1, basisSize);
         m_RCharMatrix = MatrixXd::Zero(maxR + 1, basisSize);
         m_NCharMatrix = MatrixXd::Zero(maxN + 1, basisSize);
-        for (int i = 0; i < basisSize; i++) {
+        for (int i = 0; i < basisSize; i++) 
+        {
             auto [n, l, R, N, mN] = basis[i];
             m_nCharMatrix(n - m_minn, i) = 1.0;
             m_lCharMatrix(l, i) = 1.0;
@@ -111,7 +117,8 @@ class NOStarkMapApp {
         }
     }
 
-    Matrix<double, Dynamic, 4> DetermineStateCharacter(const MatrixXd &states) {
+    Matrix<double, Dynamic, 4> DetermineStateCharacter(const MatrixXd &states) 
+    {
         Matrix<double, Dynamic, 4> character(states.rows(), 4);
         auto statesSq = states.cwiseAbs2().eval();
         MatrixXd nMat = m_nCharMatrix * statesSq;
@@ -119,7 +126,8 @@ class NOStarkMapApp {
         MatrixXd RMat = m_RCharMatrix * statesSq;
         MatrixXd NMat = m_NCharMatrix * statesSq;
 
-        for (int j = 0; j < states.rows(); j++) {
+        for (int j = 0; j < states.rows(); j++) 
+        {
             int nIdx = 0, lIdx = 0, RIdx = 0, NIdx = 0;
             nMat.col(j).maxCoeff(&nIdx);
             lMat.col(j).maxCoeff(&lIdx);
@@ -135,7 +143,8 @@ class NOStarkMapApp {
         return character;
     }
 
-    void MatchStates(const VectorXd &eFields, int basisSize) {
+    void MatchStates(const VectorXd &eFields, int basisSize) 
+    {
         MatrixXd prevStates;
         VectorXd prevEnergies, prevEnergies2, extrEnergies;
 
@@ -160,13 +169,15 @@ class NOStarkMapApp {
             indices[i] = i;
 
         auto nextDataPromise = m_ioThread.LoadData(0);
-        for (int i = 0; i < eFields.size(); i++) {
+        for (int i = 0; i < eFields.size(); i++) 
+        {
             auto [idx, ef, energies, states, character] = nextDataPromise.get();
             if (i < eFields.size() - 1)
                 nextDataPromise = m_ioThread.LoadData(i + 1);
 
             // prepare ordering auxilliary variables
-            if (i == 0) {
+            if (i == 0) 
+            {
                 prevEnergies = energies;
                 prevEnergies2 = prevEnergies;
                 prevStates = states;
@@ -176,8 +187,10 @@ class NOStarkMapApp {
             // calculate heuristic matching criteria
             overlaps = (states.transpose() * prevStates).cwiseAbs();
             energyDiffs(overlaps.rows(), overlaps.cols());
-            for (int i1 = 0; i1 < energyDiffs.rows(); i1++) {
-                for (int i2 = 0; i2 < energyDiffs.rows(); i2++) {
+            for (int i1 = 0; i1 < energyDiffs.rows(); i1++) 
+            {
+                for (int i2 = 0; i2 < energyDiffs.rows(); i2++) 
+                {
                     extrEnergies = prevEnergies2;
                     if (i > 1)
                         extrEnergies += (prevEnergies - prevEnergies2) / (eFields[i - 1] - eFields[i - 2]) *
@@ -189,7 +202,8 @@ class NOStarkMapApp {
             heuristics = overlaps - energyDiffs.cwiseSqrt();
 
             // determine order in which states are processed
-            for (int j = 0; j < states.rows(); j++) {
+            for (int j = 0; j < states.rows(); j++) 
+            {
                 stateIndices[j] = j;
                 overlapMax[j] = overlaps.col(j).maxCoeff(&overlapIndices[j]);
                 heuristicMax[j] = heuristics.col(j).maxCoeff();
@@ -198,13 +212,13 @@ class NOStarkMapApp {
             constexpr double threshold = 0.70710678118;
             auto it = stateIndices.begin();
             std::sort(it, stateIndices.end(), [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
-            for (; it < stateIndices.end() && overlapMax[*it] > threshold; it++)
-                ;
+            for (; it < stateIndices.end() && overlapMax[*it] > threshold; it++);
             std::sort(it, stateIndices.end(), [&](int i1, int i2) { return heuristicMax[i1] > heuristicMax[i2]; });
 
             // do the actual matching procedure
             std::set<int> matched;
-            for (int j : stateIndices) {
+            for (int j : stateIndices) 
+            {
                 auto overlap = overlaps.col(j);
                 auto heuristic = heuristics.col(j);
                 idx = overlapIndices[j];
@@ -256,37 +270,71 @@ int main(int argc, const char *argv[]) {
 
     std::string filename = GetDefaultAppDataDir("NO_StarkMap") + '/' + GenerateFilename("NOStarkMap") + ".h5";
     argparse.AddOptionDefault("file", "HDF5 file path", filename);
+    argparse.AddOptionDefault("n", "Principal quantum number", "42");
+    argparse.AddOptionDefault("l", "Orbital angular momentum quantum number", "3");
+    argparse.AddOptionDefault("R", "Rotational quantum number", "5");
+    argparse.AddOptionDefault("N", "Total angular momentum quantum number", "3");
+    argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
+    argparse.AddOptionDefault("Rmin", "Rotational quantum number basis minimum", "0");
+    argparse.AddOptionDefault("Rmax", "Rotational quantum number basis maximum", "7");
+    argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
+    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "7.0");
+    argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
+    argparse.AddOption("dErcm", "Energy range cm^-1");
+    argparse.AddOption("dEGHz", "Energy range GHz");
     argparse.AddOption("help", "Print this help string");
     auto args = argparse.Parse(argc, argv);
 
     if (args.IsError()) {
         std::cout << args.GetError() << std::endl;
         return 1;
-    } else if (args.IsOptionPresent("help")) {
+    } 
+    else if (args.IsOptionPresent("dErcm") && args.IsOptionPresent("dEGHz"))
+    {
+        std::cout << "dErcm and dEGHz option are mutually exclusive" << std::endl;
+        return 1;
+    }
+    else if (args.IsOptionPresent("help")) {
         std::cout << argparse.GetHelpString() << std::endl;
         return 0;
     }
     filename = args.GetOptionStringValue("file");
 
-    constexpr double rcm = EnergyInverseCm_v;
-    constexpr double GHz = EnergyGHz_v;
+    // retrieve parameter
+    int n = args.GetOptionValue<int>("n");
+    int l = args.GetOptionValue<int>("l");
+    int R = args.GetOptionValue<int>("R");
+    int N = args.GetOptionValue<int>("N");
+    int mN = args.GetOptionValue<int>("mN");
+    double Rmin = args.GetOptionValue<double>("Rmin");
+    double Rmax = args.GetOptionValue<double>("Rmax");
+    double Fmin = args.GetOptionValue<double>("Fmin");
+    double Fmax = args.GetOptionValue<double>("Fmax");
+    int Fsteps = args.GetOptionValue<int>("Fsteps");
 
-    // parameters
-    int n = 46;
-    int R = 3;
-    int dR = 2;
-    double dE = 75 * GHz;
+    double dE = 10 * EnergyInverseCm_v;
+    if (args.IsOptionPresent("dErcm"))
+        dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
+    else if (args.IsOptionPresent("dEGHz"))
+        dE = args.GetOptionValue<double>("dEGHz") * EnergyGHz_v;
 
+    // validate quantum numbers
+    auto state = RydbergDiatomicState_t(n, l, R, N, mN);
+    if (n < 0 || l < 0 || l >= n || R < 0 || N < std::abs(R-l) || N > std::abs(R+l) || std::abs(mN) > N)
+    {
+        std::cout << "Invalid quantum numbers" << std::endl;
+        return 0;
+    }
+    
     // find state
     NitricOxide molecule;
-    double energy = molecule.GetEnergy(RydbergDiatomicState_t(n, 10, R, 10, 0));
-    std::cout << "State energy: " << energy / EnergyGHz_v << "GHz" << std::endl;
+    double energy = molecule.GetEnergy(state);
+    std::cout << "State energy: " << energy / EnergyGHz_v << "GHz / " << energy / EnergyInverseCm_v << "cm^{-1}" << std::endl;
 
     // Run calculation
     NOStarkMapApp app(filename);
-    // VectorXd eFields = VectorXd::LinSpaced(256, 0.0, 7.0); // V cm^-1
-    VectorXd eFields = VectorXd::LinSpaced(2, 0.0, 0.00001); // V cm^-1
-    app.RunCalculation(100.0 * eFields, energy, dE, std::max(0, R - dR), R + dR, 0, 1, 100);
+    VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
+    app.RunCalculation(100.0 * eFields, energy, dE, Rmin, Rmax, mN);
 
     return 0;
 }

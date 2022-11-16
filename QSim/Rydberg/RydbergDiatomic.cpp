@@ -6,6 +6,15 @@
 #include "../Constants.h"
 #include "QuantumDefects.h"
 
+#define DEBUG_PRINTING
+#ifdef DEBUG_PRINTING
+#include <iostream>
+#endif
+
+#define QSIM_STARK_VRAKKING
+// #define QSIM_STARK_HOGAN
+// #define QSIM_STARK_QNOSE
+
 namespace QSim
 {
 
@@ -18,22 +27,51 @@ namespace QSim
         return n;
     }
 
-    double RydbergDiatomic::GetQuantumDefect(const RydbergDiatomicState_t& state) const
+    double RydbergDiatomic::GetQuantumDefectHcbMixing(int l1, int l2, int Lambda) const
     {
-        const auto [n, l, R, N, mN] = state;
-
-        const int lmax = this->GetQuantumDefectHcbMaxLambda();
-        int l0 = std::min(l, lmax);
-
-        double defect = 0;
-        for (int Lambda=0; Lambda <= l0; Lambda++)
+        // s-d mixing in the Lambda=0 channel
+        if ((l1==0||l1==2) && (l2==0||l2==2) && Lambda == 0)
         {
-            double aCoeff = GetHcbToHcdCoeff(N, l0, R, Lambda);
-            defect += aCoeff*aCoeff*this->GetQuantumDefectHcb(l0, Lambda);
+            double sdAngle = this->GetSDMixingAngle();
+            double c2 = [](double x){ return x*x; }(std::cos(sdAngle));
+            double s2 = 1 - c2;
+
+            double mus = this->GetQuantumDefectHcb(0, 0);
+            double mud = this->GetQuantumDefectHcb(2, 0);
+
+            if (l1 == 0 && l2 == 0)
+                return (c2*mus + s2*mud);
+            else if (l1 == 2 && l2 == 2)
+                return (c2*mud + s2*mus);
+            else
+                return 0.5*std::sin(2*sdAngle) * (mus - mud);
+
+        }
+        else if (l1 == l2)
+        {
+            return this->GetQuantumDefectHcb(l1, Lambda);
         }
 
-        if (l0 < l)
-            defect = 0.0; // ExtrapolateQuantumDefect(defect, l0, l);
+#ifdef DEBUG_PRINTING
+        std::cout << "Something bad happened" << l1 << " " << l2 << std::endl;
+        abort();
+#endif
+    }
+
+    double RydbergDiatomic::GetQuantumDefect(const RydbergDiatomicState_t& state) const
+    {
+        // Calculates the Hund's case (d) quantum defect
+        const auto [n, l, R, N, mN] = state;
+
+        if (l > this->GetQuantumDefectHcbMaxLambda())
+            return 0.0;
+
+        double defect = 0;
+        for (int Lambda=0; Lambda <= l; Lambda++)
+        {
+            double aCoeff = GetHcbToHcdCoeff(N, l, R, Lambda);
+            defect += aCoeff*aCoeff*this->GetQuantumDefectHcbMixing(l, l, Lambda);
+        }
 
         return defect;
     }
@@ -89,6 +127,7 @@ namespace QSim
 
         constexpr double k = -ElementaryCharge_v / (4*Pi_v*VacuumPermittivity_v);
         double mu = this->GetCoreDipoleMoment();
+
         double a0 = BohrRadius_v * ElectronMass_v / this->GetReducedMass();
             
         // adjusted quantum numbers l and n
@@ -110,64 +149,25 @@ namespace QSim
     double RydbergDiatomic::GetCoreInteractionHcb(int n1, int l1, int R1, 
         int n2, int l2, int R2, int lambda, int N) const
     {
-        // no data available
-        if (lambda >= this->GetQuantumDefectHcbMaxLambda())
-            return 0.0;
-
-        double result = 0;
-        
-        // diagonal terms already included
-        // 1 / (n - mu)^2 = 1/n^2 - 2*mu/n^3 + ...
-        if (n1==n2 && l1==l2 && R1==R2)
-            return 0.0;
-
-        // l-l coupling and s-d mixing (dR = even) see Vrakking et. al.
-        // if (std::abs(R1 - R2) % 2 == 0)
-        if (std::abs(R1 - R2) == 2)
-        {
-            // s-d mixing in the Lambda=0 channel
-            if ((l1==0||l1==2) && (l2==0||l2==2) && lambda == 0)
-            {
-                double sdAngle = this->GetSDMixingAngle();
-                double c2 = [](double x){ return x*x; }(std::cos(sdAngle));
-                double s2 = 1 - c2;
-
-                double mus = this->GetQuantumDefectHcb(0, 0);
-                double mud = this->GetQuantumDefectHcb(2, 0);
-
-                if (l1 == 0 && l2 == 0)
-                    result = -(c2*mus + s2*mud);
-                else if (l1 == 2 && l2 == 2)
-                    result = -(c2*mud + s2*mus);
-                else
-                    result = -0.5*std::sin(2*sdAngle) * (mus - mud);
-
-                result /= std::pow((n1-mus)*(n1-mud)*(n2-mus)*(n2-mud), 0.75);
-            }
-            
-            // l-l coupling
-            else if (l1 == l2 && l1 >= lambda && l1 < this->GetQuantumDefectHcbMaxLambda())
-            {
-                double mu = this->GetQuantumDefectHcb(l1, lambda);
-                result = -mu / std::pow((n1-mu)*(n2-mu), 1.5);
-            }
-        }
-
-        // unit correction
-        constexpr double hc = SpeedOfLight_v * PlanckConstant_v;
-        double hcR = hc * this->GetScaledRydbergConstant();
-        return 2 * hcR * result; 
+        // Hogen paper: H_ll^Lambda
+        return this->GetQuantumDefectHcbMixing(l1, l2, lambda);
     }
 
     double RydbergDiatomic::GetCoreInteractionME(const RydbergDiatomicState_t& state1, 
             const RydbergDiatomicState_t& state2) const
     {
+        // Hogen paper: H_multi Hc (d)
+        
         const auto [n1, l1, R1, N1, mN1] = state1;
         const auto [n2, l2, R2, N2, mN2] = state2;
 
         // diagonal in N and mN
         if (N1 != N2 || mN1 != mN2)
             return 0.0;
+
+
+        // if (std::abs(R1-R2) != 2)
+        //     return 0.0;
 
         // convert from Hund's case (b) to (d)
         double result = 0;
@@ -179,6 +179,13 @@ namespace QSim
             result += hcb * a1 * a2;
         }
 
+        
+        constexpr double k = -2 * PlanckConstant_v * SpeedOfLight_v;
+        double RNO = this->GetScaledRydbergConstant();
+        double nu1 = n1 - this->GetQuantumDefect(state1);
+        double nu2 = n2 - this->GetQuantumDefect(state2);
+        result *= k * RNO / std::pow(nu1*nu2, 1.5);
+
         return result;
     }
 
@@ -188,7 +195,7 @@ namespace QSim
         const auto [n2, l2, R2, N2, mN2] = state2;
         
         // selection rules
-        if (std::abs(l1-l2) != 1 || R1 != R2)
+        if (std::abs(l1-l2) != 1 || R1 != R2 || mN1 != mN2)
             return 0.0;
 
         // angular part
@@ -199,7 +206,7 @@ namespace QSim
 
         // check if angular momentum algebra already results 
         // in a vanishing matrix element
-        if (dip == 0) 
+        if (dip == 0)
             return 0.0;
 
         // radial rydberg matrix element
@@ -248,6 +255,7 @@ namespace QSim
 
     double NitricOxide::GetSDMixingAngle() const
     {
+        // Phys. Chem. Chem. Phys., 2021, 23, 18806; doi: 10.1039/d1cp01930a
         return -38.7 * Pi_v / 180.0;
     }
 
@@ -258,7 +266,9 @@ namespace QSim
         constexpr static std::array<double, 2> s_l1quantumDefects = { 0.7038, 0.7410 };
         constexpr static std::array<double, 3> s_l2quantumDefects = { 0.050, -0.053, 0.089 };
         constexpr static std::array<double, 4> s_l3quantumDefects = { 0.0182, 0.0172, 0.00128, 0.0057 };
-        
+
+        assert(Lambda <= l && l <= this->GetQuantumDefectHcbMaxLambda());
+
         const static std::array<const double*, 4> quantumDefects = {
             s_l0quantumDefects.data(), s_l1quantumDefects.data(),
             s_l2quantumDefects.data(), s_l3quantumDefects.data()

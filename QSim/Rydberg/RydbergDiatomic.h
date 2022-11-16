@@ -13,7 +13,7 @@ namespace QSim
     // n, l, R, N, mN
     // n: Principle quantum number of the Rydberg electron
     // l: Orbital momentum quantum number of the Rydberg electron
-    // R: Rotational core angular momentum
+    // R: Rotational core angular momentum (sometimes N+)
     // N: Total angular momentum (excluding spin)
     // mN: Projection of N onto the z-axis
     using RydbergDiatomicState_t = std::tuple<int, int, int, int, int>;
@@ -34,6 +34,7 @@ namespace QSim
         virtual int GetQuantumDefectHcbMaxLambda() const = 0;
 
         // quantum defects
+        double GetQuantumDefectHcbMixing(int l1, int l2, int Lambda) const;
         virtual double GetQuantumDefect(const RydbergDiatomicState_t& state) const override;
 
         // energy and potential

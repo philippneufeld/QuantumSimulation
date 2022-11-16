@@ -153,6 +153,7 @@ namespace QSim
     template<typename State>
     double TRydbergSystem<State>::GetIntegrationRange(int n) const
     {
+        // http://dx.doi.org/10.17632/hm5n8w628c.1
         return 3*(n+15)*n*BohrRadius_v;
     }
 
