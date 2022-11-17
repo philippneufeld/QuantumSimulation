@@ -31,7 +31,7 @@ namespace QSim
         virtual double GetCoreDipoleMoment() const = 0;
         virtual double GetSDMixingAngle() const = 0;
         virtual double GetQuantumDefectHcb(int l, int Lambda) const = 0;
-        virtual int GetQuantumDefectHcbMaxLambda() const = 0;
+        virtual int GetQuantumDefectHcbMaxL() const = 0;
 
         // quantum defects
         double GetQuantumDefectHcbMixing(int l1, int l2, int Lambda) const;
@@ -67,7 +67,7 @@ namespace QSim
         virtual double GetCoreDipoleMoment() const override;
         virtual double GetSDMixingAngle() const override;
         virtual double GetQuantumDefectHcb(int l, int Lambda) const override;
-        virtual int GetQuantumDefectHcbMaxLambda() const override; 
+        virtual int GetQuantumDefectHcbMaxL() const override; 
     };
 
 }

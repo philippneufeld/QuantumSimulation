@@ -60,7 +60,7 @@ namespace QSim
         // Calculates the Hund's case (d) quantum defect
         const auto [n, l, R, N, mN] = state;
 
-        if (l > this->GetQuantumDefectHcbMaxLambda())
+        if (l > this->GetQuantumDefectHcbMaxL())
             return 0.0;
 
         double defect = 0;
@@ -162,13 +162,15 @@ namespace QSim
         if (N1 != N2 || mN1 != mN2)
             return 0.0;
 
-
-        // if (std::abs(R1-R2) != 2)
-        //     return 0.0;
+        // Selection rule correct?
+        if (std::abs(R1-R2) != 2)
+            return 0.0;
+        
+        int lambdaMax = std::min(std::min(l1, l2), this->GetQuantumDefectHcbMaxL());
 
         // convert from Hund's case (b) to (d)
         double result = 0;
-        for (int lambda = 0; lambda <= this->GetQuantumDefectHcbMaxLambda(); lambda++)
+        for (int lambda = 0; lambda <= lambdaMax; lambda++)
         {
             double hcb = this->GetCoreInteractionHcb(n1, l1, R1, n2, l2, R2, lambda, N1);
             double a1 = this->GetHcbToHcdCoeff(N1, l1, R1, lambda);
@@ -264,7 +266,9 @@ namespace QSim
         constexpr static std::array<double, 3> s_l2quantumDefects = { 0.050, -0.053, 0.089 };
         constexpr static std::array<double, 4> s_l3quantumDefects = { 0.0182, 0.0172, 0.00128, 0.0057 };
 
-        assert(Lambda <= l && l <= this->GetQuantumDefectHcbMaxLambda());
+        assert(Lambda <= l);
+        if (l > this->GetQuantumDefectHcbMaxL())
+            return 0.0;
 
         const static std::array<const double*, 4> quantumDefects = {
             s_l0quantumDefects.data(), s_l1quantumDefects.data(),
@@ -273,7 +277,7 @@ namespace QSim
         return quantumDefects[l][Lambda];
     }
 
-    int NitricOxide::GetQuantumDefectHcbMaxLambda() const
+    int NitricOxide::GetQuantumDefectHcbMaxL() const
     {
         return 3;
     }
