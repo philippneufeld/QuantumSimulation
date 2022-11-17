@@ -48,35 +48,77 @@ namespace QSim
         }
     }
 
-    void DiatomicStarkMap::PrepareCalculation()
+    void DiatomicStarkMap::PrepareCalculation(const SingleThreaded&)
     {
         int stateCnt = m_basis.size();
+        m_hamiltonian0 = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
+        m_dipoleOperator = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
+        
+        CalcDiagHamiltonianTerms();
+        for (int row = 0; row < stateCnt; row++)
+            CalcOffDiagHamiltonianTermsRow(row);
+        SymmetrizeHamiltonianTerms();
+        
+        m_bPrepared = true;
+    }
 
-        // get energies
+    void DiatomicStarkMap::PrepareCalculation(ThreadPool& pool)
+    {
+        int stateCnt = m_basis.size();
+        m_hamiltonian0 = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
+        m_dipoleOperator = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
+        
+        CalcDiagHamiltonianTerms();
+        std::vector<std::future<void>> futures;
+        for (int row = 0; row < stateCnt; row++)
+        {
+            futures.push_back(pool.SubmitWithFuture([&, row=row]()
+            {
+                CalcOffDiagHamiltonianTermsRow(row);
+            }));
+        }
+        for (auto& future: futures)
+            future.wait();
+
+        SymmetrizeHamiltonianTerms();
+        
+        m_bPrepared = true;
+    }
+
+    void DiatomicStarkMap::CalcDiagHamiltonianTerms()
+    {
+        int stateCnt = m_basis.size();
         m_hamiltonian0 = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
         for (int i=0; i<stateCnt; i++)
             m_hamiltonian0(i, i) = m_pRydberg->GetEnergy(m_basis[i]);
+    }
 
-        // calculate dipole operator (and self-interaction operator)
-        m_dipoleOperator = Eigen::MatrixXd::Zero(stateCnt, stateCnt);
-        for (int i1 = 0; i1 < stateCnt; i1++)
+    void DiatomicStarkMap::CalcOffDiagHamiltonianTermsRow(int row)
+    {
+        for (int i2 = 0; i2 <= row; i2++)
+        {
+            // self dipole and self multielectron interaction
+            double selfDip = m_pRydberg->GetSelfDipoleME(m_basis[row], m_basis[i2]);
+            double selfEl = m_pRydberg->GetCoreInteractionME(m_basis[row], m_basis[i2]);
+            m_hamiltonian0(row, i2) += selfEl + selfDip;
+            
+
+            // stark operators
+            double dip = m_pRydberg->GetDipoleME(m_basis[row], m_basis[i2]);
+            m_dipoleOperator(row, i2) += dip;
+        }
+    }
+
+    void DiatomicStarkMap::SymmetrizeHamiltonianTerms()
+    {
+        for (int i1 = 0; i1 < m_basis.size(); i1++)
         {
             for (int i2 = 0; i2 <= i1; i2++)
             {
-                // self dipole and self multielectron interaction
-                double selfDip = m_pRydberg->GetSelfDipoleME(m_basis[i1], m_basis[i2]);
-                double selfEl = m_pRydberg->GetCoreInteractionME(m_basis[i1], m_basis[i2]);
-                m_hamiltonian0(i1, i2) += selfEl + selfDip;
                 m_hamiltonian0(i2, i1) = m_hamiltonian0(i1, i2);
-
-                // stark operators
-                double dip = m_pRydberg->GetDipoleME(m_basis[i1], m_basis[i2]);
-                m_dipoleOperator(i1, i2) += dip;
                 m_dipoleOperator(i2, i1) = m_dipoleOperator(i1, i2);
             }
         }
-
-        m_bPrepared = true;
     }
 
     Eigen::VectorXd DiatomicStarkMap::GetEnergies(double electricField)

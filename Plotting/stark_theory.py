@@ -123,10 +123,11 @@ def main_overlap(data_folder, plot_folder):
     stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_fcharacter)
 
 def main_hogan_test(data_folder, plot_folder):
-    name = "NOStarkMap_20221117-100108_calcc.h5"
+    # name = "NOStarkMap_20221117-100108_calcc.h5"
+    name = "NOStarkMap_20221117-163554_ludwigsburg.h5"
     data_path = os.path.join(data_folder, name)
     plot_path = os.path.join(plot_folder, name + "_theory.pdf")
-    stark_theory_plot_standalone(data_path, plot_path, color_rot)
+    stark_theory_plot_standalone(data_path, plot_path, color_rot, ymin=-486, ymax=-483, xmax=7)
 
 if __name__ == "__main__":
 

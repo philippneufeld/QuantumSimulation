@@ -41,9 +41,7 @@ class NOStarkMapApp
 
     void RunCalculation(const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
     {
-        NitricOxide rydberg;
-
-        // 
+        ThreadPool pool(GetNumberOfCalcThreads());
 
         // initialize calculation and process basis
         std::cout << "Searching for appropriate basis set..." << std::endl;
@@ -53,14 +51,13 @@ class NOStarkMapApp
         std::cout << "Found basis set of size: " << basis.size() << std::endl;
 
         std::cout << "Calculating hamiltonian..." << std::endl;
-        starkMap.PrepareCalculation();
+        starkMap.PrepareCalculation(pool);
         std::cout << "Calculation of hamiltonian finished. Starting diagonalization..." << std::endl;
 
         // start i/o thread
         m_ioThread.Start(basis, energy, dE);
 
         // do the actual calculation
-        ThreadPool pool(GetNumberOfCalcThreads());
         ProgressBar progress(eFields.size());
         for (int i = 0; i < eFields.size(); i++) 
         {
@@ -192,7 +189,7 @@ class NOStarkMapApp
 
             // calculate heuristic matching criteria
             overlaps = (states.transpose() * prevStates).cwiseAbs();
-            energyDiffs(overlaps.rows(), overlaps.cols());
+            // energyDiffs(overlaps.rows(), overlaps.cols());
             for (int i1 = 0; i1 < energyDiffs.rows(); i1++) 
             {
                 for (int i2 = 0; i2 < energyDiffs.rows(); i2++) 
@@ -282,7 +279,7 @@ int main(int argc, const char *argv[]) {
     argparse.AddOptionDefault("N", "Total angular momentum quantum number", "3");
     argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
     argparse.AddOptionDefault("nMax", "Principal quantum number basis maximum", "100");
-    argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "[0,1,2,3,4,5,6,7]");
+    argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "0,1,2,3,4,5,6,7");
     argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
     argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "7.0");
     argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");

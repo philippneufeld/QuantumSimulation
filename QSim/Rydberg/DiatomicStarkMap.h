@@ -10,6 +10,8 @@
 
 #include "RydbergDiatomic.h"
 
+#include "../Execution/SingleThreaded.h"
+#include "../Execution/ThreadPool.h"
 
 namespace QSim
 {
@@ -24,12 +26,18 @@ namespace QSim
         const std::vector<RydbergDiatomicState_t>& GetBasis() const { return m_basis; }
         const Eigen::MatrixXd& GetDipoleOperator() const { return m_dipoleOperator; }
 
-        void PrepareCalculation();
+        void PrepareCalculation(const SingleThreaded& = SingleThreaded{});
+        void PrepareCalculation(ThreadPool& pool);
 
         // eigen-energy calculator
         Eigen::VectorXd GetEnergies(double electricField);
         std::pair<Eigen::VectorXd, Eigen::MatrixXd> GetEnergiesAndStates(double electricField);
     
+    private:
+        void CalcDiagHamiltonianTerms();
+        void CalcOffDiagHamiltonianTermsRow(int row);
+        void SymmetrizeHamiltonianTerms();
+
     private:
         std::unique_ptr<RydbergDiatomic> m_pRydberg;
         std::vector<RydbergDiatomicState_t> m_basis;
