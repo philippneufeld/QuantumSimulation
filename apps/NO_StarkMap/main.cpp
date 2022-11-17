@@ -39,16 +39,22 @@ class NOStarkMapApp
   public:
     NOStarkMapApp(const std::string path) : m_path(path), m_ioThread(path) {}
 
-    void RunCalculation(const VectorXd &eFields, double energy, double dE, int Rmin, int Rmax, int mN) 
+    void RunCalculation(const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
     {
-        // initialize calculation
-        DiatomicStarkMap starkMap(NitricOxide{}, 1, 100, Rmin, Rmax, mN, energy, dE);
+        NitricOxide rydberg;
 
-        // process basis
+        // 
+
+        // initialize calculation and process basis
+        std::cout << "Searching for appropriate basis set..." << std::endl;
+        DiatomicStarkMap starkMap(std::make_unique<NitricOxide>(), Rs, nMax, mN, energy, dE);
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
         AnalyzeBasis(basis);
+        std::cout << "Found basis set of size: " << basis.size() << std::endl;
 
-        std::cout << "Basis size: " << basis.size() << std::endl;
+        std::cout << "Calculating hamiltonian..." << std::endl;
+        starkMap.PrepareCalculation();
+        std::cout << "Calculation of hamiltonian finished. Starting diagonalization..." << std::endl;
 
         // start i/o thread
         m_ioThread.Start(basis, energy, dE);
@@ -275,8 +281,8 @@ int main(int argc, const char *argv[]) {
     argparse.AddOptionDefault("R", "Rotational quantum number", "5");
     argparse.AddOptionDefault("N", "Total angular momentum quantum number", "3");
     argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
-    argparse.AddOptionDefault("Rmin", "Rotational quantum number basis minimum", "0");
-    argparse.AddOptionDefault("Rmax", "Rotational quantum number basis maximum", "7");
+    argparse.AddOptionDefault("nMax", "Principal quantum number basis maximum", "100");
+    argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "[0,1,2,3,4,5,6,7]");
     argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
     argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "7.0");
     argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
@@ -306,8 +312,8 @@ int main(int argc, const char *argv[]) {
     int R = args.GetOptionValue<int>("R");
     int N = args.GetOptionValue<int>("N");
     int mN = args.GetOptionValue<int>("mN");
-    double Rmin = args.GetOptionValue<double>("Rmin");
-    double Rmax = args.GetOptionValue<double>("Rmax");
+    int nMax = args.GetOptionValue<int>("nMax");
+    std::vector<int> Rs = args.GetOptionValue<std::vector<int>>("Rs");
     double Fmin = args.GetOptionValue<double>("Fmin");
     double Fmax = args.GetOptionValue<double>("Fmax");
     int Fsteps = args.GetOptionValue<int>("Fsteps");
@@ -317,6 +323,7 @@ int main(int argc, const char *argv[]) {
         dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
     else if (args.IsOptionPresent("dEGHz"))
         dE = args.GetOptionValue<double>("dEGHz") * EnergyGHz_v;
+    dE = 1.5 * EnergyInverseCm_v;
 
     // validate quantum numbers
     auto state = RydbergDiatomicState_t(n, l, R, N, mN);
@@ -334,7 +341,7 @@ int main(int argc, const char *argv[]) {
     // Run calculation
     NOStarkMapApp app(filename);
     VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
-    app.RunCalculation(100.0 * eFields, energy, dE, Rmin, Rmax, mN);
+    app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
 
     return 0;
 }

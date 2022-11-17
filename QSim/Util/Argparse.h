@@ -3,6 +3,7 @@
 #ifndef QSim_Util_Argparse_H_
 #define QSim_Util_Argparse_H_
 
+#include <vector>
 #include <string>
 #include <map>
 #include <algorithm>
@@ -73,19 +74,54 @@ namespace QSim
     };
 
 
+    namespace Internal
+    {
+        template<typename T>
+        struct ArgumentValueParser
+        {
+            static T Parse(const std::string& str)
+            {
+                T res{};
+                if (!str.empty())
+                {
+                    std::istringstream ss(str);
+                    ss >> res;
+                }
+                return res;
+            }
+        };
+
+        template<typename T>
+        struct ArgumentValueParser<std::vector<T>>
+        {
+            static std::vector<T> Parse(const std::string& str)
+            {
+                std::vector<T> vect{};
+                T val{};
+                if (!str.empty())
+                {
+                    std::istringstream ss(str);
+                    if (ss.peek() == '[')
+                        ss.ignore();
+
+                    for (T val{}; ss >> val;) {
+                        vect.push_back(val);    
+                        if (ss.peek() == ',')
+                            ss.ignore();
+                    }
+                }
+                return vect;
+            }
+        };
+    }
+
+
     // template function implementationd
     template<typename T>
     T ArgumentParserResult::GetOptionValue(std::string optName) const
     {
-        T res{};
         auto str = GetOptionStringValue(optName);
-        if (!str.empty())
-        {
-            std::istringstream ss;
-            ss.str(str);
-            ss >> res;
-        }
-        return res;
+        return Internal::ArgumentValueParser<T>::Parse(str);
     }
 
 }
