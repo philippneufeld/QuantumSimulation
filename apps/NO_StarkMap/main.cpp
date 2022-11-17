@@ -318,19 +318,6 @@ int main(int argc, const char *argv[]) {
     else if (args.IsOptionPresent("dEGHz"))
         dE = args.GetOptionValue<double>("dEGHz") * EnergyGHz_v;
 
-    // debugging parameters (segfault)
-    n = 38;
-    l = 10;
-    R = 2;
-    N = 10;
-    mN = 0;
-    Fmin = 0;
-    Fmax = 0;
-    Fsteps = 0;
-    dE = 10 * EnergyInverseCm_v;
-    Rmin = 0;
-    Rmax = 4;
-
     // validate quantum numbers
     auto state = RydbergDiatomicState_t(n, l, R, N, mN);
     if (n < 0 || l < 0 || l >= n || R < 0 || N < std::abs(R-l) || N > std::abs(R+l) || std::abs(mN) > N)
