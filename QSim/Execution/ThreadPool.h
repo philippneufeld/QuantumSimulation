@@ -33,6 +33,7 @@ namespace QSim
         template<typename Task, typename RType=std::invoke_result_t<Task>>
         std::future<RType> SubmitWithFuture(Task&& task);
 
+        void WaitUntilReadyForTask();
         void WaitUntilFinished();
 
     private:

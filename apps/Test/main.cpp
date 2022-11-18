@@ -1,31 +1,28 @@
 // Philipp Neufeld, 2021-2022
 
 #include <iostream>
+#include <chrono>
 #include <Eigen/Dense>
 
-#include <QSim/Rydberg/RydbergDiatomic.h>
+#include <QSim/Execution/ThreadPool.h>
 
 using namespace QSim;
 using namespace Eigen;
 
+using namespace std::chrono_literals;
+
 int main()
 {
-    NitricOxide molecule;
-    int n = 40;
-    int l = 3;
-    auto state = RydbergDiatomicState_t(n, l, 5, 5, 0);
+    ThreadPool pool(5);
 
-    double hcR = PlanckConstant_v*SpeedOfLight_v*molecule.GetScaledRydbergConstant();
+    pool.Submit([](){ std::this_thread::sleep_for(2s); });
+    for (int i=0; i<4; i++) pool.Submit([](){ std::this_thread::sleep_for(5s); });
 
-    double mu = molecule.GetQuantumDefect(state);
-    double corr1 = -2*hcR*mu / std::pow(n, 3);
-    double energy0 = -hcR / std::pow(n, 2);
-    double energy = -hcR / std::pow(n-mu, 2);
-    std::cout << "Hund's case (d): " 
-        << mu << ", "
-        << corr1 / EnergyGHz_v << " GHz, "
-        << ((energy0+corr1)-energy) / EnergyGHz_v << " GHz, "
-        << std::endl;
+    pool.WaitUntilReadyForTask();
+    std::cout << "Ready for task" << std::endl;
+
+    pool.WaitUntilFinished();
+    std::cout << "Finished!" << std::endl;
 
     return 0;
 }

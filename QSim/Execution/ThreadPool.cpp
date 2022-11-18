@@ -34,6 +34,15 @@ namespace QSim
             t.join();
     }
 
+    void ThreadPool::WaitUntilReadyForTask()
+    {
+        // wait until no new tasks are in the queue and not
+        // all threads are occupied
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_taskFinished.wait(lock, [&](){ return m_ongoingTasks < m_threads.size() && m_queue.empty(); });
+    }
+    
+    
     void ThreadPool::WaitUntilFinished()
     {
         // wait until all tasks are done

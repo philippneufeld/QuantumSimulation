@@ -44,6 +44,7 @@ namespace QSim
             return res.get_future();
         }
 
+        void WaitUntilReadyForTask() {}
         void WaitUntilFinished() {}
     };
 

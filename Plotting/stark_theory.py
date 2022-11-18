@@ -12,7 +12,7 @@ from stark_utils import load_stark_data_h5, combined_sigmoids, stark_plot_helper
 
 # Constants
 COLOR_PALETTE = np.array(
-    [col.to_rgba(c) for c in ("black", "blue", "red", "green", "purple", "gray")]
+    [col.to_rgba(c) for c in ("black", "blue", "red", "green", "purple", "orange", "gray")]
 )
 energyInvCm = 100 * 299792458 * 6.626e-34
 energyGHz = 6.626e-34 * 1e9
@@ -27,18 +27,16 @@ def color_rot(datagroup, basis):
         np.clip(datagroup["Character"][:, 2].astype(int), 0, len(COLOR_PALETTE) - 1)
     ]
 
-
-def color_n42(datagroup, basis):
+def color_n42_R5(datagroup, basis):
     ns = datagroup["Character"][:, 0].astype(int)
-    return np.array([[1.0, 0.0, 0.0, 0.5 if n == 42 else 0.0] for n in ns])
-
+    Rs = datagroup["Character"][:, 2].astype(int)
+    return np.array([[1.0, 1.0, 1.0, 0.5 if n == 42 and R==5 else 0.0] for n, R in zip(ns, Rs)])
 
 def color_fcharacter(datagroup, basis):
     mask = np.logical_or(basis[:, 1] == 3, basis[:, 1] == 1)
     states = datagroup["States"][:, :]
     strength = np.clip(np.sum((states[mask, :] ** 2), axis=0), 0, 1)
     return np.array([[1.0, 1.0, 1.0, x] for x in strength])
-
 
 #
 # Plot functions
@@ -71,7 +69,7 @@ def plot_stark_theory_lines(ax, path, color_func, xoff=0, yoff=0, unit=energyGHz
 def stark_theory_plot(exdata, cmap_func, simdata_path, plot_path, yoff, cfunc):
     fig, ax = stark_plot_helper(*exdata, cmap_func)
 
-    plot_stark_theory_lines(ax, simdata_path, cfunc, -0.7, yoff - 3.4)
+    plot_stark_theory_lines(ax, simdata_path, cfunc, -0.7, yoff - 2.4)
 
     fig.tight_layout()
     fig.savefig(plot_path)
@@ -113,21 +111,23 @@ def main_overlap(data_folder, plot_folder):
     data = {
         "n42R5_1": ["NOStarkMap_20221111-121150_calcc.h5", -77.303],
         "n42R5_2": ["NOStarkMap_20221111-200322_calcc.h5", -77.303],
+        "n42R5_3": ["NOStarkMap_20221117-143542_calcc.h5", -78.268],
         "n42R3": ["NOStarkMap_20221114-114554_calcc.h5", -1149.86],
-    }["n42R5_2"]
+    }["n42R5_3"]
     filename, yoff = data
 
     data_path = os.path.join(data_folder, filename)
     plot_path = os.path.join(plot_folder, filename + ".pdf")
 
-    stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_fcharacter)
+    stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_rot)
+    # stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_fcharacter)
 
 def main_hogan_test(data_folder, plot_folder):
     # name = "NOStarkMap_20221117-100108_calcc.h5"
-    name = "NOStarkMap_20221117-163554_ludwigsburg.h5"
+    name = "NOStarkMap_20221117-143542_calcc.h5"
     data_path = os.path.join(data_folder, name)
     plot_path = os.path.join(plot_folder, name + "_theory.pdf")
-    stark_theory_plot_standalone(data_path, plot_path, color_rot, ymin=-486, ymax=-483, xmax=7)
+    stark_theory_plot_standalone(data_path, plot_path, color_rot, ymin=-4, ymax=0, xmax=7)
 
 if __name__ == "__main__":
 
@@ -140,6 +140,6 @@ if __name__ == "__main__":
     os.makedirs(data_folder, exist_ok=True)
     os.makedirs(plot_folder, exist_ok=True)
 
-    # main_overlap(data_folder, plot_folder)
-    main_hogan_test(data_folder, plot_folder)
+    main_overlap(data_folder, plot_folder)
+    # main_hogan_test(data_folder, plot_folder)
     
