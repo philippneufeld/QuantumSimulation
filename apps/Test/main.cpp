@@ -4,6 +4,7 @@
 #include <chrono>
 #include <Eigen/Dense>
 
+#include <QSim/Util/Argparse.h>
 #include <QSim/Execution/ServerPool.h>
 
 using namespace QSim;
@@ -38,23 +39,11 @@ private:
     double m_dPayload;
 };
 
-
-int main()
+int ServerMain()
 {
-    TCPIPSocketServer server;
-    TCPIPSocketClient client;
-
-    std::string helloServer = "Hello server!";
     std::string helloClient = "Hello client!";
 
-    client.ConnectHostname("calcc", 8000);
-    client.Send(helloServer.data(), helloServer.size());
-
-    char buff[4096] = "";
-    client.Recv(buff, 4096);
-    std::cout << buff << std::endl;
-
-    return 0;
+    TCPIPSocketServer server;
 
     if (!server.Bind(8000))
         std::cout << "Failed to bind server " << strerror(errno) << std::endl;
@@ -66,17 +55,43 @@ int main()
     {
         auto [client, clientIp] = server.Accept();
 
-        if (client)
-        {
-            std::cout << "Connection accepted: " << clientIp << " " << client.IsValid() << std::endl;
-            client.Send(helloClient.data(), helloClient.size());
-        }
-        else
-        {
-            std::cout << "Connection failed!" << std::endl;
-        }
+        std::cout << "Connection accepted: " << clientIp << " " << client.IsValid() << std::endl;
+        client.Send(helloClient.data(), helloClient.size());
     }
+    std::cout << "server" << std::endl;
+    return 0;
+}
 
+int ClientMain()
+{
+    std::string helloServer = "Hello server!";
+
+    TCPIPSocketClient client;
+    if (!client.ConnectHostname("calcc", 8000))
+    {
+        std::cout << "Failed to connect to server" << std::endl;
+        return 1;
+    }
+    client.Send(helloServer.data(), helloServer.size());
+
+    char buff[4096] = "";
+    client.Recv(buff, 4096);
+    std::cout << buff << std::endl;
+
+    return 0;
+}
+
+int main(int argc, const char** argv)
+{
+
+    ArgumentParser parser;
+    parser.AddOption("worker", "Start as worker");
+    auto args = parser.Parse(argc, argv);
+    
+    if (args.IsOptionPresent("worker"))
+        return ClientMain();
+    else 
+        return ServerMain();
 
     /*ThreadPool pool(5);
 

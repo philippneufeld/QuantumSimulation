@@ -27,7 +27,6 @@ namespace QSim
         SocketDataPackageBin& operator=(SocketDataPackageBin&& rhs);
 
         bool Allocate(std::uint64_t size);
-
         std::uint64_t GetSize() const { return m_size; };
         std::uint8_t* GetData() const { return m_pData; };
         
