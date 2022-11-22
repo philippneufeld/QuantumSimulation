@@ -77,6 +77,7 @@ namespace QSim
         TCPIPConnection();
 
         std::size_t Send(const void* data, std::size_t n);
+        std::size_t Recv(void* buffer, std::size_t buffSize);
     };
 
     class TCPIPSocketServer : public TCPIPSocket

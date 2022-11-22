@@ -44,13 +44,19 @@ int main()
     TCPIPSocketServer server;
     TCPIPSocketClient client;
 
-    std::string helloWorld = "Hello world!";
+    std::string helloServer = "Hello server!";
+    std::string helloClient = "Hello client!";
 
-    client.ConnectHostname("calcc", 8888);
-    client.Send(helloWorld.data(), helloWorld.size());
+    client.ConnectHostname("calcc", 8000);
+    client.Send(helloServer.data(), helloServer.size());
+
+    char buff[4096] = "";
+    client.Recv(buff, 4096);
+    std::cout << buff << std::endl;
+
     return 0;
 
-    if (!server.Bind(8888))
+    if (!server.Bind(8000))
         std::cout << "Failed to bind server " << strerror(errno) << std::endl;
 
     if (!server.Listen(5))
@@ -63,7 +69,7 @@ int main()
         if (client)
         {
             std::cout << "Connection accepted: " << clientIp << " " << client.IsValid() << std::endl;
-            client.Send(helloWorld.data(), helloWorld.size());
+            client.Send(helloClient.data(), helloClient.size());
         }
         else
         {

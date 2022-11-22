@@ -191,6 +191,14 @@ namespace QSim
 
         return send(GetHandle(), data, n, 0);
     }
+    
+    std::size_t TCPIPConnection::Recv(void* buffer, std::size_t buffSize)
+    {
+        if (!IsValid())
+            return 0;
+
+        return recv(GetHandle(), buffer, buffSize, 0);
+    }
 
     //
     // TCPIPSocketClient
