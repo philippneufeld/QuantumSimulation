@@ -22,6 +22,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Execution/Progress.cpp"
     "${QSIM_SOURCE_DIR}/Execution/ThreadPool.cpp"
     "${QSIM_SOURCE_DIR}/Execution/ServerPool.cpp"
+    "${QSIM_SOURCE_DIR}/Util/TCPIP.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/SimulationApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"
