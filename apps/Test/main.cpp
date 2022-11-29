@@ -18,12 +18,12 @@ using namespace std::chrono_literals;
 class MyServer : public TCPIPServer
 {
 public:
-    virtual bool OnClientConnected(const std::string& ip) override
+    virtual bool OnClientConnected(std::size_t id, const std::string& ip) override
     {
         std::cout << "Client connected: " << ip << std::endl;
         return true; 
     }
-    virtual void OnClientDisconnected() override 
+    virtual void OnClientDisconnected(std::size_t id) override 
     {
         std::cout << "Client disconnected" << std::endl;     
     }
@@ -33,13 +33,25 @@ public:
         return SocketDataPackage(); 
     }
 
-    virtual SocketDataPackage OnMessageReceived(SocketDataPackage data) override
+    virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) override
     { 
         char* msg = reinterpret_cast<char*>(data.GetData());
-        std::cout << "Message received: " << msg << std::endl;
-        return SocketDataPackage(); 
-    }
+        std::cout << "Message received (" << id << "): " << msg << std::endl;
 
+        constexpr std::uint32_t n = 100000;
+        std::vector<double> vec;
+        vec.reserve(n);
+        for (std::size_t i = 0; i < n; i++)
+        {
+            vec.push_back(i);
+        }
+
+        SocketDataPackage reply(n*sizeof(double));
+        std::copy_n(vec.data(), n, reinterpret_cast<double*>(reply.GetData()));
+
+        return reply;
+    }
+    
 };
 
 int ServerMain()
@@ -54,20 +66,19 @@ int ClientMain()
 {
     std::string helloServer = "Hello server!";
 
-    TCPIPClientSocket client;
+    TCPIPClient client;
     if (!client.ConnectHostname("ludwigsburg", 8000))
     {
         std::cout << "Failed to connect to server" << std::endl;
         return 1;
     }
-    client.Send(helloServer.data(), helloServer.size());
+    
+    client.Send2(helloServer.data(), helloServer.size());
 
+    auto reply = client.Recv2();
+    std::cout << "Received data: " << reply.GetSize() / sizeof(double) << std::endl;
 
     std::this_thread::sleep_for(5s);
-
-    // char buff[4096] = "";
-    // client.Recv(buff, 4096);
-    // std::cout << buff << std::endl;
 
     return 0;
 }

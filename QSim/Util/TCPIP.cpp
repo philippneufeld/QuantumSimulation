@@ -15,6 +15,16 @@
 
 #include <iostream>
 
+// https://stackoverflow.com/questions/3022552/is-there-any-standard-htonl-like-function-for-64-bits-integers-in-c
+#ifdef __BIG_ENDIAN__
+#   define htonll(x) (x)
+#   define ntohll(x) (x)
+#else
+#   define htonll(x) (((std::uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
+#   define ntohll(x) (((std::uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
+#endif
+
+
 namespace QSim
 {
     
@@ -63,7 +73,7 @@ namespace QSim
     TCPIPConnection::TCPIPConnection(int handle)
         : TCPIPSocket(handle) {}
 
-    std::size_t TCPIPConnection::Send(const void* data, std::size_t n)
+    std::int64_t TCPIPConnection::Send(const void* data, std::size_t n)
     {
         if (!IsValid())
             return 0;
@@ -71,7 +81,7 @@ namespace QSim
         return send(GetHandle(), data, n, 0);
     }
     
-    std::size_t TCPIPConnection::Recv(void* buffer, std::size_t buffSize)
+    std::int64_t TCPIPConnection::Recv(void* buffer, std::size_t buffSize)
     {
         if (!IsValid())
             return 0;
@@ -264,6 +274,12 @@ namespace QSim
 
     SocketDataPackage::SocketDataPackage() 
         : m_size(0), m_pData(nullptr) {}
+
+    SocketDataPackage::SocketDataPackage(std::uint64_t size) 
+        : SocketDataPackage() 
+    {
+        Allocate(size);
+    }
     
     SocketDataPackage::~SocketDataPackage() 
     { 
@@ -350,43 +366,105 @@ namespace QSim
         if (!server.Listen(5))
             return false;
 
+        std::set<TCPIPConnection*> killed;
         while (true)
         {
-            auto [ac, re, wr, ex] = TCPIPServerSocket::Select({&server}, m_pClients, {}, {});
+            killed.clear();
+            auto [ac, re, wr, ex] = TCPIPServerSocket::Select({&server}, m_pClients, m_pClients, {});
             
             // handle new connections
             if (std::find(ac.begin(), ac.end(), &server) != ac.end())
             {
                 auto [cid, ip] = server.Accept();
-                auto pClient = new TCPIPConnection(cid);
-                if (pClient->IsValid())
+                auto pConn = new TCPIPConnection(cid);
+                if (pConn->IsValid())
                 {
-                    if (this->OnClientConnected(ip))
-                        m_pClients.push_back(pClient);
+                    if (OnClientConnected(GetIdFromConnection(pConn), ip))
+                    {
+                        m_pClients.push_back(pConn);
+                        AddToWriteBuffer(pConn, std::move(GetWelcomeMessage()));
+                    }
                 }
             }
 
             // handle receiving messages
             for (TCPIPConnection* pConn: re)
             {
-                constexpr int buffsize = 4096;
-                std::uint8_t buff[buffsize] = "";
-                int cnt = pConn->Recv(buff, buffsize);
+                if (killed.count(pConn) != 0)
+                    continue;
+                
+                auto id = GetIdFromConnection(pConn);
 
-                if (cnt <= 0)
+                // check if data in read buffer
+                if (m_readBuffer.count(pConn) == 0)
                 {
-                    CloseClientConnection(pConn);
-                    OnClientDisconnected();
+                    std::uint64_t nsize = 0;
+                    if (pConn->Recv(&nsize, sizeof(nsize)) != sizeof(nsize))
+                    {
+                        killed.insert(pConn);
+                        continue;
+                    }
+                    std::uint64_t size = ntohll(nsize);
+                    m_readBuffer[pConn] = std::make_tuple(SocketDataPackage(size), std::uint64_t(0));                    
                 }
                 else
                 {
-                    SocketDataPackage data;
-                    data.Allocate(cnt);
-                    std::copy_n(buff, cnt, data.GetData());
-                    OnMessageReceived(std::move(data));
+                    auto& [buffer, alreadyRead] = m_readBuffer[pConn];
+                    std::uint64_t remaining = buffer.GetSize() - alreadyRead;
+
+                    std::size_t cnt = pConn->Recv(buffer.GetData() + alreadyRead, remaining);
+                    if (cnt <= 0 || cnt > remaining)
+                    {
+                        killed.insert(pConn);
+                        continue;
+                    }
+                    else
+                    {
+                        alreadyRead += cnt; // update read buffer (reference)
+                        SocketDataPackage resp = OnMessageReceived(id, std::move(buffer));
+                        AddToWriteBuffer(pConn, std::move(resp));
+                        m_readBuffer.erase(m_readBuffer.find(pConn));
+                    }
                 }
             }
-            
+
+            // handle sending messages
+            for (TCPIPConnection* pConn: wr)
+            {
+                if (killed.count(pConn) != 0)
+                    continue;
+
+                auto& outputBuff = m_writeBuffer[pConn];
+                for (auto& package: outputBuff)
+                {
+                    std::uint64_t size = package.GetSize();
+                    std::uint64_t nsize = htonll(size);
+
+                    // send package size
+                    if (pConn->Send(&nsize, sizeof(nsize)) != sizeof(nsize))
+                    {
+                        killed.insert(pConn);
+                        break;
+                    }
+
+                    // send package itself
+                    if (pConn->Send(package.GetData(), size) != size)
+                    {
+                        killed.insert(pConn);
+                        break;
+                    }
+
+                }
+                outputBuff.clear();
+            }
+
+            // handle killed connections
+            for (TCPIPConnection* pConn: killed)
+            {
+                auto id = GetIdFromConnection(pConn);
+                CloseClientConnection(pConn);
+                OnClientDisconnected(id);
+            }
         }
 
         return 0;
@@ -402,8 +480,95 @@ namespace QSim
     void TCPIPServer::CloseClientConnection(TCPIPConnection* pClient)
     {
         m_pClients.remove(pClient);
+
+        auto it1 = m_readBuffer.find(pClient);
+        if (it1 != m_readBuffer.end())
+            m_readBuffer.erase(it1);
+
+        auto it2 = m_writeBuffer.find(pClient);
+        if (it2 != m_writeBuffer.end())
+            m_writeBuffer.erase(it2);
+
         delete pClient;
     }
 
+    std::size_t TCPIPServer::GetIdFromConnection(TCPIPConnection* pClient) const
+    {
+        static_assert(sizeof(std::size_t) == sizeof(TCPIPConnection*), "id type not large enough");
+        return reinterpret_cast<std::size_t>(pClient);
+    }
 
+    void TCPIPServer::AddToWriteBuffer(TCPIPConnection* pClient, SocketDataPackage package)
+    {
+        if (package.GetSize() > 0)
+            m_writeBuffer[pClient].push_back(std::move(package));
+    }
+
+
+    // TCPIPClient::TCPIPClient()
+    //     : m_socket() {}
+    //
+    // bool TCPIPClient::Connect(const std::string& ip, short port)
+    // {
+    //     return m_socket.Connect(ip, port);
+    // }
+    //
+    // bool TCPIPClient::ConnectHostname(const std::string& hostname, short port)
+    // {
+    //     return m_socket.ConnectHostname(hostname, port);
+    // }
+    //
+    // void TCPIPClient::Close()
+    // {
+    //     m_socket.Close();
+    // }
+    //
+
+    SocketDataPackage TCPIPClient::Recv2()
+    {
+        std::uint64_t nsize = 0;
+        std::uint64_t cnt = TCPIPClientSocket::Recv(&nsize, sizeof(nsize));
+        
+        if (cnt != sizeof(nsize))
+        {
+            Close();
+            return SocketDataPackage();
+        }
+
+        std::uint64_t size = ntohll(nsize);
+        SocketDataPackage package(size);
+
+        std::size_t read = 0;
+        while (read < size)
+        {
+            cnt = TCPIPClientSocket::Recv(package.GetData() + read, size-read);
+            if (cnt <= 0)
+            {
+                Close();
+                return SocketDataPackage();
+            }
+            read += cnt;
+        }
+
+        return package;
+    }
+
+    bool TCPIPClient::Send2(const void* data, std::uint64_t n)
+    {
+        std::uint64_t nsize = htonll(n);
+
+        if (TCPIPClientSocket::Send(&nsize, sizeof(nsize)) != sizeof(nsize))
+        {
+            Close();
+            return false;
+        }
+
+        if (TCPIPClientSocket::Send(data, n) != n)
+        {
+            Close();
+            return false;
+        }
+
+        return true;
+    }
 }

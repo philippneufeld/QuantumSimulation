@@ -8,6 +8,8 @@
 #include <tuple>
 #include <vector>
 #include <list>
+#include <map>
+#include <set>
 
 namespace QSim
 {
@@ -41,8 +43,8 @@ namespace QSim
         TCPIPConnection();
         TCPIPConnection(int handle);
 
-        std::size_t Send(const void* data, std::size_t n);
-        std::size_t Recv(void* buffer, std::size_t buffSize);
+        std::int64_t Send(const void* data, std::size_t n);
+        std::int64_t Recv(void* buffer, std::size_t buffSize);
     };
 
     class TCPIPServerSocket : public TCPIPSocket
@@ -78,6 +80,7 @@ namespace QSim
     {
     public:
         SocketDataPackage();
+        SocketDataPackage(std::uint64_t size);
         ~SocketDataPackage();
 
         SocketDataPackage(const SocketDataPackage& rhs);
@@ -104,20 +107,54 @@ namespace QSim
         bool Run(short port);
 
         // callbacks
-        virtual bool OnClientConnected(const std::string& ip) { return true; }
-        virtual void OnClientDisconnected() {}
+        virtual bool OnClientConnected(std::size_t id, const std::string& ip) { return true; }
+        virtual void OnClientDisconnected(std::size_t id) {}
         virtual SocketDataPackage GetWelcomeMessage() { return SocketDataPackage(); }
-        virtual SocketDataPackage OnMessageReceived(SocketDataPackage data) { return SocketDataPackage(); }
+        virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) { return SocketDataPackage(); }
 
     protected:
         void Purge();
         void CloseClientConnection(TCPIPConnection* pClient);
+        std::size_t GetIdFromConnection(TCPIPConnection* pClient) const;
 
+        void AddToWriteBuffer(TCPIPConnection* pClient, SocketDataPackage package);
+        
     private:
         bool m_bRunning;
         std::list<TCPIPConnection*> m_pClients;
-
+        
         // buffers
+        std::map<TCPIPConnection*, std::tuple<SocketDataPackage, std::uint64_t>> m_readBuffer;
+        std::map<TCPIPConnection*, std::list<SocketDataPackage>> m_writeBuffer;
+    };
+
+    class TCPIPClient : public TCPIPClientSocket
+    {
+        // disallow the use of base class send and receive
+    // protected:
+    //     using TCPIPClientSocket::Recv;
+    //     using TCPIPClientSocket::Send;
+
+    public:
+        // TCPIPClient();
+        // ~TCPIPClient();
+        //
+        // TCPIPClient(const TCPIPClient&) = delete;
+        // TCPIPClient(TCPIPClient&&) = default;
+        //
+        // TCPIPClient& operator=(const TCPIPClient&) = delete;
+        // TCPIPClient& operator=(TCPIPClient&&) = default;
+        //
+        // bool Connect(const std::string& ip, short port);
+        // bool ConnectHostname(const std::string& hostname, short port);
+        //
+        // void Close();
+
+        SocketDataPackage Recv2();
+        bool Send2(const void* data, std::uint64_t n);
+
+    // private:
+    //     TCPIPClientSocket m_socket;
     };
 
 }
