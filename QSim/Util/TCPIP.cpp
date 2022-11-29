@@ -254,10 +254,10 @@ namespace QSim
         gethostname(buffer, bufferLen - 1);
 
         hostent* pRes = gethostbyname(hostname.c_str());
-        char** addresses = pRes->h_addr_list;
-        if (pRes->h_length < 4)
+        if (!pRes || pRes->h_length < 4)
             return false;
-
+        char** addresses = pRes->h_addr_list;
+        
         std::string ip = 
             std::to_string((int)(unsigned char)addresses[0][0]) + "." 
             + std::to_string((int)(unsigned char)addresses[0][1]) + "." 
@@ -504,27 +504,7 @@ namespace QSim
             m_writeBuffer[pClient].push_back(std::move(package));
     }
 
-
-    // TCPIPClient::TCPIPClient()
-    //     : m_socket() {}
-    //
-    // bool TCPIPClient::Connect(const std::string& ip, short port)
-    // {
-    //     return m_socket.Connect(ip, port);
-    // }
-    //
-    // bool TCPIPClient::ConnectHostname(const std::string& hostname, short port)
-    // {
-    //     return m_socket.ConnectHostname(hostname, port);
-    // }
-    //
-    // void TCPIPClient::Close()
-    // {
-    //     m_socket.Close();
-    // }
-    //
-
-    SocketDataPackage TCPIPClient::Recv2()
+    SocketDataPackage TCPIPClient::Recv()
     {
         std::uint64_t nsize = 0;
         std::uint64_t cnt = TCPIPClientSocket::Recv(&nsize, sizeof(nsize));
@@ -553,7 +533,7 @@ namespace QSim
         return package;
     }
 
-    bool TCPIPClient::Send2(const void* data, std::uint64_t n)
+    bool TCPIPClient::Send(const void* data, std::uint64_t n)
     {
         std::uint64_t nsize = htonll(n);
 

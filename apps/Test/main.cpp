@@ -73,9 +73,9 @@ int ClientMain()
         return 1;
     }
     
-    client.Send2(helloServer.data(), helloServer.size());
+    client.Send(helloServer.data(), helloServer.size());
 
-    auto reply = client.Recv2();
+    auto reply = client.Recv();
     std::cout << "Received data: " << reply.GetSize() / sizeof(double) << std::endl;
 
     std::this_thread::sleep_for(5s);

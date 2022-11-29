@@ -131,30 +131,13 @@ namespace QSim
     class TCPIPClient : public TCPIPClientSocket
     {
         // disallow the use of base class send and receive
-    // protected:
-    //     using TCPIPClientSocket::Recv;
-    //     using TCPIPClientSocket::Send;
+    protected:
+        using TCPIPClientSocket::Recv;
+        using TCPIPClientSocket::Send;
 
     public:
-        // TCPIPClient();
-        // ~TCPIPClient();
-        //
-        // TCPIPClient(const TCPIPClient&) = delete;
-        // TCPIPClient(TCPIPClient&&) = default;
-        //
-        // TCPIPClient& operator=(const TCPIPClient&) = delete;
-        // TCPIPClient& operator=(TCPIPClient&&) = default;
-        //
-        // bool Connect(const std::string& ip, short port);
-        // bool ConnectHostname(const std::string& hostname, short port);
-        //
-        // void Close();
-
-        SocketDataPackage Recv2();
-        bool Send2(const void* data, std::uint64_t n);
-
-    // private:
-    //     TCPIPClientSocket m_socket;
+        SocketDataPackage Recv();
+        bool Send(const void* data, std::uint64_t n);
     };
 
 }
