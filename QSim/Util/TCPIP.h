@@ -80,7 +80,7 @@ namespace QSim
 
     class SocketDataPackage
     {
-        constexpr static std::uint64_t s_protocolId = 0xA3F6A39464CF1A;
+        constexpr static std::uint64_t s_protocolId = 0x00A3F6A39464CF1A;
     public:
         using Header_t = std::array<std::uint8_t, 16>;
 
@@ -115,8 +115,6 @@ namespace QSim
     class TCPIPServer
     {
     public:
-        
-
         TCPIPServer();
         virtual ~TCPIPServer();
 

@@ -561,6 +561,11 @@ namespace QSim
         return reinterpret_cast<std::size_t>(pClient);
     }
 
+
+    //
+    // TCPIPClient
+    //
+
     std::optional<SocketDataPackage> TCPIPClient::Query(const void* data, std::uint64_t n)
     {
         SocketDataPackage::Header_t header;
