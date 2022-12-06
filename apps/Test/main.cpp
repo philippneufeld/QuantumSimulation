@@ -28,11 +28,6 @@ public:
         std::cout << "Client disconnected" << std::endl;     
     }
 
-    virtual SocketDataPackage GetWelcomeMessage() override
-    { 
-        return SocketDataPackage(); 
-    }
-
     virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) override
     { 
         char* msg = reinterpret_cast<char*>(data.GetData());
@@ -68,15 +63,15 @@ int ClientMain()
 
     TCPIPClient client;
     if (!client.ConnectHostname("ludwigsburg", 8000))
+    // if (!client.ConnectHostname("calcc", 8000))
     {
         std::cout << "Failed to connect to server" << std::endl;
         return 1;
     }
     
-    client.Send(helloServer.data(), helloServer.size());
-
-    auto reply = client.Recv();
-    std::cout << "Received data: " << reply.GetSize() / sizeof(double) << std::endl;
+    auto reply = client.Query(helloServer.data(), helloServer.size());
+    if (reply)
+        std::cout << "Received data: " << (*reply).GetSize() / sizeof(double) << std::endl;
 
     std::this_thread::sleep_for(5s);
 

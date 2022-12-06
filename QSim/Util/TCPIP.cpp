@@ -273,12 +273,26 @@ namespace QSim
     //
 
     SocketDataPackage::SocketDataPackage() 
-        : m_size(0), m_pData(nullptr) {}
+        : m_size(0), m_pData(nullptr), m_status(0) {}
 
     SocketDataPackage::SocketDataPackage(std::uint64_t size) 
+        : SocketDataPackage(size, 0) {}
+    
+    SocketDataPackage::SocketDataPackage(std::uint64_t size, std::uint8_t status) 
         : SocketDataPackage() 
     {
+        m_status = status;
         Allocate(size);
+    }
+
+    SocketDataPackage::SocketDataPackage(const std::array<std::uint8_t, 16>& header)
+        : SocketDataPackage()
+    {
+        if (IsValidHeader(header))
+        {
+            m_status = GetStatusFromHeader(header);
+            Allocate(GetSizeFromHeader(header));
+        }
     }
     
     SocketDataPackage::~SocketDataPackage() 
@@ -341,6 +355,45 @@ namespace QSim
         return (size == m_size);
     }
 
+    bool SocketDataPackage::IsValidHeader(const std::array<std::uint8_t, 16>& header)
+    {
+        std::uint64_t npid = 0;
+        std::copy_n(header.data(), 7, reinterpret_cast<std::uint8_t*>(&npid) + 1);
+        std::uint64_t pid = ntohll(npid);
+        return (pid == s_protocolId);
+    }
+
+    std::uint8_t SocketDataPackage::GetStatusFromHeader(const std::array<std::uint8_t, 16>& header)
+    {
+        return header[7];
+    }
+    
+    std::uint64_t SocketDataPackage::GetSizeFromHeader(const std::array<std::uint8_t, 16>& header)
+    {
+        std::uint64_t nsize = 0;
+        std::copy_n(header.data() + 8, 8, reinterpret_cast<std::uint8_t*>(&nsize));
+        return ntohll(nsize);
+    }
+
+    SocketDataPackage::Header_t SocketDataPackage::GenerateHeader(std::uint64_t size, std::uint8_t status)
+    {
+        Header_t header;
+
+        std::uint64_t npid = htonll(s_protocolId);
+        std::uint64_t nsize = htonll(size);
+        
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid) + 1, 7, header.data());
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&status), 1, header.data() + 7);
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&nsize), 8, header.data() + 8);
+
+        return header;
+    }
+
+    SocketDataPackage::Header_t SocketDataPackage::GetHeader() const
+    {
+        return GenerateHeader(m_size, m_status);
+    }
+
 
     //
     // TCPIPServer
@@ -382,7 +435,6 @@ namespace QSim
                     if (OnClientConnected(GetIdFromConnection(pConn), ip))
                     {
                         m_pClients.push_back(pConn);
-                        AddToWriteBuffer(pConn, std::move(GetWelcomeMessage()));
                     }
                 }
             }
@@ -398,14 +450,20 @@ namespace QSim
                 // check if data in read buffer
                 if (m_readBuffer.count(pConn) == 0)
                 {
-                    std::uint64_t nsize = 0;
-                    if (pConn->Recv(&nsize, sizeof(nsize)) != sizeof(nsize))
+                    SocketDataPackage::Header_t header;
+                    if (pConn->Recv(header.data(), sizeof(header)) != sizeof(header))
                     {
                         killed.insert(pConn);
                         continue;
                     }
-                    std::uint64_t size = ntohll(nsize);
-                    m_readBuffer[pConn] = std::make_tuple(SocketDataPackage(size), std::uint64_t(0));                    
+
+                    if (!SocketDataPackage::IsValidHeader(header))
+                    {
+                        killed.insert(pConn);
+                        continue;
+                    }
+                    
+                    m_readBuffer[pConn] = std::make_tuple(SocketDataPackage(header), std::uint64_t(0));                    
                 }
                 else
                 {
@@ -421,9 +479,12 @@ namespace QSim
                     else
                     {
                         alreadyRead += cnt; // update read buffer (reference)
-                        SocketDataPackage resp = OnMessageReceived(id, std::move(buffer));
-                        AddToWriteBuffer(pConn, std::move(resp));
-                        m_readBuffer.erase(m_readBuffer.find(pConn));
+                        if (alreadyRead == buffer.GetSize())
+                        {
+                            SocketDataPackage resp = OnMessageReceived(id, std::move(buffer));
+                            m_writeBuffer[pConn].push_back(std::move(resp));
+                            m_readBuffer.erase(m_readBuffer.find(pConn));
+                        }
                     }
                 }
             }
@@ -437,23 +498,25 @@ namespace QSim
                 auto& outputBuff = m_writeBuffer[pConn];
                 for (auto& package: outputBuff)
                 {
+                    
+                    // send package header
+                    SocketDataPackage::Header_t header = package.GetHeader();
+                    if (pConn->Send(header.data(), sizeof(header)) != sizeof(header))
+                    {
+                        killed.insert(pConn);
+                        break;
+                    }
+
+                    // send package data
                     std::uint64_t size = package.GetSize();
-                    std::uint64_t nsize = htonll(size);
-
-                    // send package size
-                    if (pConn->Send(&nsize, sizeof(nsize)) != sizeof(nsize))
+                    if (size > 0)
                     {
-                        killed.insert(pConn);
-                        break;
+                        if (pConn->Send(package.GetData(), size) != size)
+                        {
+                            killed.insert(pConn);
+                            break;
+                        }
                     }
-
-                    // send package itself
-                    if (pConn->Send(package.GetData(), size) != size)
-                    {
-                        killed.insert(pConn);
-                        break;
-                    }
-
                 }
                 outputBuff.clear();
             }
@@ -498,57 +561,48 @@ namespace QSim
         return reinterpret_cast<std::size_t>(pClient);
     }
 
-    void TCPIPServer::AddToWriteBuffer(TCPIPConnection* pClient, SocketDataPackage package)
+    std::optional<SocketDataPackage> TCPIPClient::Query(const void* data, std::uint64_t n)
     {
-        if (package.GetSize() > 0)
-            m_writeBuffer[pClient].push_back(std::move(package));
-    }
-
-    SocketDataPackage TCPIPClient::Recv()
-    {
-        std::uint64_t nsize = 0;
-        std::uint64_t cnt = TCPIPClientSocket::Recv(&nsize, sizeof(nsize));
+        SocketDataPackage::Header_t header;
         
-        if (cnt != sizeof(nsize))
+        // send package header
+        header = SocketDataPackage::GenerateHeader(n, 0);
+        if (TCPIPClientSocket::Send(header.data(), sizeof(header)) != sizeof(header))
         {
             Close();
-            return SocketDataPackage();
+            return std::nullopt;
         }
 
-        std::uint64_t size = ntohll(nsize);
-        SocketDataPackage package(size);
-
-        std::size_t read = 0;
-        while (read < size)
+        // send package data
+        if (n > 0)
         {
-            cnt = TCPIPClientSocket::Recv(package.GetData() + read, size-read);
+            if (TCPIPClientSocket::Send(data, n) != n)
+            {
+                Close();
+                return std::nullopt;
+            }
+        }
+
+        // receiving package header of response
+        std::uint64_t cnt = TCPIPClientSocket::Recv(header.data(), sizeof(header));
+        if (cnt != sizeof(header) || !SocketDataPackage::IsValidHeader(header))
+        {
+            Close();
+            return std::nullopt;
+        }
+        
+        SocketDataPackage package(header);
+        for (std::size_t read = 0; read < package.GetSize();)
+        {
+            cnt = TCPIPClientSocket::Recv(package.GetData() + read, package.GetSize()-read);
             if (cnt <= 0)
             {
                 Close();
-                return SocketDataPackage();
+                return std::nullopt;
             }
             read += cnt;
         }
 
         return package;
-    }
-
-    bool TCPIPClient::Send(const void* data, std::uint64_t n)
-    {
-        std::uint64_t nsize = htonll(n);
-
-        if (TCPIPClientSocket::Send(&nsize, sizeof(nsize)) != sizeof(nsize))
-        {
-            Close();
-            return false;
-        }
-
-        if (TCPIPClientSocket::Send(data, n) != n)
-        {
-            Close();
-            return false;
-        }
-
-        return true;
     }
 }

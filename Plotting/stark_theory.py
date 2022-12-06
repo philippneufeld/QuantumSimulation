@@ -43,7 +43,7 @@ def color_fcharacter_N5(datagroup, basis):
     mask = np.logical_and(np.logical_or(basis[:, 1] == 3, basis[:, 1] == 1), basis[:, 2] == 5)
     states = datagroup["States"][:, :]
     strength = np.clip(np.sum((states[mask, :] ** 2), axis=0), 0, 1)
-    return np.array([[1.0, 1.0, 1.0, x] for x in strength])
+    return np.array([[1.0, 1.0, 1.0, np.clip(2.5*x, 0.0, 1.0)] for x in strength])
 
 #
 # Plot functions
@@ -58,7 +58,7 @@ def plot_stark_theory_lines(ax, path, color_func, xoff=0, yoff=0, unit=energyGHz
         basis = file["Basis"][:, :]
 
         for idx, datagroup in enumerate(tqdm.tqdm([file[k] for k in keys])):
-            efields[idx] = float(datagroup.attrs["Electric_Field"]) / 100 * ecorr * 4.5 - xoff
+            efields[idx] = float(datagroup.attrs["Electric_Field"]) / 100 * ecorr - xoff
             stark_map[:, idx] = np.array(datagroup["Energies"][:, 0]) / unit - yoff
             colors[:, idx, :] = color_func(datagroup, basis)
 
@@ -73,17 +73,17 @@ def plot_stark_theory_lines(ax, path, color_func, xoff=0, yoff=0, unit=energyGHz
         lc = LineCollection(segments, colors=colors[idx], linewidths=0.5)
         ax.add_collection(lc)
 
-def stark_theory_plot(exdata, cmap_func, simdata_path, plot_path, yoff, cfunc):
+def stark_theory_plot(exdata, cmap_func, simdata_path, plot_path, yoff, cfunc, ecorr=1.0):
     fig, ax = stark_plot_helper(*exdata, cmap_func)
 
-    plot_stark_theory_lines(ax, simdata_path, cfunc, -0.7, yoff - 2.4)
+    plot_stark_theory_lines(ax, simdata_path, cfunc, -0.7, yoff - 2.4, ecorr=ecorr)
 
     fig.tight_layout()
     fig.savefig(plot_path)
 
 
 def stark_theory_plot_standalone(simdata_path, plot_path, cfunc, ymin=-66.5, ymax=-61.5, xmin=0.0, xmax=25.0):
-    fig = plt.figure(figsize=plotlib.set_size(aspect=0.484, fraction=1))
+    fig = plt.figure(figsize=plotlib.set_size(aspect=0.484, fraction=1.0))
     ax = fig.add_subplot()
 
     ax.set_xlim((xmin, xmax))
@@ -120,21 +120,22 @@ def main_overlap(data_folder, plot_folder):
         "n42R5_2": ["NOStarkMap_20221111-200322_calcc.h5", -77.303],
         "n42R5_3": ["NOStarkMap_20221117-143542_calcc.h5", -78.268],
         "n42R3": ["NOStarkMap_20221114-114554_calcc.h5", -1149.86],
-    }["n42R5_3"]
+        "n42R5_4": ["NOStarkMap_20221125-190505_calcc.h5", -78.268]
+    }["n42R5_4"]
     filename, yoff = data
 
     data_path = os.path.join(data_folder, filename)
     plot_path = os.path.join(plot_folder, filename + ".pdf")
 
     # stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_rot)
-    stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_fcharacter_N5)
+    stark_theory_plot(meas_data, func, data_path, plot_path, yoff, color_fcharacter_N5, ecorr=4.5)
 
 def main_hogan_test(data_folder, plot_folder):
-    # name = "NOStarkMap_20221117-100108_calcc.h5"
-    name = "NOStarkMap_20221117-143542_calcc.h5"
+    name = "NOStarkMap_20221117-100108_calcc.h5"
+    # name = "NOStarkMap_20221117-143542_calcc.h5"
     data_path = os.path.join(data_folder, name)
     plot_path = os.path.join(plot_folder, name + "_theory.pdf")
-    stark_theory_plot_standalone(data_path, plot_path, color_rot, ymin=-4, ymax=0, xmax=7)
+    stark_theory_plot_standalone(data_path, plot_path, color_rot, ymin=-66.5, ymax=-61.5, xmax=25)
 
 if __name__ == "__main__":
 

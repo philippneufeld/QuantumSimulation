@@ -10,6 +10,8 @@
 #include <list>
 #include <map>
 #include <set>
+#include <array>
+#include <optional>
 
 namespace QSim
 {
@@ -78,9 +80,14 @@ namespace QSim
 
     class SocketDataPackage
     {
+        constexpr static std::uint64_t s_protocolId = 0xA3F6A39464CF1A;
     public:
+        using Header_t = std::array<std::uint8_t, 16>;
+
         SocketDataPackage();
         SocketDataPackage(std::uint64_t size);
+        SocketDataPackage(std::uint64_t size, std::uint8_t status);
+        SocketDataPackage(const Header_t& header);
         ~SocketDataPackage();
 
         SocketDataPackage(const SocketDataPackage& rhs);
@@ -93,7 +100,14 @@ namespace QSim
         std::uint64_t GetSize() const { return m_size; };
         std::uint8_t* GetData() const { return m_pData; };
 
+        static bool IsValidHeader(const std::array<std::uint8_t, 16>& header);
+        static std::uint8_t GetStatusFromHeader(const std::array<std::uint8_t, 16>& header);
+        static std::uint64_t GetSizeFromHeader(const std::array<std::uint8_t, 16>& header);
+        static Header_t GenerateHeader(std::uint64_t size, std::uint8_t status);
+        Header_t GetHeader() const;
+
     private:
+        std::uint8_t m_status;
         std::uint64_t m_size;
         std::uint8_t* m_pData;
     };
@@ -101,6 +115,8 @@ namespace QSim
     class TCPIPServer
     {
     public:
+        
+
         TCPIPServer();
         virtual ~TCPIPServer();
 
@@ -109,15 +125,12 @@ namespace QSim
         // callbacks
         virtual bool OnClientConnected(std::size_t id, const std::string& ip) { return true; }
         virtual void OnClientDisconnected(std::size_t id) {}
-        virtual SocketDataPackage GetWelcomeMessage() { return SocketDataPackage(); }
         virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) { return SocketDataPackage(); }
 
     protected:
         void Purge();
         void CloseClientConnection(TCPIPConnection* pClient);
         std::size_t GetIdFromConnection(TCPIPConnection* pClient) const;
-
-        void AddToWriteBuffer(TCPIPConnection* pClient, SocketDataPackage package);
         
     private:
         bool m_bRunning;
@@ -136,8 +149,7 @@ namespace QSim
         using TCPIPClientSocket::Send;
 
     public:
-        SocketDataPackage Recv();
-        bool Send(const void* data, std::uint64_t n);
+        std::optional<SocketDataPackage> Query(const void* data, std::uint64_t n);
     };
 
 }
