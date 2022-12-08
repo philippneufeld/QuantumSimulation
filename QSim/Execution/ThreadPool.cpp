@@ -83,4 +83,17 @@ namespace QSim
         }
     }
 
+    unsigned int ThreadPool::GetAvailableThreads() const 
+    { 
+        std::unique_lock<std::mutex> lock(m_mutex);
+        std::size_t queued = m_queue.size();
+        
+        std::size_t idleThreads = m_threads.size() - m_ongoingTasks;
+        
+        if (queued >= idleThreads)
+            return 0;
+        else
+            return idleThreads - queued;
+    }
+
 }

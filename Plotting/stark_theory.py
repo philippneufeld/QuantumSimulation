@@ -36,14 +36,14 @@ def color_fcharacter(datagroup, basis):
     mask = np.logical_or(basis[:, 1] == 3, basis[:, 1] == 1)
     states = datagroup["States"][:, :]
     strength = np.clip(np.sum((states[mask, :] ** 2), axis=0), 0, 1)
-    return np.array([[1.0, 1.0, 1.0, x] for x in strength])
+    return np.array([[0.0, 1.0, 0.0, x] for x in strength])
 
 
 def color_fcharacter_N5(datagroup, basis):
     mask = np.logical_and(np.logical_or(basis[:, 1] == 3, basis[:, 1] == 1), basis[:, 2] == 5)
     states = datagroup["States"][:, :]
     strength = np.clip(np.sum((states[mask, :] ** 2), axis=0), 0, 1)
-    return np.array([[1.0, 1.0, 1.0, np.clip(2.5*x, 0.0, 1.0)] for x in strength])
+    return np.array([[0.0, 1.0, 0.0, np.clip(2.5*x, 0.0, 1.0)] for x in strength])
 
 #
 # Plot functions
@@ -61,6 +61,10 @@ def plot_stark_theory_lines(ax, path, color_func, xoff=0, yoff=0, unit=energyGHz
             efields[idx] = float(datagroup.attrs["Electric_Field"]) / 100 * ecorr - xoff
             stark_map[:, idx] = np.array(datagroup["Energies"][:, 0]) / unit - yoff
             colors[:, idx, :] = color_func(datagroup, basis)
+            
+    # flip, TODO
+    # flipoff = 3.25
+    # stark_map = -stark_map + 2*np.ones_like(stark_map)*flipoff-0.7
 
     ymin, ymax = ax.get_ylim()
     for idx in range(len(stark_map)):

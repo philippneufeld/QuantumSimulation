@@ -77,7 +77,7 @@ namespace QSim
         bool ConnectHostname(const std::string& hostname, short port);
     };
 
-
+    // TODO: message id
     class SocketDataPackage
     {
         constexpr static std::uint64_t s_protocolId = 0x00A3F6A39464CF1A;

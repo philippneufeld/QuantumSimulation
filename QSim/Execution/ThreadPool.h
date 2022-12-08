@@ -36,6 +36,8 @@ namespace QSim
         void WaitUntilReadyForTask();
         void WaitUntilFinished();
 
+        unsigned int GetAvailableThreads() const;
+
     private:
         void WorkerThread();
 
