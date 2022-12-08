@@ -273,24 +273,21 @@ namespace QSim
     //
 
     SocketDataPackage::SocketDataPackage() 
-        : m_size(0), m_pData(nullptr), m_status(0) {}
+        : m_size(0), m_pData(nullptr), m_status(SocketDataPackageStatus_OK), m_messageId(0) {}
 
     SocketDataPackage::SocketDataPackage(std::uint64_t size) 
-        : SocketDataPackage(size, 0) {}
-    
-    SocketDataPackage::SocketDataPackage(std::uint64_t size, std::uint8_t status) 
         : SocketDataPackage() 
     {
-        m_status = status;
         Allocate(size);
     }
 
-    SocketDataPackage::SocketDataPackage(const std::array<std::uint8_t, 16>& header)
+    SocketDataPackage::SocketDataPackage(const Header_t& header)
         : SocketDataPackage()
     {
         if (IsValidHeader(header))
         {
             m_status = GetStatusFromHeader(header);
+            m_messageId = GetMessageIdFromHeader(header);
             Allocate(GetSizeFromHeader(header));
         }
     }
@@ -303,6 +300,8 @@ namespace QSim
     SocketDataPackage::SocketDataPackage(const SocketDataPackage& rhs)
         : SocketDataPackage()
     {
+        m_status = rhs.m_status;
+        m_messageId = rhs.m_messageId;
         if (rhs.m_size > 0)
         {
             Allocate(rhs.m_size);
@@ -311,7 +310,7 @@ namespace QSim
     }
     
     SocketDataPackage::SocketDataPackage(SocketDataPackage&& rhs)
-        : m_pData(rhs.m_pData), m_size(rhs.m_size)
+        : m_pData(rhs.m_pData), m_size(rhs.m_size), m_status(rhs.m_status), m_messageId(rhs.m_messageId)
     {
         rhs.m_pData = nullptr;
         rhs.m_size = 0;
@@ -329,6 +328,11 @@ namespace QSim
         std::swap(m_pData, rhs.m_pData);
         std::swap(m_size, rhs.m_size);
         return *this;
+    }
+
+    SocketDataPackage::operator bool() const
+    {
+        return m_status == SocketDataPackageStatus_OK;
     }
     
     bool SocketDataPackage::Allocate(std::uint64_t size)
@@ -355,7 +359,7 @@ namespace QSim
         return (size == m_size);
     }
 
-    bool SocketDataPackage::IsValidHeader(const std::array<std::uint8_t, 16>& header)
+    bool SocketDataPackage::IsValidHeader(const Header_t& header)
     {
         std::uint64_t npid = 0;
         std::copy_n(header.data(), 7, reinterpret_cast<std::uint8_t*>(&npid) + 1);
@@ -363,35 +367,51 @@ namespace QSim
         return (pid == s_protocolId);
     }
 
-    std::uint8_t SocketDataPackage::GetStatusFromHeader(const std::array<std::uint8_t, 16>& header)
+    std::uint8_t SocketDataPackage::GetStatusFromHeader(const Header_t& header)
     {
         return header[7];
     }
     
-    std::uint64_t SocketDataPackage::GetSizeFromHeader(const std::array<std::uint8_t, 16>& header)
+    std::uint32_t SocketDataPackage::GetMessageIdFromHeader(const Header_t& header)
+    {
+        std::uint32_t nmid = 0;
+        std::copy_n(header.data() + 16, sizeof(nmid), reinterpret_cast<std::uint8_t*>(&nmid));
+        return ntohl(nmid);
+    }
+    
+    std::uint64_t SocketDataPackage::GetSizeFromHeader(const Header_t& header)
     {
         std::uint64_t nsize = 0;
-        std::copy_n(header.data() + 8, 8, reinterpret_cast<std::uint8_t*>(&nsize));
+        std::copy_n(header.data() + 8, sizeof(nsize), reinterpret_cast<std::uint8_t*>(&nsize));
         return ntohll(nsize);
     }
 
-    SocketDataPackage::Header_t SocketDataPackage::GenerateHeader(std::uint64_t size, std::uint8_t status)
+    SocketDataPackage::Header_t SocketDataPackage::GenerateHeader(std::uint64_t size, std::uint8_t status, std::uint32_t msgId)
     {
         Header_t header;
 
         std::uint64_t npid = htonll(s_protocolId);
         std::uint64_t nsize = htonll(size);
+        std::uint32_t nmid = htonl(msgId);
         
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid) + 1, 7, header.data());
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&status), 1, header.data() + 7);
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&nsize), 8, header.data() + 8);
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&nmid), 4, header.data() + 16);
 
         return header;
     }
 
     SocketDataPackage::Header_t SocketDataPackage::GetHeader() const
     {
-        return GenerateHeader(m_size, m_status);
+        return GenerateHeader(m_size, m_status, m_messageId);
+    }
+    
+    SocketDataPackage SocketDataPackage::CreateError(std::uint8_t status)
+    {
+        SocketDataPackage package;
+        package.SetStatus(status);
+        return package;
     }
 
 
@@ -566,16 +586,16 @@ namespace QSim
     // TCPIPClient
     //
 
-    std::optional<SocketDataPackage> TCPIPClient::Query(const void* data, std::uint64_t n)
+    SocketDataPackage TCPIPClient::Query(const void* data, std::uint64_t n, std::uint32_t msgId)
     {
         SocketDataPackage::Header_t header;
         
         // send package header
-        header = SocketDataPackage::GenerateHeader(n, 0);
+        header = SocketDataPackage::GenerateHeader(n, SocketDataPackageStatus_OK, msgId);
         if (TCPIPClientSocket::Send(header.data(), sizeof(header)) != sizeof(header))
         {
             Close();
-            return std::nullopt;
+            return SocketDataPackage::CreateError(SocketDataPackageStatus_IO_ERROR);
         }
 
         // send package data
@@ -584,7 +604,7 @@ namespace QSim
             if (TCPIPClientSocket::Send(data, n) != n)
             {
                 Close();
-                return std::nullopt;
+                return SocketDataPackage::CreateError(SocketDataPackageStatus_IO_ERROR);
             }
         }
 
@@ -593,7 +613,7 @@ namespace QSim
         if (cnt != sizeof(header) || !SocketDataPackage::IsValidHeader(header))
         {
             Close();
-            return std::nullopt;
+            return SocketDataPackage::CreateError(SocketDataPackageStatus_INVALID_PACKAGE);
         }
         
         SocketDataPackage package(header);
@@ -603,7 +623,7 @@ namespace QSim
             if (cnt <= 0)
             {
                 Close();
-                return std::nullopt;
+                return SocketDataPackage::CreateError(SocketDataPackageStatus_IO_ERROR);
             }
             read += cnt;
         }

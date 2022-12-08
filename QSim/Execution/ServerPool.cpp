@@ -39,6 +39,8 @@ namespace QSim
             *reinterpret_cast<std::uint32_t*>(response.GetData() + 4) = reserveCnt;
             return response;
         }
+
+        return SocketDataPackage();
     }
 
     std::uint32_t ServerPoolWorker::TryReserve(std::size_t id, std::uint32_t cnt)
@@ -76,6 +78,8 @@ namespace QSim
         m_tickets.erase(it);
 
         m_pool.Submit([this, data=std::move(data)](){ return DoWork(data); });
+
+        return true;
     }
 
 }

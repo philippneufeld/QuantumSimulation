@@ -71,7 +71,7 @@ int ClientMain()
     
     auto reply = client.Query(helloServer.data(), helloServer.size());
     if (reply)
-        std::cout << "Received data: " << (*reply).GetSize() / sizeof(double) << std::endl;
+        std::cout << "Received data: " << reply.GetSize() / sizeof(double) << std::endl;
 
     std::this_thread::sleep_for(5s);
 
