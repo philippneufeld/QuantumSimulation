@@ -62,8 +62,7 @@ int ClientMain()
     std::string helloServer = "Hello server!";
 
     TCPIPClient client;
-    if (!client.ConnectHostname("ludwigsburg", 8000))
-    // if (!client.ConnectHostname("calcc", 8000))
+    if (!client.Connect(TCPIPClientSocket::GetHostByName("monaco"), 8000))
     {
         std::cout << "Failed to connect to server" << std::endl;
         return 1;

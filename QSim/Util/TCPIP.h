@@ -142,6 +142,14 @@ namespace QSim
     class TCPIPConnectionHandler
     {
     public:
+        TCPIPConnectionHandler();
+        virtual ~TCPIPConnectionHandler();
+
+        TCPIPConnectionHandler(const TCPIPConnectionHandler&) = delete;
+        TCPIPConnectionHandler(TCPIPConnectionHandler&& rhs) = delete;
+
+        TCPIPConnectionHandler& operator=(const TCPIPConnectionHandler&) = delete;
+        TCPIPConnectionHandler& operator=(TCPIPConnectionHandler&&) = delete;
 
         void AddConnection(TCPIPConnection* pConn);
         void RemoveConnection(TCPIPConnection* pConn);
@@ -151,21 +159,20 @@ namespace QSim
         void RunHandler();
         void StopHandler();
 
-        virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) { };
-        virtual void OnConnectionClosed(TCPIPConnection* pConn) { };
-        virtual SocketDataPackage OnMessageReceived(TCPIPConnection* pConn, SocketDataPackage msg);
+        virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) = 0;
+        virtual void OnConnectionClosed(TCPIPConnection* pConn) = 0;
+        virtual void OnConnectionRemoved(TCPIPConnection* pConn) = 0;
+        virtual SocketDataPackage OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) = 0;
 
     private:
         void DoRunHandler();
 
     private:
-        std::atomic<bool> m_keepRunning;
+        std::mutex m_mutex;
+        bool m_keepRunning;
 
         std::list<TCPIPServerSocket*> m_servers;
         std::list<TCPIPConnection*> m_connections;
-        
-        std::mutex m_mutex;
-        std::list<TCPIPConnection*> m_checkWritable;
         std::map<TCPIPConnection*, std::queue<SocketDataPackage>> m_writeBuffer;
     };
 
@@ -182,10 +189,17 @@ namespace QSim
         virtual void OnClientDisconnected(std::size_t id) {}
         virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) { return SocketDataPackage(); }
 
-    protected:
-        void Purge();
-        void CloseClientConnection(TCPIPConnection* pClient);
-        std::size_t GetIdFromConnection(TCPIPConnection* pClient) const;
+    private:
+        // connection handler callbacks
+        virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) override;
+        virtual void OnConnectionClosed(TCPIPConnection* pConn) override;
+        virtual void OnConnectionRemoved(TCPIPConnection* pConn) override;
+        virtual SocketDataPackage OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) override;
+
+        std::size_t GetIdFromConnection(TCPIPConnection* pConnection) const;
+
+    private:
+        TCPIPServerSocket* m_pServer;
     };
 
     class TCPIPClient : public TCPIPClientSocket

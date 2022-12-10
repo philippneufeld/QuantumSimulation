@@ -416,25 +416,49 @@ namespace QSim
 
 
     //
+    // TCPIPConnectionHandler
     //
-    //
+
+    TCPIPConnectionHandler::TCPIPConnectionHandler() { }
+    
+    TCPIPConnectionHandler::~TCPIPConnectionHandler() 
+    {
+        while (!m_connections.empty())
+            RemoveConnection(m_connections.front());
+
+        while (!m_servers.empty())
+            RemoveServer(m_servers.front());
+    }
 
     void TCPIPConnectionHandler::AddConnection(TCPIPConnection* pConn)
     {
+        if (!pConn)
+            return;
+        
+        std::unique_lock<std::mutex> lock(m_mutex);
         auto it = std::find(m_connections.begin(), m_connections.end(), pConn);
         if (it == m_connections.end())
             m_connections.push_back(pConn);
     }
 
     void TCPIPConnectionHandler::RemoveConnection(TCPIPConnection* pConn)
-    {
+    {   
+        std::unique_lock<std::mutex> lock(m_mutex);
         auto it = std::find(m_connections.begin(), m_connections.end(), pConn);
         if (it != m_connections.end())
+        {
             m_connections.erase(it);
+            lock.unlock();
+            OnConnectionRemoved(pConn);
+        }
     }
 
     void TCPIPConnectionHandler::AddServer(TCPIPServerSocket* pServer)
     {
+        if (!pServer)
+            return;
+        
+        std::unique_lock<std::mutex> lock(m_mutex);
         auto it = std::find(m_servers.begin(), m_servers.end(), pServer);
         if (it == m_servers.end())
             m_servers.push_back(pServer);
@@ -442,6 +466,7 @@ namespace QSim
 
     void TCPIPConnectionHandler::RemoveServer(TCPIPServerSocket* pServer)
     {
+        std::unique_lock<std::mutex> lock(m_mutex);
         auto it = std::find(m_servers.begin(), m_servers.end(), pServer);
         if (it != m_servers.end())
             m_servers.erase(it);
@@ -449,7 +474,7 @@ namespace QSim
 
     void TCPIPConnectionHandler::RunHandler()
     {
-        DoRun();
+        DoRunHandler();
     }
 
     void TCPIPConnectionHandler::StopHandler()
@@ -466,8 +491,12 @@ namespace QSim
         std::vector<TCPIPConnection*> checkReadable;
         std::vector<TCPIPConnection*> checkWritable;
 
-        m_keepRunning = true;
-        while (m_keepRunning)
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_keepRunning = true;
+        }
+
+        while (true)
         { 
             checkAcceptable.clear();
             checkReadable.clear();
@@ -477,6 +506,10 @@ namespace QSim
             // prepare lists of connections to be checked
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
+
+                if (!m_keepRunning)
+                    break;
+
                 checkAcceptable.reserve(m_servers.size());
                 checkReadable.reserve(m_connections.size());
                 checkWritable.reserve(m_writeBuffer.size());
@@ -534,9 +567,10 @@ namespace QSim
                         alreadyRead += cnt; // update read buffer (reference)
                         if (alreadyRead == buffer.GetSize())
                         {
-                            SocketDataPackage resp = OnMessageReceived(pConn, std::move(buffer));
-                            m_writeBuffer[pConn].push_back(std::move(resp));
+                            SocketDataPackage resp = OnConnectionMessage(pConn, std::move(buffer));
                             readBuffer.erase(readBuffer.find(pConn));
+                            std::unique_lock<std::mutex> lock(m_mutex);
+                            m_writeBuffer[pConn].push(std::move(resp));
                         }
                     }
                 }
@@ -599,10 +633,10 @@ namespace QSim
             // handle killed connections
             for (TCPIPConnection* pConn: killed)
             {
-                this->RemoveConnection(pConn);
                 pConn->Close();
                 this->OnConnectionClosed(pConn);
-
+                this->RemoveConnection(pConn);
+                
                 // clear read buffer
                 auto it1 = readBuffer.find(pConn);
                 if (it1 != readBuffer.end())
@@ -621,26 +655,63 @@ namespace QSim
     // TCPIPServer
     //
 
-    TCPIPServer::TCPIPServer()
-        : m_bRunning(false) { }
+    TCPIPServer::TCPIPServer() : m_pServer(nullptr) { }
     
-    TCPIPServer::~TCPIPServer()
-    {
-    }
+    TCPIPServer::~TCPIPServer() { }
 
     bool TCPIPServer::Run(short port)
     {
-        // start socket server
-        TCPIPServerSocket server;
-        if (!server.Bind(8000))
-            return false;
-        if (!server.Listen(5))
+        if (m_pServer)
             return false;
 
-        this->AddServer(&server);
+        // start socket server
+        m_pServer = new TCPIPServerSocket();
+        if (!m_pServer->Bind(8000))
+            return false;
+        if (!m_pServer->Listen(5))
+            return false;
+
+        this->AddServer(m_pServer);
         this->RunHandler();
+        this->RemoveServer(m_pServer);
+
+        delete m_pServer;
+        m_pServer = nullptr;
+
+        return true;
     }
 
+    void TCPIPServer::OnConnectionAcceptale(TCPIPServerSocket* pServer) 
+    {
+        auto [fd, ip] = pServer->Accept();
+        TCPIPConnection* pConn = new TCPIPConnection(fd);
+        if (pConn->IsValid())
+        {
+            AddConnection(pConn);
+            OnClientConnected(GetIdFromConnection(pConn), ip);
+        }
+    }
+
+    void TCPIPServer::OnConnectionClosed(TCPIPConnection* pConn) 
+    {
+        OnClientDisconnected(GetIdFromConnection(pConn));
+    }
+
+    void TCPIPServer::OnConnectionRemoved(TCPIPConnection* pConn) 
+    {
+        if (pConn) delete pConn;
+    }
+
+    SocketDataPackage TCPIPServer::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
+    {
+        return OnMessageReceived(GetIdFromConnection(pConn), std::move(msg));
+    }
+
+    std::size_t TCPIPServer::GetIdFromConnection(TCPIPConnection* pConnection) const
+    {
+        static_assert(sizeof(std::size_t) == sizeof(pConnection), "id type not large enough");
+        return reinterpret_cast<std::size_t>(pConnection);
+    }
 
     //
     // TCPIPClient
