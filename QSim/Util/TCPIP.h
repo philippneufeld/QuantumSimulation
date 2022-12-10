@@ -11,6 +11,10 @@
 #include <map>
 #include <set>
 #include <array>
+#include <functional>
+#include <atomic>
+#include <mutex>
+#include <queue>
 
 namespace QSim
 {
@@ -62,10 +66,10 @@ namespace QSim
             std::vector<TCPIPServerSocket*>, std::vector<TCPIPConnection*>, 
             std::vector<TCPIPConnection*>, std::vector<TCPIPConnection*>
         >
-            Select(const std::list<TCPIPServerSocket*>& acceptable,
-                   const std::list<TCPIPConnection*>& readable, 
-                   const std::list<TCPIPConnection*>& writable, 
-                   const std::list<TCPIPConnection*>& exceptional);
+            Select(const std::vector<TCPIPServerSocket*>& acceptable,
+                   const std::vector<TCPIPConnection*>& readable, 
+                   const std::vector<TCPIPConnection*>& writable, 
+                   const std::vector<TCPIPConnection*>& exceptional);
     };
 
     class TCPIPClientSocket : public TCPIPConnection
@@ -73,7 +77,7 @@ namespace QSim
     public:
         TCPIPClientSocket();
         bool Connect(const std::string& ip, short port);
-        bool ConnectHostname(const std::string& hostname, short port);
+        static std::string GetHostByName(const std::string& hostname);
     };
 
 
@@ -133,7 +137,39 @@ namespace QSim
         std::uint8_t* m_pData;
     };
 
-    class TCPIPServer
+    using UUID = std::size_t;
+
+    class TCPIPConnectionHandler
+    {
+    public:
+
+        void AddConnection(TCPIPConnection* pConn);
+        void RemoveConnection(TCPIPConnection* pConn);
+        void AddServer(TCPIPServerSocket* pServer);
+        void RemoveServer(TCPIPServerSocket* pServer);
+
+        void RunHandler();
+        void StopHandler();
+
+        virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) { };
+        virtual void OnConnectionClosed(TCPIPConnection* pConn) { };
+        virtual SocketDataPackage OnMessageReceived(TCPIPConnection* pConn, SocketDataPackage msg);
+
+    private:
+        void DoRunHandler();
+
+    private:
+        std::atomic<bool> m_keepRunning;
+
+        std::list<TCPIPServerSocket*> m_servers;
+        std::list<TCPIPConnection*> m_connections;
+        
+        std::mutex m_mutex;
+        std::list<TCPIPConnection*> m_checkWritable;
+        std::map<TCPIPConnection*, std::queue<SocketDataPackage>> m_writeBuffer;
+    };
+
+    class TCPIPServer : private TCPIPConnectionHandler
     {
     public:
         TCPIPServer();
@@ -150,14 +186,6 @@ namespace QSim
         void Purge();
         void CloseClientConnection(TCPIPConnection* pClient);
         std::size_t GetIdFromConnection(TCPIPConnection* pClient) const;
-        
-    private:
-        bool m_bRunning;
-        std::list<TCPIPConnection*> m_pClients;
-        
-        // buffers
-        std::map<TCPIPConnection*, std::tuple<SocketDataPackage, std::uint64_t>> m_readBuffer;
-        std::map<TCPIPConnection*, std::list<SocketDataPackage>> m_writeBuffer;
     };
 
     class TCPIPClient : public TCPIPClientSocket
@@ -169,6 +197,21 @@ namespace QSim
 
     public:
         SocketDataPackage Query(const void* data, std::uint64_t n, std::uint32_t msgId = 0);
+    };
+
+    class TCPIPMultiClient
+    {
+    public:
+        TCPIPMultiClient();
+
+        std::size_t Connect(const std::string& ip, short port);
+        std::size_t ConnectHostname(const std::string& hostname, short port);
+
+    private:
+        std::size_t GetIdFromConnection(TCPIPConnection* pConnection) const;
+
+    private:
+        std::list<TCPIPConnection*> m_connections;
     };
 
 }

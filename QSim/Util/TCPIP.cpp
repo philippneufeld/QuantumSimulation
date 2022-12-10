@@ -152,10 +152,10 @@ namespace QSim
         std::vector<TCPIPConnection*>, std::vector<TCPIPConnection*>
     >
         TCPIPServerSocket::Select(
-            const std::list<TCPIPServerSocket*>& acceptable, 
-            const std::list<TCPIPConnection*>& readable, 
-            const std::list<TCPIPConnection*>& writable, 
-            const std::list<TCPIPConnection*>& exceptional)
+            const std::vector<TCPIPServerSocket*>& acceptable, 
+            const std::vector<TCPIPConnection*>& readable, 
+            const std::vector<TCPIPConnection*>& writable, 
+            const std::vector<TCPIPConnection*>& exceptional)
     {
         // initialize file descriptor sets
         fd_set readFds, writeFds, excFds;
@@ -247,7 +247,7 @@ namespace QSim
         return true;
     }
 
-    bool TCPIPClientSocket::ConnectHostname(const std::string& hostname, short port)
+    std::string TCPIPClientSocket::GetHostByName(const std::string& hostname)
     {
         constexpr int bufferLen = 256;
         char buffer[bufferLen] = "";
@@ -255,7 +255,7 @@ namespace QSim
 
         hostent* pRes = gethostbyname(hostname.c_str());
         if (!pRes || pRes->h_length < 4)
-            return false;
+            return "";
         char** addresses = pRes->h_addr_list;
         
         std::string ip = 
@@ -263,8 +263,8 @@ namespace QSim
             + std::to_string((int)(unsigned char)addresses[0][1]) + "." 
             + std::to_string((int)(unsigned char)addresses[0][2]) + "." 
             + std::to_string((int)(unsigned char)addresses[0][3]);
-        
-        return Connect(ip, port);
+
+        return ip;
     }
 
 
@@ -416,48 +416,83 @@ namespace QSim
 
 
     //
-    // TCPIPServer
+    //
     //
 
-    TCPIPServer::TCPIPServer()
-        : m_bRunning(false) { }
-    
-    TCPIPServer::~TCPIPServer()
+    void TCPIPConnectionHandler::AddConnection(TCPIPConnection* pConn)
     {
-        Purge();
+        auto it = std::find(m_connections.begin(), m_connections.end(), pConn);
+        if (it == m_connections.end())
+            m_connections.push_back(pConn);
     }
 
-    bool TCPIPServer::Run(short port)
+    void TCPIPConnectionHandler::RemoveConnection(TCPIPConnection* pConn)
     {
-        // clear all buffers
-        Purge();
-        
-        // start socket server
-        TCPIPServerSocket server;
-        if (!server.Bind(8000))
-            return false;
-        if (!server.Listen(5))
-            return false;
+        auto it = std::find(m_connections.begin(), m_connections.end(), pConn);
+        if (it != m_connections.end())
+            m_connections.erase(it);
+    }
 
+    void TCPIPConnectionHandler::AddServer(TCPIPServerSocket* pServer)
+    {
+        auto it = std::find(m_servers.begin(), m_servers.end(), pServer);
+        if (it == m_servers.end())
+            m_servers.push_back(pServer);
+    }
+
+    void TCPIPConnectionHandler::RemoveServer(TCPIPServerSocket* pServer)
+    {
+        auto it = std::find(m_servers.begin(), m_servers.end(), pServer);
+        if (it != m_servers.end())
+            m_servers.erase(it);
+    }
+
+    void TCPIPConnectionHandler::RunHandler()
+    {
+        DoRun();
+    }
+
+    void TCPIPConnectionHandler::StopHandler()
+    {
+        m_keepRunning = true;
+    }
+
+    void TCPIPConnectionHandler::DoRunHandler()
+    {
+        std::map<TCPIPConnection*, std::tuple<SocketDataPackage, std::uint64_t>> readBuffer;
         std::set<TCPIPConnection*> killed;
-        while (true)
-        {
+
+        std::vector<TCPIPServerSocket*> checkAcceptable;
+        std::vector<TCPIPConnection*> checkReadable;
+        std::vector<TCPIPConnection*> checkWritable;
+
+        m_keepRunning = true;
+        while (m_keepRunning)
+        { 
+            checkAcceptable.clear();
+            checkReadable.clear();
+            checkWritable.clear();
             killed.clear();
-            auto [ac, re, wr, ex] = TCPIPServerSocket::Select({&server}, m_pClients, m_pClients, {});
+ 
+            // prepare lists of connections to be checked
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                checkAcceptable.reserve(m_servers.size());
+                checkReadable.reserve(m_connections.size());
+                checkWritable.reserve(m_writeBuffer.size());
+                std::copy(m_servers.begin(), m_servers.end(), std::back_inserter(checkAcceptable));
+                std::copy(m_connections.begin(), m_connections.end(), std::back_inserter(checkReadable));
+                std::transform(m_writeBuffer.begin(), m_writeBuffer.end(), 
+                    std::back_inserter(checkWritable), [](auto el) { return el.first; });
+            }
+
+            // block until either accept, read or write can be performed
+            // TODO: wakup with pipe
+            auto [ac, re, wr, ex] = TCPIPServerSocket::Select(checkAcceptable, checkReadable, checkWritable, {});
             
             // handle new connections
-            if (std::find(ac.begin(), ac.end(), &server) != ac.end())
-            {
-                auto [cid, ip] = server.Accept();
-                auto pConn = new TCPIPConnection(cid);
-                if (pConn->IsValid())
-                {
-                    if (OnClientConnected(GetIdFromConnection(pConn), ip))
-                    {
-                        m_pClients.push_back(pConn);
-                    }
-                }
-            }
+            for (TCPIPServerSocket* pServer: ac)
+                this->OnConnectionAcceptale(pServer);
 
             // handle receiving messages
             for (TCPIPConnection* pConn: re)
@@ -465,10 +500,8 @@ namespace QSim
                 if (killed.count(pConn) != 0)
                     continue;
                 
-                auto id = GetIdFromConnection(pConn);
-
                 // check if data in read buffer
-                if (m_readBuffer.count(pConn) == 0)
+                if (readBuffer.count(pConn) == 0)
                 {
                     SocketDataPackage::Header_t header;
                     if (pConn->Recv(header.data(), sizeof(header)) != sizeof(header))
@@ -483,11 +516,11 @@ namespace QSim
                         continue;
                     }
                     
-                    m_readBuffer[pConn] = std::make_tuple(SocketDataPackage(header), std::uint64_t(0));                    
+                    readBuffer[pConn] = std::make_tuple(SocketDataPackage(header), std::uint64_t(0));                    
                 }
                 else
                 {
-                    auto& [buffer, alreadyRead] = m_readBuffer[pConn];
+                    auto& [buffer, alreadyRead] = readBuffer[pConn];
                     std::uint64_t remaining = buffer.GetSize() - alreadyRead;
 
                     std::size_t cnt = pConn->Recv(buffer.GetData() + alreadyRead, remaining);
@@ -501,9 +534,9 @@ namespace QSim
                         alreadyRead += cnt; // update read buffer (reference)
                         if (alreadyRead == buffer.GetSize())
                         {
-                            SocketDataPackage resp = OnMessageReceived(id, std::move(buffer));
+                            SocketDataPackage resp = OnMessageReceived(pConn, std::move(buffer));
                             m_writeBuffer[pConn].push_back(std::move(resp));
-                            m_readBuffer.erase(m_readBuffer.find(pConn));
+                            readBuffer.erase(readBuffer.find(pConn));
                         }
                     }
                 }
@@ -512,13 +545,23 @@ namespace QSim
             // handle sending messages
             for (TCPIPConnection* pConn: wr)
             {
+                // access to write buffer is thread-safe without lock in this case,
+                // since all other threads may only append to the list 
+                // (this does not invalidate the iterators to the existing items)
                 if (killed.count(pConn) != 0)
                     continue;
 
-                auto& outputBuff = m_writeBuffer[pConn];
-                for (auto& package: outputBuff)
+                auto& outputQueue = m_writeBuffer[pConn];
+
+                while (true)
                 {
-                    
+                    std::unique_lock<std::mutex> lock(m_mutex);
+                    if (outputQueue.empty())
+                        break;
+                    SocketDataPackage package = std::move(outputQueue.front());
+                    outputQueue.pop();
+                    lock.unlock();
+
                     // send package header
                     SocketDataPackage::Header_t header = package.GetHeader();
                     if (pConn->Send(header.data(), sizeof(header)) != sizeof(header))
@@ -538,47 +581,64 @@ namespace QSim
                         }
                     }
                 }
-                outputBuff.clear();
+            }
+            
+            // purge write buffer of empty queues
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                for (auto it = m_writeBuffer.begin(); it != m_writeBuffer.end();)
+                {
+                    if (it->second.empty())
+                        it = m_writeBuffer.erase(it);
+                    else
+                        it = std::next(it);
+                }
+                
             }
 
             // handle killed connections
             for (TCPIPConnection* pConn: killed)
             {
-                auto id = GetIdFromConnection(pConn);
-                CloseClientConnection(pConn);
-                OnClientDisconnected(id);
+                this->RemoveConnection(pConn);
+                pConn->Close();
+                this->OnConnectionClosed(pConn);
+
+                // clear read buffer
+                auto it1 = readBuffer.find(pConn);
+                if (it1 != readBuffer.end())
+                    readBuffer.erase(it1);
+
+                // clear write buffer
+                std::unique_lock<std::mutex> lock(m_mutex);
+                auto it2 = m_writeBuffer.find(pConn);
+                if (it2 != m_writeBuffer.end())
+                    m_writeBuffer.erase(it2);
             }
         }
-
-        return 0;
     }
 
-    void TCPIPServer::Purge()
+    //
+    // TCPIPServer
+    //
+
+    TCPIPServer::TCPIPServer()
+        : m_bRunning(false) { }
+    
+    TCPIPServer::~TCPIPServer()
     {
-        for (TCPIPConnection* pClient: m_pClients)
-            delete pClient;
-        m_pClients.clear();
     }
 
-    void TCPIPServer::CloseClientConnection(TCPIPConnection* pClient)
+    bool TCPIPServer::Run(short port)
     {
-        m_pClients.remove(pClient);
+        // start socket server
+        TCPIPServerSocket server;
+        if (!server.Bind(8000))
+            return false;
+        if (!server.Listen(5))
+            return false;
 
-        auto it1 = m_readBuffer.find(pClient);
-        if (it1 != m_readBuffer.end())
-            m_readBuffer.erase(it1);
-
-        auto it2 = m_writeBuffer.find(pClient);
-        if (it2 != m_writeBuffer.end())
-            m_writeBuffer.erase(it2);
-
-        delete pClient;
-    }
-
-    std::size_t TCPIPServer::GetIdFromConnection(TCPIPConnection* pClient) const
-    {
-        static_assert(sizeof(std::size_t) == sizeof(TCPIPConnection*), "id type not large enough");
-        return reinterpret_cast<std::size_t>(pClient);
+        this->AddServer(&server);
+        this->RunHandler();
     }
 
 
@@ -629,5 +689,32 @@ namespace QSim
         }
 
         return package;
+    }
+
+    //
+    // TCPIPMultiClient
+    //
+
+    TCPIPMultiClient::TCPIPMultiClient() { }
+
+    std::size_t TCPIPMultiClient::Connect(const std::string& ip, short port)
+    {
+        auto pConn = new TCPIPClientSocket();
+        if (!pConn->Connect(ip, port))
+            return 0;
+        
+        m_connections.push_back(pConn);
+        return GetIdFromConnection(pConn);
+    }
+    
+    std::size_t TCPIPMultiClient::ConnectHostname(const std::string& hostname, short port)
+    {
+        return Connect(TCPIPClientSocket::GetHostByName(hostname), port);
+    }
+
+    std::size_t TCPIPMultiClient::GetIdFromConnection(TCPIPConnection* pConnection) const
+    {
+        static_assert(sizeof(std::size_t) == sizeof(pConnection), "id type not large enough");
+        return reinterpret_cast<std::size_t>(pConnection);
     }
 }
