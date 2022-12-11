@@ -49,6 +49,16 @@ public:
     
 };
 
+class MyClient : public TCPIPMultiClient
+{
+public:
+    virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) override
+    {
+        std::cout << "Received data: " << data.GetSize() / sizeof(double) << std::endl;
+        return SocketDataPackage();
+    }
+};
+
 int ServerMain()
 {
     MyServer server;
@@ -77,18 +87,44 @@ int ClientMain()
     return 0;
 }
 
+int ClientMain2()
+{
+    std::string helloServer = "Hello server!";
+
+    MyClient client;
+
+    std::thread thread([&](){ client.Run(); });
+
+    //std::this_thread::sleep_for(50s);
+
+    std::size_t id = client.ConnectHostname("lupus", 8000);
+    if (id == 0)
+    {
+        std::cout << "Failed to connect to server" << std::endl;
+        return 1;
+    }
+    
+    SocketDataPackage msg(helloServer.size());
+    std::copy_n(helloServer.begin(), helloServer.size(), reinterpret_cast<char*>(msg.GetData()));
+    client.WriteTo(id, std::move(msg));
+    
+    std::this_thread::sleep_for(5s);
+
+    std::cout << "Stopping..." << std::endl;
+    client.Stop();
+    thread.join();
+
+    return 0;
+}
+
 int main(int argc, const char** argv)
 {
-    fd_set set;
-    FD_ZERO(&set);
-    constexpr auto askjdfh = FD_SETSIZE;
-
     ArgumentParser parser;
     parser.AddOption("worker", "Start as worker");
     auto args = parser.Parse(argc, argv);
     
     if (args.IsOptionPresent("worker"))
-        return ClientMain();
+        return ClientMain2();
     else 
         return ServerMain();
 

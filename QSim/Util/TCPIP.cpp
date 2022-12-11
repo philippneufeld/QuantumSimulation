@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <sstream>
 
+#include <fcntl.h>
+
 #include <unistd.h> // close
 #include <sys/socket.h> // socket functions
 #include <sys/select.h> // select
@@ -12,8 +14,6 @@
 #include <netdb.h> // gethostbyname
 
 #include "TCPIP.h"
-
-#include <iostream>
 
 // https://stackoverflow.com/questions/3022552/is-there-any-standard-htonl-like-function-for-64-bits-integers-in-c
 #ifdef __BIG_ENDIAN__
@@ -27,7 +27,38 @@
 
 namespace QSim
 {
-    
+
+    //
+    // IOEvent
+    //
+
+    IOEvent::IOEvent()
+    {
+        pipe(m_fd);
+        fcntl(m_fd[0], F_SETFL, O_NONBLOCK);
+    }
+
+    IOEvent::~IOEvent()
+    {
+        for (int i=0; i<2; i++)
+        {
+            if (m_fd[i] >= 0)
+                close(m_fd[i]);
+            m_fd[i] = -1;
+        }
+    }
+
+    void IOEvent::Set()
+    {
+        write(m_fd[1], "x", 1);
+    }
+
+    void IOEvent::Reset()
+    {
+        std::uint8_t buff = 0;
+        while (read(m_fd[0], &buff, 1) == 1);
+    }
+
     //
     // TCPIPSocket
     //
@@ -88,7 +119,6 @@ namespace QSim
 
         return recv(GetHandle(), buffer, buffSize, 0);
     }
-
 
     //
     // TCPIPServerSocket
@@ -155,7 +185,8 @@ namespace QSim
             const std::vector<TCPIPServerSocket*>& acceptable, 
             const std::vector<TCPIPConnection*>& readable, 
             const std::vector<TCPIPConnection*>& writable, 
-            const std::vector<TCPIPConnection*>& exceptional)
+            const std::vector<TCPIPConnection*>& exceptional,
+            IOEvent& wakeupSignal)
     {
         // initialize file descriptor sets
         fd_set readFds, writeFds, excFds;
@@ -171,6 +202,7 @@ namespace QSim
         bool bE = !exceptional.empty();
 
         // populate sets
+        FD_SET(wakeupSignal.GetFileDescriptor(), &readFds);
         for (const TCPIPServerSocket* pServer : acceptable) 
             FD_SET(pServer->GetHandle(), &readFds);
         for (const TCPIPConnection* pConn : readable) 
@@ -182,7 +214,7 @@ namespace QSim
     
         // Maybe error handling here?
         int cnt = select(FD_SETSIZE, 
-            !acceptable.empty() || !readable.empty() ? &readFds : nullptr, 
+            &readFds, 
             !writable.empty() ? &writeFds : nullptr, 
             !exceptional.empty() ? &excFds : nullptr, nullptr);
 
@@ -424,7 +456,7 @@ namespace QSim
     TCPIPConnectionHandler::~TCPIPConnectionHandler() 
     {
         while (!m_connections.empty())
-            RemoveConnection(m_connections.front());
+            RemoveConnection(*m_connections.begin());
 
         while (!m_servers.empty())
             RemoveServer(m_servers.front());
@@ -436,18 +468,29 @@ namespace QSim
             return;
         
         std::unique_lock<std::mutex> lock(m_mutex);
-        auto it = std::find(m_connections.begin(), m_connections.end(), pConn);
+        auto it = m_connections.find(pConn);
         if (it == m_connections.end())
-            m_connections.push_back(pConn);
+        {
+            m_connections.insert(pConn);
+            m_wakeupSignal.Set();
+        }
     }
 
     void TCPIPConnectionHandler::RemoveConnection(TCPIPConnection* pConn)
     {   
         std::unique_lock<std::mutex> lock(m_mutex);
-        auto it = std::find(m_connections.begin(), m_connections.end(), pConn);
+        auto it = m_connections.find(pConn);
         if (it != m_connections.end())
         {
             m_connections.erase(it);
+
+            // clear write buffer from pConn
+            auto it2 = m_writeBuffer.find(pConn);
+            if (it2 != m_writeBuffer.end())
+                m_writeBuffer.erase(it2);
+
+            m_wakeupSignal.Set();
+
             lock.unlock();
             OnConnectionRemoved(pConn);
         }
@@ -461,7 +504,10 @@ namespace QSim
         std::unique_lock<std::mutex> lock(m_mutex);
         auto it = std::find(m_servers.begin(), m_servers.end(), pServer);
         if (it == m_servers.end())
+        {
             m_servers.push_back(pServer);
+            m_wakeupSignal.Set();
+        }
     }
 
     void TCPIPConnectionHandler::RemoveServer(TCPIPServerSocket* pServer)
@@ -469,20 +515,23 @@ namespace QSim
         std::unique_lock<std::mutex> lock(m_mutex);
         auto it = std::find(m_servers.begin(), m_servers.end(), pServer);
         if (it != m_servers.end())
+        {
             m_servers.erase(it);
+            m_wakeupSignal.Set();
+        }
+    }
+
+    void TCPIPConnectionHandler::WriteTo(TCPIPConnection* pConn, SocketDataPackage msg)
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        if (m_connections.count(pConn) != 0)
+        {
+            m_writeBuffer[pConn].push(std::move(msg));
+            m_wakeupSignal.Set();
+        }
     }
 
     void TCPIPConnectionHandler::RunHandler()
-    {
-        DoRunHandler();
-    }
-
-    void TCPIPConnectionHandler::StopHandler()
-    {
-        m_keepRunning = true;
-    }
-
-    void TCPIPConnectionHandler::DoRunHandler()
     {
         std::map<TCPIPConnection*, std::tuple<SocketDataPackage, std::uint64_t>> readBuffer;
         std::set<TCPIPConnection*> killed;
@@ -509,6 +558,7 @@ namespace QSim
 
                 if (!m_keepRunning)
                     break;
+                m_wakeupSignal.Reset();
 
                 checkAcceptable.reserve(m_servers.size());
                 checkReadable.reserve(m_connections.size());
@@ -520,12 +570,27 @@ namespace QSim
             }
 
             // block until either accept, read or write can be performed
-            // TODO: wakup with pipe
-            auto [ac, re, wr, ex] = TCPIPServerSocket::Select(checkAcceptable, checkReadable, checkWritable, {});
+            auto [ac, re, wr, ex] = TCPIPServerSocket::Select(checkAcceptable, checkReadable, checkWritable, {}, m_wakeupSignal);
             
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                if (!m_keepRunning)
+                    break;
+            }
+
             // handle new connections
             for (TCPIPServerSocket* pServer: ac)
                 this->OnConnectionAcceptale(pServer);
+
+            // validate read buffer
+            for (auto it = readBuffer.begin(); it != readBuffer.end();)
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                if (m_connections.count(it->first) == 0)
+                    it = readBuffer.erase(it);
+                else
+                    it = std::next(it);
+            }
 
             // handle receiving messages
             for (TCPIPConnection* pConn: re)
@@ -562,16 +627,14 @@ namespace QSim
                         killed.insert(pConn);
                         continue;
                     }
-                    else
+                    
+                    alreadyRead += cnt; // update read buffer (reference)
+
+                    if (alreadyRead == buffer.GetSize())
                     {
-                        alreadyRead += cnt; // update read buffer (reference)
-                        if (alreadyRead == buffer.GetSize())
-                        {
-                            SocketDataPackage resp = OnConnectionMessage(pConn, std::move(buffer));
-                            readBuffer.erase(readBuffer.find(pConn));
-                            std::unique_lock<std::mutex> lock(m_mutex);
-                            m_writeBuffer[pConn].push(std::move(resp));
-                        }
+                        SocketDataPackage resp = OnConnectionMessage(pConn, std::move(buffer));
+                        readBuffer.erase(readBuffer.find(pConn));
+                        WriteTo(pConn, std::move(resp));
                     }
                 }
             }
@@ -649,7 +712,31 @@ namespace QSim
                     m_writeBuffer.erase(it2);
             }
         }
+
+        // cleanup
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            while (!m_connections.empty())
+            {
+                TCPIPConnection* pConn = *m_connections.begin();
+                pConn->Close();
+
+                lock.unlock();
+                this->RemoveConnection(pConn);
+                lock.lock();
+            }
+
+            m_writeBuffer.clear();
+        }
     }
+
+    void TCPIPConnectionHandler::StopHandler()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_keepRunning = false;
+        m_wakeupSignal.Set();
+    }
+
 
     //
     // TCPIPServer
@@ -681,6 +768,11 @@ namespace QSim
         return true;
     }
 
+    void TCPIPServer::Stop()
+    {
+        StopHandler();
+    }
+
     void TCPIPServer::OnConnectionAcceptale(TCPIPServerSocket* pServer) 
     {
         auto [fd, ip] = pServer->Accept();
@@ -688,13 +780,13 @@ namespace QSim
         if (pConn->IsValid())
         {
             AddConnection(pConn);
-            OnClientConnected(GetIdFromConnection(pConn), ip);
+            OnClientConnected(reinterpret_cast<std::size_t>(pConn), ip);
         }
     }
 
     void TCPIPServer::OnConnectionClosed(TCPIPConnection* pConn) 
     {
-        OnClientDisconnected(GetIdFromConnection(pConn));
+        OnClientDisconnected(reinterpret_cast<std::size_t>(pConn));
     }
 
     void TCPIPServer::OnConnectionRemoved(TCPIPConnection* pConn) 
@@ -704,13 +796,7 @@ namespace QSim
 
     SocketDataPackage TCPIPServer::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
     {
-        return OnMessageReceived(GetIdFromConnection(pConn), std::move(msg));
-    }
-
-    std::size_t TCPIPServer::GetIdFromConnection(TCPIPConnection* pConnection) const
-    {
-        static_assert(sizeof(std::size_t) == sizeof(pConnection), "id type not large enough");
-        return reinterpret_cast<std::size_t>(pConnection);
+        return OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
     }
 
     //
@@ -774,8 +860,8 @@ namespace QSim
         if (!pConn->Connect(ip, port))
             return 0;
         
-        m_connections.push_back(pConn);
-        return GetIdFromConnection(pConn);
+        AddConnection(pConn);
+        return reinterpret_cast<std::size_t>(pConn);
     }
     
     std::size_t TCPIPMultiClient::ConnectHostname(const std::string& hostname, short port)
@@ -783,9 +869,36 @@ namespace QSim
         return Connect(TCPIPClientSocket::GetHostByName(hostname), port);
     }
 
-    std::size_t TCPIPMultiClient::GetIdFromConnection(TCPIPConnection* pConnection) const
+    void TCPIPMultiClient::Run()
     {
-        static_assert(sizeof(std::size_t) == sizeof(pConnection), "id type not large enough");
-        return reinterpret_cast<std::size_t>(pConnection);
+        RunHandler();
     }
+
+    void TCPIPMultiClient::Stop()
+    {
+        StopHandler();
+    }
+
+    void TCPIPMultiClient::WriteTo(std::size_t id, SocketDataPackage data)
+    {
+        TCPIPConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(data));
+    }
+
+    void TCPIPMultiClient::OnConnectionAcceptale(TCPIPServerSocket* pServer) { }
+    
+    void TCPIPMultiClient::OnConnectionClosed(TCPIPConnection* pConn) 
+    {
+        OnClientDisconnected(reinterpret_cast<std::size_t>(pConn));
+    }
+
+    void TCPIPMultiClient::OnConnectionRemoved(TCPIPConnection* pConn) 
+    { 
+        if (pConn) delete pConn;
+    }
+    
+    SocketDataPackage TCPIPMultiClient::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
+    {
+        return OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
+    }
+
 }
