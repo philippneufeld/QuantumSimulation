@@ -323,7 +323,7 @@ namespace QSim
                 if (readBuffer.count(pConn) == 0)
                 {
                     NetworkDataPackage::Header_t header;
-                    if (pConn->Recv(header.data(), sizeof(header)) != sizeof(header))
+                    if (!pConn->Recvall(header.data(), sizeof(header)))
                     {
                         killed.insert(pConn);
                         continue;
@@ -380,9 +380,9 @@ namespace QSim
                     outputQueue.pop();
                     lock.unlock();
 
-                    // send package header
+                    // send package header (completely!)
                     NetworkDataPackage::Header_t header = package.GetHeader();
-                    if (pConn->Send(header.data(), sizeof(header)) != sizeof(header))
+                    if (!pConn->Sendall(header.data(), sizeof(header)))
                     {
                         killed.insert(pConn);
                         break;

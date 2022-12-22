@@ -75,7 +75,7 @@ int ClientMain()
 
     //std::this_thread::sleep_for(50s);
 
-    std::size_t id = client.ConnectHostname("calcc", 8000);
+    std::size_t id = client.ConnectHostname("ludwigsburg", 8000);
     if (id == 0)
     {
         std::cout << "Failed to connect to server" << std::endl;
@@ -103,7 +103,7 @@ int main(int argc, const char** argv)
     parser.AddOption("worker", "Start as worker");
     auto args = parser.Parse(argc, argv);
     
-    if (true || args.IsOptionPresent("worker"))
+    if (args.IsOptionPresent("worker"))
         return ClientMain();
     else 
         return ServerMain();

@@ -60,8 +60,11 @@ namespace QSim
         TCPIPConnection();
         TCPIPConnection(int handle);
 
-        std::int64_t Send(const void* data, std::size_t n);
-        std::int64_t Recv(void* buffer, std::size_t buffSize);
+        std::make_signed_t<std::size_t> Send(const void* data, std::size_t n);
+        std::make_signed_t<std::size_t> Recv(void* buffer, std::size_t buffSize);
+
+        bool Sendall(const void* data, std::size_t n);
+        bool Recvall(void* buffer, std::size_t n);
     };
 
     class TCPIPServerSocket : public TCPIPSocket
