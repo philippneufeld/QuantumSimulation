@@ -632,9 +632,9 @@ namespace QSim
 
                     if (alreadyRead == buffer.GetSize())
                     {
-                        SocketDataPackage resp = OnConnectionMessage(pConn, std::move(buffer));
+                        SocketDataPackage msg = std::move(buffer);
                         readBuffer.erase(readBuffer.find(pConn));
-                        WriteTo(pConn, std::move(resp));
+                        OnConnectionMessage(pConn, std::move(msg)); 
                     }
                 }
             }
@@ -773,6 +773,11 @@ namespace QSim
         StopHandler();
     }
 
+    void TCPIPServer::WriteTo(std::size_t id, SocketDataPackage msg)
+    {
+        TCPIPConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(msg));
+    }
+
     void TCPIPServer::OnConnectionAcceptale(TCPIPServerSocket* pServer) 
     {
         auto [fd, ip] = pServer->Accept();
@@ -794,58 +799,9 @@ namespace QSim
         if (pConn) delete pConn;
     }
 
-    SocketDataPackage TCPIPServer::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
+    void TCPIPServer::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
     {
-        return OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
-    }
-
-    //
-    // TCPIPClient
-    //
-
-    SocketDataPackage TCPIPClient::Query(const void* data, std::uint64_t n, std::uint32_t msgId)
-    {
-        SocketDataPackage::Header_t header;
-        
-        // send package header
-        header = SocketDataPackage::GenerateHeader(n, SocketDataPackageStatus_OK, msgId);
-        if (TCPIPClientSocket::Send(header.data(), sizeof(header)) != sizeof(header))
-        {
-            Close();
-            return SocketDataPackage::CreateError(SocketDataPackageStatus_IO_ERROR);
-        }
-
-        // send package data
-        if (n > 0)
-        {
-            if (TCPIPClientSocket::Send(data, n) != n)
-            {
-                Close();
-                return SocketDataPackage::CreateError(SocketDataPackageStatus_IO_ERROR);
-            }
-        }
-
-        // receiving package header of response
-        std::uint64_t cnt = TCPIPClientSocket::Recv(header.data(), sizeof(header));
-        if (cnt != sizeof(header) || !SocketDataPackage::IsValidHeader(header))
-        {
-            Close();
-            return SocketDataPackage::CreateError(SocketDataPackageStatus_INVALID_PACKAGE);
-        }
-        
-        SocketDataPackage package(header);
-        for (std::size_t read = 0; read < package.GetSize();)
-        {
-            cnt = TCPIPClientSocket::Recv(package.GetData() + read, package.GetSize()-read);
-            if (cnt <= 0)
-            {
-                Close();
-                return SocketDataPackage::CreateError(SocketDataPackageStatus_IO_ERROR);
-            }
-            read += cnt;
-        }
-
-        return package;
+        OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
     }
 
     //
@@ -896,9 +852,9 @@ namespace QSim
         if (pConn) delete pConn;
     }
     
-    SocketDataPackage TCPIPMultiClient::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
+    void TCPIPMultiClient::OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) 
     {
-        return OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
+        OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
     }
 
 }

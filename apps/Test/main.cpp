@@ -28,7 +28,7 @@ public:
         std::cout << "Client disconnected" << std::endl;     
     }
 
-    virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) override
+    virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) override
     { 
         char* msg = reinterpret_cast<char*>(data.GetData());
         std::cout << "Message received (" << id << "): " << msg << std::endl;
@@ -43,8 +43,7 @@ public:
 
         SocketDataPackage reply(n*sizeof(double));
         std::copy_n(vec.data(), n, reinterpret_cast<double*>(reply.GetData()));
-
-        return reply;
+        this->WriteTo(id, reply);
     }
     
 };
@@ -52,10 +51,9 @@ public:
 class MyClient : public TCPIPMultiClient
 {
 public:
-    virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) override
+    virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) override
     {
         std::cout << "Received data: " << data.GetSize() / sizeof(double) << std::endl;
-        return SocketDataPackage();
     }
 };
 
@@ -71,36 +69,18 @@ int ClientMain()
 {
     std::string helloServer = "Hello server!";
 
-    TCPIPClient client;
-    if (!client.Connect(TCPIPClientSocket::GetHostByName("monaco"), 8000))
-    {
-        std::cout << "Failed to connect to server" << std::endl;
-        return 1;
-    }
-    
-    auto reply = client.Query(helloServer.data(), helloServer.size());
-    if (reply)
-        std::cout << "Received data: " << reply.GetSize() / sizeof(double) << std::endl;
-
-    std::this_thread::sleep_for(5s);
-
-    return 0;
-}
-
-int ClientMain2()
-{
-    std::string helloServer = "Hello server!";
-
     MyClient client;
 
     std::thread thread([&](){ client.Run(); });
 
     //std::this_thread::sleep_for(50s);
 
-    std::size_t id = client.ConnectHostname("lupus", 8000);
+    std::size_t id = client.ConnectHostname("calcc", 8000);
     if (id == 0)
     {
         std::cout << "Failed to connect to server" << std::endl;
+        client.Stop();
+        thread.join();
         return 1;
     }
     
@@ -123,8 +103,8 @@ int main(int argc, const char** argv)
     parser.AddOption("worker", "Start as worker");
     auto args = parser.Parse(argc, argv);
     
-    if (args.IsOptionPresent("worker"))
-        return ClientMain2();
+    if (true || args.IsOptionPresent("worker"))
+        return ClientMain();
     else 
         return ServerMain();
 

@@ -29,7 +29,7 @@ namespace QSim
         ServerPoolWorker();
         ServerPoolWorker(std::size_t threadCnt);
 
-        virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) override;
+        virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) override;
 
         virtual SocketDataPackage DoWork(SocketDataPackage data) = 0;
 

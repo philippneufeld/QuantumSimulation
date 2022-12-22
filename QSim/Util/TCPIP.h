@@ -183,7 +183,7 @@ namespace QSim
         virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) = 0;
         virtual void OnConnectionClosed(TCPIPConnection* pConn) = 0;
         virtual void OnConnectionRemoved(TCPIPConnection* pConn) = 0;
-        virtual SocketDataPackage OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) = 0;
+        virtual void OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) = 0;
 
     private:
         std::mutex m_mutex;
@@ -205,33 +205,22 @@ namespace QSim
         bool Run(short port);
         void Stop();
 
+        void WriteTo(std::size_t id, SocketDataPackage msg);
+
         // callbacks
         virtual bool OnClientConnected(std::size_t id, const std::string& ip) { return true; }
         virtual void OnClientDisconnected(std::size_t id) {}
-        virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) { return SocketDataPackage(); }
+        virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) { }
 
     private:
         // connection handler callbacks
         virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) override;
         virtual void OnConnectionClosed(TCPIPConnection* pConn) override;
         virtual void OnConnectionRemoved(TCPIPConnection* pConn) override;
-        virtual SocketDataPackage OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) override;
-
-        std::size_t GetIdFromConnection(TCPIPConnection* pConnection) const;
+        virtual void OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) override;
 
     private:
         TCPIPServerSocket* m_pServer;
-    };
-
-    class TCPIPClient : public TCPIPClientSocket
-    {
-        // disallow the use of base class send and receive
-    protected:
-        using TCPIPClientSocket::Recv;
-        using TCPIPClientSocket::Send;
-
-    public:
-        SocketDataPackage Query(const void* data, std::uint64_t n, std::uint32_t msgId = 0);
     };
 
     class TCPIPMultiClient : private TCPIPConnectionHandler
@@ -243,7 +232,7 @@ namespace QSim
         std::size_t ConnectHostname(const std::string& hostname, short port);
 
         virtual void OnClientDisconnected(std::size_t id) {}
-        virtual SocketDataPackage OnMessageReceived(std::size_t id, SocketDataPackage data) { return SocketDataPackage(); }
+        virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) { }
 
         void Run();
         void Stop();
@@ -255,9 +244,7 @@ namespace QSim
         virtual void OnConnectionAcceptale(TCPIPServerSocket* pServer) override;
         virtual void OnConnectionClosed(TCPIPConnection* pConn) override;
         virtual void OnConnectionRemoved(TCPIPConnection* pConn) override;
-        virtual SocketDataPackage OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) override;
-
-        std::size_t GetIdFromConnection(TCPIPConnection* pConnection) const;
+        virtual void OnConnectionMessage(TCPIPConnection* pConn, SocketDataPackage msg) override;
     };
 
 }
