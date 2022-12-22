@@ -48,7 +48,7 @@ public:
     
 };
 
-class MyClient : public PackageMultiClient
+class MyClient : public PackageClient
 {
 public:
     virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) override

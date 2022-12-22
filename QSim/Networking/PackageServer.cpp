@@ -26,7 +26,7 @@ namespace QSim
     //
 
     NetworkDataPackage::NetworkDataPackage() 
-        : m_size(0), m_pData(nullptr), m_status(NetworkDataPackageStatus_OK), m_messageId(0) {}
+        : m_size(0), m_pData(nullptr), m_messageId(0) {}
 
     NetworkDataPackage::NetworkDataPackage(std::uint64_t size) 
         : NetworkDataPackage() 
@@ -39,7 +39,6 @@ namespace QSim
     {
         if (IsValidHeader(header))
         {
-            m_status = GetStatusFromHeader(header);
             m_messageId = GetMessageIdFromHeader(header);
             Allocate(GetSizeFromHeader(header));
         }
@@ -53,7 +52,6 @@ namespace QSim
     NetworkDataPackage::NetworkDataPackage(const NetworkDataPackage& rhs)
         : NetworkDataPackage()
     {
-        m_status = rhs.m_status;
         m_messageId = rhs.m_messageId;
         if (rhs.m_size > 0)
         {
@@ -63,7 +61,7 @@ namespace QSim
     }
     
     NetworkDataPackage::NetworkDataPackage(NetworkDataPackage&& rhs)
-        : m_pData(rhs.m_pData), m_size(rhs.m_size), m_status(rhs.m_status), m_messageId(rhs.m_messageId)
+        : m_pData(rhs.m_pData), m_size(rhs.m_size), m_messageId(rhs.m_messageId)
     {
         rhs.m_pData = nullptr;
         rhs.m_size = 0;
@@ -81,11 +79,6 @@ namespace QSim
         std::swap(m_pData, rhs.m_pData);
         std::swap(m_size, rhs.m_size);
         return *this;
-    }
-
-    NetworkDataPackage::operator bool() const
-    {
-        return m_status == NetworkDataPackageStatus_OK;
     }
     
     bool NetworkDataPackage::Allocate(std::uint64_t size)
@@ -115,14 +108,9 @@ namespace QSim
     bool NetworkDataPackage::IsValidHeader(const Header_t& header)
     {
         std::uint64_t npid = 0;
-        std::copy_n(header.data(), 7, reinterpret_cast<std::uint8_t*>(&npid) + 1);
+        std::copy_n(header.data(), 8, reinterpret_cast<std::uint8_t*>(&npid));
         std::uint64_t pid = ntohll(npid);
         return (pid == s_protocolId);
-    }
-
-    std::uint8_t NetworkDataPackage::GetStatusFromHeader(const Header_t& header)
-    {
-        return header[7];
     }
     
     std::uint32_t NetworkDataPackage::GetMessageIdFromHeader(const Header_t& header)
@@ -139,7 +127,7 @@ namespace QSim
         return ntohll(nsize);
     }
 
-    NetworkDataPackage::Header_t NetworkDataPackage::GenerateHeader(std::uint64_t size, std::uint8_t status, std::uint32_t msgId)
+    NetworkDataPackage::Header_t NetworkDataPackage::GenerateHeader(std::uint64_t size, std::uint32_t msgId)
     {
         Header_t header;
 
@@ -147,8 +135,7 @@ namespace QSim
         std::uint64_t nsize = htonll(size);
         std::uint32_t nmid = htonl(msgId);
         
-        std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid) + 1, 7, header.data());
-        std::copy_n(reinterpret_cast<const std::uint8_t*>(&status), 1, header.data() + 7);
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid), 8, header.data());
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&nsize), 8, header.data() + 8);
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&nmid), 4, header.data() + 16);
 
@@ -157,16 +144,9 @@ namespace QSim
 
     NetworkDataPackage::Header_t NetworkDataPackage::GetHeader() const
     {
-        return GenerateHeader(m_size, m_status, m_messageId);
+        return GenerateHeader(m_size, m_messageId);
     }
     
-    NetworkDataPackage NetworkDataPackage::CreateError(std::uint8_t status)
-    {
-        NetworkDataPackage package;
-        package.SetStatus(status);
-        return package;
-    }
-
 
     //
     // PackageConnectionHandler
@@ -526,12 +506,12 @@ namespace QSim
     }
 
     //
-    // PackageMultiClient
+    // PackageClient
     //
 
-    PackageMultiClient::PackageMultiClient() { }
+    PackageClient::PackageClient() { }
 
-    std::size_t PackageMultiClient::Connect(const std::string& ip, short port)
+    std::size_t PackageClient::Connect(const std::string& ip, short port)
     {
         auto pConn = new TCPIPClientSocket();
         if (!pConn->Connect(ip, port))
@@ -541,39 +521,39 @@ namespace QSim
         return reinterpret_cast<std::size_t>(pConn);
     }
     
-    std::size_t PackageMultiClient::ConnectHostname(const std::string& hostname, short port)
+    std::size_t PackageClient::ConnectHostname(const std::string& hostname, short port)
     {
         return Connect(TCPIPClientSocket::GetHostByName(hostname), port);
     }
 
-    void PackageMultiClient::Run()
+    void PackageClient::Run()
     {
         RunHandler();
     }
 
-    void PackageMultiClient::Stop()
+    void PackageClient::Stop()
     {
         StopHandler();
     }
 
-    void PackageMultiClient::WriteTo(std::size_t id, NetworkDataPackage data)
+    void PackageClient::WriteTo(std::size_t id, NetworkDataPackage data)
     {
         PackageConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(data));
     }
 
-    void PackageMultiClient::OnConnectionAcceptale(TCPIPServerSocket* pServer) { }
+    void PackageClient::OnConnectionAcceptale(TCPIPServerSocket* pServer) { }
     
-    void PackageMultiClient::OnConnectionClosed(TCPIPConnection* pConn) 
+    void PackageClient::OnConnectionClosed(TCPIPConnection* pConn) 
     {
         OnClientDisconnected(reinterpret_cast<std::size_t>(pConn));
     }
 
-    void PackageMultiClient::OnConnectionRemoved(TCPIPConnection* pConn) 
+    void PackageClient::OnConnectionRemoved(TCPIPConnection* pConn) 
     { 
         if (pConn) delete pConn;
     }
     
-    void PackageMultiClient::OnConnectionMessage(TCPIPConnection* pConn, NetworkDataPackage msg) 
+    void PackageClient::OnConnectionMessage(TCPIPConnection* pConn, NetworkDataPackage msg) 
     {
         OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
     }
