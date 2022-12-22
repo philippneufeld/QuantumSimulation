@@ -15,7 +15,7 @@ using namespace Eigen;
 
 using namespace std::chrono_literals;
 
-class MyServer : public TCPIPServer
+class MyServer : public PackageServer
 {
 public:
     virtual bool OnClientConnected(std::size_t id, const std::string& ip) override
@@ -28,7 +28,7 @@ public:
         std::cout << "Client disconnected" << std::endl;     
     }
 
-    virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) override
+    virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) override
     { 
         char* msg = reinterpret_cast<char*>(data.GetData());
         std::cout << "Message received (" << id << "): " << msg << std::endl;
@@ -41,17 +41,17 @@ public:
             vec.push_back(i);
         }
 
-        SocketDataPackage reply(n*sizeof(double));
+        NetworkDataPackage reply(n*sizeof(double));
         std::copy_n(vec.data(), n, reinterpret_cast<double*>(reply.GetData()));
         this->WriteTo(id, reply);
     }
     
 };
 
-class MyClient : public TCPIPMultiClient
+class MyClient : public PackageMultiClient
 {
 public:
-    virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) override
+    virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) override
     {
         std::cout << "Received data: " << data.GetSize() / sizeof(double) << std::endl;
     }
@@ -84,7 +84,7 @@ int ClientMain()
         return 1;
     }
     
-    SocketDataPackage msg(helloServer.size());
+    NetworkDataPackage msg(helloServer.size());
     std::copy_n(helloServer.begin(), helloServer.size(), reinterpret_cast<char*>(msg.GetData()));
     client.WriteTo(id, std::move(msg));
     

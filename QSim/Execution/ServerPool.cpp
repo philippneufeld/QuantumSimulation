@@ -21,10 +21,10 @@ namespace QSim
 
     ServerPoolWorker::ServerPoolWorker(std::size_t threadCnt) : m_pool(threadCnt) { }
 
-    void ServerPoolWorker::OnMessageReceived(std::size_t id, SocketDataPackage data)
+    void ServerPoolWorker::OnMessageReceived(std::size_t id, NetworkDataPackage data)
     {
         if (data.GetSize() < 4)
-            return; // SocketDataPackage();
+            return; // NetworkDataPackage();
         
         std::uint32_t desc = *reinterpret_cast<std::uint32_t*>(data.GetData());
         std::uint8_t* payload = (data.GetData() + 4);
@@ -34,7 +34,7 @@ namespace QSim
             std::uint32_t reserveCnt = *reinterpret_cast<std::uint32_t*>(payload);
             reserveCnt = TryReserve(id, reserveCnt);
 
-            SocketDataPackage response(8);
+            NetworkDataPackage response(8);
             *reinterpret_cast<std::uint32_t*>(response.GetData()) = ServerPoolQuery_Reserve;
             *reinterpret_cast<std::uint32_t*>(response.GetData() + 4) = reserveCnt;
             // return response;
@@ -60,7 +60,7 @@ namespace QSim
         return cnt;
     }
 
-    bool ServerPoolWorker::TryRun(std::size_t id, SocketDataPackage data)
+    bool ServerPoolWorker::TryRun(std::size_t id, NetworkDataPackage data)
     {
         // check for ticket
         auto it = m_tickets.find(id);

@@ -9,7 +9,7 @@
 #include <tuple>
 #include <set>
 
-#include "../Util/TCPIP.h"
+#include "../Networking/PackageServer.h"
 #include "Progress.h"
 #include "ThreadPool.h"
 
@@ -23,19 +23,19 @@ namespace QSim
         ServerPoolQuery_Post = 0x02,
     };
 
-    class ServerPoolWorker : public TCPIPServer
+    class ServerPoolWorker : public PackageServer
     {
     public:
         ServerPoolWorker();
         ServerPoolWorker(std::size_t threadCnt);
 
-        virtual void OnMessageReceived(std::size_t id, SocketDataPackage data) override;
+        virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) override;
 
-        virtual SocketDataPackage DoWork(SocketDataPackage data) = 0;
+        virtual NetworkDataPackage DoWork(NetworkDataPackage data) = 0;
 
     private:
         std::uint32_t TryReserve(std::size_t id, std::uint32_t cnt);
-        bool TryRun(std::size_t id, SocketDataPackage data);
+        bool TryRun(std::size_t id, NetworkDataPackage data);
 
     private:
         ThreadPool m_pool;
