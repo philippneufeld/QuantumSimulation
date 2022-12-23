@@ -19,7 +19,31 @@
 namespace QSim
 {
 
-    class NetworkDataPackage
+    class DataPackagePayload
+    {
+    public:
+        DataPackagePayload();
+        DataPackagePayload(std::uint64_t size);
+        virtual ~DataPackagePayload();
+
+        DataPackagePayload(const DataPackagePayload& rhs);
+        DataPackagePayload(DataPackagePayload&& rhs);
+
+        DataPackagePayload& operator=(const DataPackagePayload& rhs);
+        DataPackagePayload& operator=(DataPackagePayload&& rhs);
+
+        bool Allocate(std::uint64_t size);
+
+        // getter
+        std::uint64_t GetSize() const { return m_size; };
+        std::uint8_t* GetData() const { return m_pData; };
+
+    private:
+        std::uint64_t m_size;
+        std::uint8_t* m_pData;
+    };
+
+    class NetworkDataPackage : public DataPackagePayload
     {
         constexpr static std::uint64_t s_protocolId = 0x13A3F6A39464CF1A;
     public:
@@ -28,23 +52,23 @@ namespace QSim
         NetworkDataPackage();
         NetworkDataPackage(std::uint64_t size);
         NetworkDataPackage(const Header_t& header);
-        ~NetworkDataPackage();
 
         NetworkDataPackage(const NetworkDataPackage& rhs);
         NetworkDataPackage(NetworkDataPackage&& rhs);
+        NetworkDataPackage(const DataPackagePayload& rhs);
+        NetworkDataPackage(DataPackagePayload&& rhs);
 
         NetworkDataPackage& operator=(const NetworkDataPackage& rhs);
         NetworkDataPackage& operator=(NetworkDataPackage&& rhs);
+        NetworkDataPackage& operator=(const DataPackagePayload& rhs);
+        NetworkDataPackage& operator=(DataPackagePayload&& rhs);
 
         // function to change package state
-        bool Allocate(std::uint64_t size);
-        void SetMessageId(std::uint8_t msgId) { m_messageId = msgId; }
+        void SetMessageId(std::uint32_t msgId) { m_messageId = msgId; }
 
         // getter
         std::uint8_t GetMessageId() const { return m_messageId; }
-        std::uint64_t GetSize() const { return m_size; };
-        std::uint8_t* GetData() const { return m_pData; };
-
+        
         // header functions
         static bool IsValidHeader(const Header_t& header);
         static std::uint32_t GetMessageIdFromHeader(const Header_t& header);
@@ -52,10 +76,10 @@ namespace QSim
         static Header_t GenerateHeader(std::uint64_t size, std::uint32_t msgId);
         Header_t GetHeader() const;
 
+        static NetworkDataPackage CreateEmptyPackage(std::uint32_t msgId);
+
     private:
-        std::uint64_t m_size;
-        std::uint32_t m_messageId;
-        std::uint8_t* m_pData;
+        std::uint32_t m_messageId = 0;
     };
 
     class PackageConnectionHandler

@@ -24,6 +24,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Execution/ServerPool.cpp"
     "${QSIM_SOURCE_DIR}/Networking/TCPIP.cpp"
     "${QSIM_SOURCE_DIR}/Networking/PackageServer.cpp"
+    "${QSIM_SOURCE_DIR}/Util/UUID.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/SimulationApp.cpp"
     "${QSIM_SOURCE_DIR}/Util/Memory.cpp"

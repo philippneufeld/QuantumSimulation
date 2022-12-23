@@ -22,37 +22,26 @@ namespace QSim
 {
 
     //
-    // NetworkDataPackage
+    // DataPackagePayload
     //
 
-    NetworkDataPackage::NetworkDataPackage() 
-        : m_size(0), m_pData(nullptr), m_messageId(0) {}
+    DataPackagePayload::DataPackagePayload() 
+        : m_size(0), m_pData(nullptr) {}
 
-    NetworkDataPackage::NetworkDataPackage(std::uint64_t size) 
-        : NetworkDataPackage() 
+    DataPackagePayload::DataPackagePayload(std::uint64_t size) 
+        : DataPackagePayload() 
     {
         Allocate(size);
     }
-
-    NetworkDataPackage::NetworkDataPackage(const Header_t& header)
-        : NetworkDataPackage()
-    {
-        if (IsValidHeader(header))
-        {
-            m_messageId = GetMessageIdFromHeader(header);
-            Allocate(GetSizeFromHeader(header));
-        }
-    }
     
-    NetworkDataPackage::~NetworkDataPackage() 
+    DataPackagePayload::~DataPackagePayload() 
     { 
         Allocate(0);
     }
 
-    NetworkDataPackage::NetworkDataPackage(const NetworkDataPackage& rhs)
-        : NetworkDataPackage()
+    DataPackagePayload::DataPackagePayload(const DataPackagePayload& rhs)
+        : DataPackagePayload()
     {
-        m_messageId = rhs.m_messageId;
         if (rhs.m_size > 0)
         {
             Allocate(rhs.m_size);
@@ -60,28 +49,27 @@ namespace QSim
         }
     }
     
-    NetworkDataPackage::NetworkDataPackage(NetworkDataPackage&& rhs)
-        : m_pData(rhs.m_pData), m_size(rhs.m_size), m_messageId(rhs.m_messageId)
+    DataPackagePayload::DataPackagePayload(DataPackagePayload&& rhs)
+        : m_pData(rhs.m_pData), m_size(rhs.m_size)
     {
         rhs.m_pData = nullptr;
         rhs.m_size = 0;
     }
 
-    NetworkDataPackage& NetworkDataPackage::operator=(const NetworkDataPackage& rhs)
+    DataPackagePayload& DataPackagePayload::operator=(const DataPackagePayload& rhs)
     {
-        NetworkDataPackage tmp(rhs);
+        DataPackagePayload tmp(rhs);
         std::swap(*this, tmp);
         return *this;
     }
 
-    NetworkDataPackage& NetworkDataPackage::operator=(NetworkDataPackage&& rhs)
+    DataPackagePayload& DataPackagePayload::operator=(DataPackagePayload&& rhs)
     {
-        std::swap(m_pData, rhs.m_pData);
-        std::swap(m_size, rhs.m_size);
+        std::swap(*this, rhs);
         return *this;
     }
     
-    bool NetworkDataPackage::Allocate(std::uint64_t size)
+    bool DataPackagePayload::Allocate(std::uint64_t size)
     {
         if (size == m_size)
             return true;
@@ -105,6 +93,66 @@ namespace QSim
         return (size == m_size);
     }
 
+    //
+    // NetworkDataPackage
+    //
+
+    NetworkDataPackage::NetworkDataPackage() 
+        : DataPackagePayload() {}
+
+    NetworkDataPackage::NetworkDataPackage(std::uint64_t size) 
+        : DataPackagePayload(size)
+    {
+        Allocate(size);
+    }
+
+    NetworkDataPackage::NetworkDataPackage(const Header_t& header)
+        : NetworkDataPackage()
+    {
+        if (IsValidHeader(header))
+        {
+            m_messageId = GetMessageIdFromHeader(header);
+            Allocate(GetSizeFromHeader(header));
+        }
+    }
+
+    NetworkDataPackage::NetworkDataPackage(const NetworkDataPackage& rhs)
+        : DataPackagePayload(rhs), m_messageId(rhs.m_messageId) {}
+    
+    NetworkDataPackage::NetworkDataPackage(NetworkDataPackage&& rhs)
+        : DataPackagePayload(std::move(rhs)), m_messageId(rhs.m_messageId) {}
+
+    NetworkDataPackage::NetworkDataPackage(const DataPackagePayload& rhs)
+        : DataPackagePayload(rhs) {}
+    
+    NetworkDataPackage::NetworkDataPackage(DataPackagePayload&& rhs)
+        : DataPackagePayload(std::move(rhs)) {}
+
+    NetworkDataPackage& NetworkDataPackage::operator=(const NetworkDataPackage& rhs)
+    {
+        NetworkDataPackage tmp(rhs);
+        std::swap(*this, tmp);
+        return *this;
+    }
+
+    NetworkDataPackage& NetworkDataPackage::operator=(NetworkDataPackage&& rhs)
+    {
+        std::swap(*this, rhs);
+        return *this;
+    }
+
+    NetworkDataPackage& NetworkDataPackage::operator=(const DataPackagePayload& rhs)
+    {
+        DataPackagePayload::operator=(rhs);
+        return *this;
+    }
+
+    NetworkDataPackage& NetworkDataPackage::operator=(DataPackagePayload&& rhs)
+    {
+        DataPackagePayload::operator=(std::move(rhs));
+        return *this;
+    }
+    
     bool NetworkDataPackage::IsValidHeader(const Header_t& header)
     {
         std::uint64_t npid = 0;
@@ -144,7 +192,14 @@ namespace QSim
 
     NetworkDataPackage::Header_t NetworkDataPackage::GetHeader() const
     {
-        return GenerateHeader(m_size, m_messageId);
+        return GenerateHeader(GetSize(), m_messageId);
+    }
+
+    NetworkDataPackage NetworkDataPackage::CreateEmptyPackage(std::uint32_t msgId)
+    {
+        NetworkDataPackage package;
+        package.SetMessageId(msgId);
+        return package;
     }
     
 

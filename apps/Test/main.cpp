@@ -7,6 +7,7 @@
 
 #include <sys/select.h>
 
+#include <QSim/Util/UUID.h>
 #include <QSim/Util/Argparse.h>
 #include <QSim/Execution/ServerPool.h>
 
@@ -97,8 +98,34 @@ int ClientMain()
     return 0;
 }
 
+
+class Test
+{
+public:
+    Test(int=0) { std::cout << "Test c'tor" << std::endl; }
+    ~Test() { std::cout << "Test d'tor" << std::endl; }
+};
+
+int foo()
+{
+    std::cout << "foo" << std::endl;
+    return 0;
+}
+
+void bar()
+{
+    std::cout << "bar" << std::endl;
+    static Test test(foo());
+}
+
+
 int main(int argc, const char** argv)
 {
+    UUIDv4 uuid;
+    std::cout << uuid.ToString() << std::endl;
+    return 0;
+    
+    
     ArgumentParser parser;
     parser.AddOption("worker", "Start as worker");
     auto args = parser.Parse(argc, argv);

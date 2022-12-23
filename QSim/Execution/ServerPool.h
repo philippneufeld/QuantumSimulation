@@ -17,10 +17,15 @@ namespace QSim
 {
 
     // 32-bit message descriptor
-    enum ServerPoolQuery
+    enum ServerPoolMessage
     {
-        ServerPoolQuery_Reserve = 0x01,
-        ServerPoolQuery_Post = 0x02,
+        ServerPool_InvalidRequest,
+        ServerPool_ReserveRequest,
+        ServerPool_Reserved,
+        ServerPool_PostRequest,
+        ServerPool_NotPosted,
+        ServerPool_Posted,
+        ServerPool_TaskCompleted,
     };
 
     class ServerPoolWorker : public PackageServer
@@ -31,7 +36,7 @@ namespace QSim
 
         virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) override;
 
-        virtual NetworkDataPackage DoWork(NetworkDataPackage data) = 0;
+        virtual DataPackagePayload DoWork(DataPackagePayload data) = 0;
 
     private:
         std::uint32_t TryReserve(std::size_t id, std::uint32_t cnt);

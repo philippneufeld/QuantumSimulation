@@ -23,23 +23,39 @@ namespace QSim
 
     void ServerPoolWorker::OnMessageReceived(std::size_t id, NetworkDataPackage data)
     {
-        if (data.GetSize() < 4)
-            return; // NetworkDataPackage();
-        
-        std::uint32_t desc = *reinterpret_cast<std::uint32_t*>(data.GetData());
-        std::uint8_t* payload = (data.GetData() + 4);
+        NetworkDataPackage response;
+        response.SetMessageId(ServerPool_InvalidRequest);
 
-        if (desc == ServerPoolQuery_Reserve)
+        switch (data.GetMessageId())
         {
-            std::uint32_t reserveCnt = *reinterpret_cast<std::uint32_t*>(payload);
+        case ServerPool_ReserveRequest:
+        {
+            std::uint32_t reserveCnt = *reinterpret_cast<std::uint32_t*>(data.GetData());
             reserveCnt = TryReserve(id, reserveCnt);
 
-            NetworkDataPackage response(8);
-            *reinterpret_cast<std::uint32_t*>(response.GetData()) = ServerPoolQuery_Reserve;
-            *reinterpret_cast<std::uint32_t*>(response.GetData() + 4) = reserveCnt;
-            // return response;
+            response.Allocate(8);
+            response.SetMessageId(ServerPool_Reserved);
+            *reinterpret_cast<std::uint32_t*>(response.GetData()) = reserveCnt;
+        } 
+        break;
+        
+        case ServerPool_PostRequest:
+        {
+            if (TryRun(id, std::move(data)))
+                response.SetMessageId(ServerPool_Posted);
+            else
+                response.SetMessageId(ServerPool_NotPosted);
+        } 
+        break;
+        
+        default:
+        {
+            response.SetMessageId(ServerPool_InvalidRequest);
+        } 
+        break;
         }
 
+        WriteTo(id, std::move(response));
     }
 
     std::uint32_t ServerPoolWorker::TryReserve(std::size_t id, std::uint32_t cnt)
@@ -76,7 +92,12 @@ namespace QSim
         // remove ticket
         m_tickets.erase(it);
 
-        m_pool.Submit([this, data=std::move(data)](){ return DoWork(data); });
+        m_pool.Submit([this, id, data=std::move(data)]()
+        { 
+            NetworkDataPackage result = DoWork(std::move(data));
+            result.SetMessageId(ServerPool_TaskCompleted);
+            WriteTo(id, std::move(result));
+        });
 
         return true;
     }
