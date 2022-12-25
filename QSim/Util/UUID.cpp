@@ -8,6 +8,7 @@
 
 #include <iostream>
 
+// SSE and SSE2 are always available
 #include <xmmintrin.h> // SSE
 #include <emmintrin.h> // SSE2
 
@@ -82,7 +83,7 @@ namespace QSim
     {
         // Generates version 4 variant 1 UUIDs
         static std::random_device rdev;
-        static std::mt19937_64 engine(rdev());
+        static std::mt19937_64 engine(/*rdev()*/0);
         static std::uniform_int_distribution<std::uint64_t> dist(
             std::numeric_limits<std::uint64_t>::min(), 
             std::numeric_limits<std::uint64_t>::max());

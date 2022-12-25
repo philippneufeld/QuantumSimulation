@@ -24,6 +24,7 @@ set(QSIM_SOURCES
     "${QSIM_SOURCE_DIR}/Execution/ServerPool.cpp"
     "${QSIM_SOURCE_DIR}/Networking/TCPIP.cpp"
     "${QSIM_SOURCE_DIR}/Networking/PackageServer.cpp"
+    "${QSIM_SOURCE_DIR}/Util/Cpu.cpp"
     "${QSIM_SOURCE_DIR}/Util/UUID.cpp"
     "${QSIM_SOURCE_DIR}/Util/Argparse.cpp"
     "${QSIM_SOURCE_DIR}/Util/SimulationApp.cpp"
@@ -43,6 +44,12 @@ target_compile_features("${QSIM_LIB_TARGET}" PUBLIC cxx_std_17)
 
 # set include directory as interface
 target_include_directories("${QSIM_LIB_TARGET}" INTERFACE "${QSIM_INCLUDE_DIR}")
+
+# CpuDetect checks for SIMD support and exports SIMD_MACRO_DEFINITIONS and SIMD_COMPILER_FLAGS
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include (CpuDetect)
+target_compile_definitions("${QSIM_LIB_TARGET}" PUBLIC "${SIMD_MACRO_DEFINITIONS}")
+target_compile_options("${QSIM_LIB_TARGET}" PUBLIC "${SIMD_COMPILER_FLAGS}")
 
 # threading
 find_package(Threads REQUIRED)

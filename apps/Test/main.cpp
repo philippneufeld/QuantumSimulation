@@ -121,6 +121,8 @@ void bar()
 
 int main(int argc, const char** argv)
 {
+    // 8BF9403E-7C3A-4DFD-BEDC-41CBC537E828
+
     UUIDv4 uuid;
     std::cout << uuid.ToString() << std::endl;
     return 0;
