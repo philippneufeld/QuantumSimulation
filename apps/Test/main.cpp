@@ -125,6 +125,10 @@ int main(int argc, const char** argv)
 
     UUIDv4 uuid;
     std::cout << uuid.ToString() << std::endl;
+
+    UUIDv4 uuid2 = UUIDv4::FromString(uuid.ToString());
+    std::cout << uuid2.ToString() << std::endl;
+
     return 0;
     
     
