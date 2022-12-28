@@ -122,28 +122,6 @@ void bar()
 
 int main(int argc, const char** argv)
 {
-
-    // __m128i lo = _mm_set_epi64x(0x0f0e0d0c0b0a0908ull, 0x0706050403020100ull);
-    // __m128i hi = _mm_set_epi64x(0x0e0f0d0c0b0a0908ull, 0x0706050403020105ull);
-    // __m128i res1 = UUIDv4::PackUUID(hi, lo);
-    // __m128i res2 = UUIDv4::SwapEndianess(_mm_set_epi64x(0xffeeddccbbaa9988ull, 0x7766554433221100ull));
-
-    // 8BF9403E-7C3A-4DFD-BEDC-41CBC537E828
-
-    UUIDv4 uuid;
-    std::cout << uuid.ToString() << std::endl;
-
-    UUIDv4 uuid2 = UUIDv4::FromString(uuid.ToString());
-    std::cout << uuid2.ToString() << std::endl;
-
-    UUIDv4 uuid3;
-
-    std::cout << (uuid == uuid2) << std::endl;
-    std::cout << (uuid == uuid3) << std::endl;
-
-    return 0;
-    
-    
     ArgumentParser parser;
     parser.AddOption("worker", "Start as worker");
     auto args = parser.Parse(argc, argv);

@@ -5,6 +5,7 @@
 #include <random>
 #include <limits>
 #include <algorithm>
+#include <cstring>
 
 #include <iostream>
 
@@ -12,16 +13,42 @@
 #include <xmmintrin.h> // SSE
 #include <emmintrin.h> // SSE2
 
-#ifdef QSim_SSSE3
-#include <tmmintrin.h> // SSSE3
+#if defined(QSim_SSSE3)
+#include <tmmintrin.h>
 #endif
 
-#ifdef QSim_SSE4_1
+#if defined(QSim_SSE4_1)
 #include <smmintrin.h>
+#endif
+
+#if defined(QSim_AVX2)
+#include <immintrin.h>
 #endif
 
 namespace QSim
 {
+
+    template<typename size_type>
+    struct UUIDv4Hash;
+    template<>
+    struct UUIDv4Hash<std::uint32_t>
+    {
+        static std::uint32_t Hash(const void* uuid)
+        {
+            const std::uint32_t* ptr = reinterpret_cast<const std::uint32_t*>(uuid);
+            return ((*ptr ^ *(ptr+1)) ^ (*(ptr+2) ^ *(ptr+3)));
+        }
+    };
+    template<>
+    struct UUIDv4Hash<std::uint64_t>
+    {
+        static std::uint64_t Hash(const void* uuid)
+        {
+            const std::uint64_t* ptr = reinterpret_cast<const std::uint64_t*>(uuid);
+            return (*ptr ^ *(ptr+1));
+        }
+    };
+
 
     UUIDv4::UUIDv4(__m128i uuid)
     {
@@ -32,9 +59,46 @@ namespace QSim
 
     bool UUIDv4::operator==(const UUIDv4& rhs) const
     {
+#if defined(QSim_SSE4_1)
+        __m128i cmp = _mm_xor_si128(Load(), rhs.Load());
+        return !!_mm_testz_si128(cmp, cmp);
+#else
         __m128i cmp = _mm_cmpeq_epi8(Load(), rhs.Load());
         int s = _mm_movemask_epi8(cmp);
         return (s == 0xffff);
+#endif
+    }
+
+    bool UUIDv4::operator<(const UUIDv4& rhs) const
+    {
+        const std::uint64_t* x = reinterpret_cast<const std::uint64_t*>(m_data);
+        const std::uint64_t* y = reinterpret_cast<const std::uint64_t*>(rhs.m_data);
+        return *x < *y || (*x == *y && *(x + 1) < *(y + 1));
+    }
+
+    bool UUIDv4::operator!=(const UUIDv4& rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool UUIDv4::operator<=(const UUIDv4& rhs) const
+    {
+        return !(rhs < *this);
+    }
+
+    bool UUIDv4::operator>(const UUIDv4& rhs) const
+    {
+        return (rhs < *this);
+    }
+
+    bool UUIDv4::operator>=(const UUIDv4& rhs) const
+    {
+        return !(*this < rhs);
+    }
+ 
+    std::size_t UUIDv4::Hash() const
+    {
+        return UUIDv4Hash<std::size_t>::Hash(m_data);
     }
 
     void UUIDv4::ToString(char* buffer) const
@@ -42,8 +106,13 @@ namespace QSim
         __m128i uuid = Load();
         __m128i uuids = _mm_srli_epi64(uuid, 4);
         
+#if defined(QSim_AVX2)
+        const __m256i asciiDigitOff = _mm256_set1_epi8(48);
+        const __m256i asciiLetterOffset = _mm256_set1_epi8(55);
+#else
         const __m128i asciiDigitOff = _mm_set1_epi8(48);
         const __m128i asciiLetterOffset = _mm_set1_epi8(55);
+#endif
 
         const __m128i mask = _mm_set1_epi8(0x0F);
         __m128i lo = _mm_unpacklo_epi8(uuids, uuid);
@@ -51,10 +120,19 @@ namespace QSim
         lo = _mm_and_si128(mask, lo);
         hi = _mm_and_si128(mask, hi);
 
+#if defined(QSim_AVX2)
+        const __m256i ten = _mm256_set1_epi8(10);
+        __m256i hilo = _mm256_set_m128i(hi, lo);
+        __m256i digitMask = _mm256_cmpgt_epi8(ten, hilo);
+        __m256i asciiOff = _mm256_blendv_epi8(asciiLetterOffset, asciiDigitOff, digitMask);
+        hilo = _mm256_add_epi8(hilo, asciiOff);
+        lo = _mm256_castsi256_si128(hilo);
+        hi = _mm256_extracti128_si256(hilo, 1);
+#else
         const __m128i ten = _mm_set1_epi8(10);
-        __m128i digitMaskLo = _mm_cmplt_epi8(lo, ten);
-        __m128i digitMaskHi = _mm_cmplt_epi8(hi, ten);
-#ifdef QSim_SSE4_1
+        __m128i digitMaskLo = _mm_cmpgt_epi8(ten, lo);
+        __m128i digitMaskHi = _mm_cmpgt_epi8(ten, hi);
+#if defined(QSim_SSE4_1)
         __m128i asciiOffLo = _mm_blendv_epi8(asciiLetterOffset, asciiDigitOff, digitMaskLo);
         __m128i asciiOffHi = _mm_blendv_epi8(asciiLetterOffset, asciiDigitOff, digitMaskHi);
 #else
@@ -65,9 +143,9 @@ namespace QSim
         __m128i asciiOffLo = _mm_or_si128(asciiDigitOffLo, asciiLetterOffLo);
         __m128i asciiOffHi = _mm_or_si128(asciiDigitOffHi, asciiLetterOffHi);
 #endif
-
         lo = _mm_add_epi8(lo, asciiOffLo);
         hi = _mm_add_epi8(hi, asciiOffHi);
+#endif
 
         const __m128i zero = _mm_setzero_si128();
         const __m128i full = _mm_cmpeq_epi32(zero, zero);
@@ -103,8 +181,13 @@ namespace QSim
 
     UUIDv4 UUIDv4::FromString(const char* uuidStr)
     {
+#if defined(QSim_AVX2)
+        const __m256i asciiDigitOff = _mm256_set1_epi8(48);
+        const __m256i asciiLetterOffset = _mm256_set1_epi8(55);
+#else
         const __m128i asciiDigitOff = _mm_set1_epi8(48);
         const __m128i asciiLetterOffset = _mm_set1_epi8(55);
+#endif
 
         __m128i lo1 = _mm_loadu_si64(uuidStr);
         __m128i lo2 = _mm_loadu_si32(uuidStr + 9);
@@ -120,10 +203,19 @@ namespace QSim
         hi2 = _mm_andnot_si128(mask, hi2);
         __m128i hi = _mm_or_si128(hi1, hi2);
 
+#if defined(QSim_AVX2)
+        const __m256i asciiAm1 = _mm256_set1_epi8(64);
+        __m256i hilo = _mm256_set_m128i(hi, lo);
+        __m256i digitMask = _mm256_cmpgt_epi8(asciiAm1, hilo);
+        __m256i asciiOff = _mm256_blendv_epi8(asciiLetterOffset, asciiDigitOff, digitMask);
+        hilo = _mm256_sub_epi8(hilo, asciiOff);
+        lo = _mm256_castsi256_si128(hilo);
+        hi = _mm256_extracti128_si256(hilo, 1);
+#else
         const __m128i asciiA = _mm_set1_epi8(65);
         __m128i digitMaskLo = _mm_cmplt_epi8(lo, asciiA);
         __m128i digitMaskHi = _mm_cmplt_epi8(hi, asciiA);
-#ifdef QSim_SSE4_1
+#if defined(QSim_SSE4_1)
         __m128i asciiOffLo = _mm_blendv_epi8(asciiLetterOffset, asciiDigitOff, digitMaskLo);
         __m128i asciiOffHi = _mm_blendv_epi8(asciiLetterOffset, asciiDigitOff, digitMaskHi);
 #else
@@ -134,9 +226,9 @@ namespace QSim
         __m128i asciiOffLo = _mm_or_si128(asciiDigitOffLo, asciiLetterOffLo);
         __m128i asciiOffHi = _mm_or_si128(asciiDigitOffHi, asciiLetterOffHi);
 #endif
-        
         lo = _mm_sub_epi8(lo, asciiOffLo);
         hi = _mm_sub_epi8(hi, asciiOffHi);
+#endif
 
         __m128i uuid = PackUUID(hi, lo);
 
@@ -171,7 +263,7 @@ namespace QSim
     __m128i UUIDv4::Load() const
     {
         __m128i res = _mm_loadu_si128(reinterpret_cast<const __m128i*>(m_data));
-#ifdef __BIG_ENDIAN__
+#if defined(__BIG_ENDIAN__)
         res = SwapEndianess(res);
 #endif
         return res;
@@ -179,7 +271,7 @@ namespace QSim
 
     void UUIDv4::Store(__m128i uuid)
     {
-#ifdef __BIG_ENDIAN__
+#if defined(__BIG_ENDIAN__)
         uuid = SwapEndianess(uuid);
 #endif
         _mm_storeu_si128(reinterpret_cast<__m128i*>(m_data), uuid);
@@ -204,7 +296,7 @@ namespace QSim
 
     __m128i UUIDv4::PackUUID(__m128i hi, __m128i lo)
     {
-#ifdef QSim_SSSE3
+#if defined(QSim_SSSE3)
         const __m128 zerof = _mm_setzero_ps();
         const __m128i shufmask = _mm_set_epi64x(0x0f0d0b0907050301ull, 0x0e0c0a0806040200);
 
@@ -263,7 +355,7 @@ namespace QSim
 
     __m128i UUIDv4::SwapEndianess(__m128i v)
     {
-#ifdef QSim_SSSE3
+#if defined(QSim_SSSE3)
         return _mm_shuffle_epi8(v, _mm_set_epi64x(0x0001020304050607ull, 0x08090A0B0C0D0E0Full));
 #else
         v = _mm_shuffle_epi32(v, _MM_SHUFFLE(0,1,2,3));

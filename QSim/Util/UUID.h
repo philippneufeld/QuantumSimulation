@@ -25,6 +25,13 @@ namespace QSim
         UUIDv4& operator=(const UUIDv4& rhs) = default;
 
         bool operator==(const UUIDv4& rhs) const;
+        bool operator!=(const UUIDv4& rhs) const;
+        bool operator<(const UUIDv4& rhs) const;
+        bool operator<=(const UUIDv4& rhs) const;
+        bool operator>(const UUIDv4& rhs) const;
+        bool operator>=(const UUIDv4& rhs) const;
+
+        std::size_t Hash() const;
 
         void ToString(char* buffer) const;
         void ToString(std::string& buffer) const;
@@ -48,6 +55,18 @@ namespace QSim
         std::uint8_t m_data[16];
     };
 
+}
+
+namespace std
+{
+    template<>
+    struct hash<QSim::UUIDv4>
+    {
+        std::size_t operator()(const QSim::UUIDv4& uuid) const
+        {
+            return uuid.Hash();
+        }
+    };
 }
 
 #endif
