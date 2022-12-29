@@ -15,6 +15,7 @@
 #include <queue>
 
 #include "TCPIP.h"
+#include "../Util/UUID.h"
 
 namespace QSim
 {
@@ -46,8 +47,13 @@ namespace QSim
     class NetworkDataPackage : public DataPackagePayload
     {
         constexpr static std::uint64_t s_protocolId = 0x13A3F6A39464CF1A;
+
+        constexpr static std::size_t s_pidOff = 0;
+        constexpr static std::size_t s_sizeOff = 8;
+        constexpr static std::size_t s_msgOff = 16;
+        constexpr static std::size_t s_topicOff = 20;
     public:
-        using Header_t = std::array<std::uint8_t, 20>;
+        using Header_t = std::array<std::uint8_t, 36>;
 
         NetworkDataPackage();
         NetworkDataPackage(std::uint64_t size);
@@ -65,21 +71,25 @@ namespace QSim
 
         // function to change package state
         void SetMessageId(std::uint32_t msgId) { m_messageId = msgId; }
+        void SetTopic(const UUIDv4& topic) { m_topic = topic; }
 
         // getter
         std::uint8_t GetMessageId() const { return m_messageId; }
+        UUIDv4 GetTopic() const { return m_topic; }
         
         // header functions
         static bool IsValidHeader(const Header_t& header);
-        static std::uint32_t GetMessageIdFromHeader(const Header_t& header);
         static std::uint64_t GetSizeFromHeader(const Header_t& header);
-        static Header_t GenerateHeader(std::uint64_t size, std::uint32_t msgId);
+        static std::uint32_t GetMessageIdFromHeader(const Header_t& header);
+        static UUIDv4 GetTopicFromHeader(const Header_t& header);
+        static Header_t GenerateHeader(std::uint64_t size, std::uint32_t msgId, const UUIDv4& topic);
         Header_t GetHeader() const;
 
         static NetworkDataPackage CreateEmptyPackage(std::uint32_t msgId);
 
     private:
         std::uint32_t m_messageId = 0;
+        UUIDv4 m_topic;
     };
 
     class PackageConnectionHandler

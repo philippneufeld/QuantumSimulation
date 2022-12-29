@@ -5,13 +5,19 @@
 #include "Cpu.h"
 #include <cstring> //for strcmp
 
+#if !defined(QSim_ARCH_X86_64) && !defined(QSim_ARCH_X86_64)
+#define QSim_DUMMY_CPUID
+#endif
+
 // include right header for intrinsic cpuid function
+#if !defined(QSim_DUMMY_CPUID)
 #if defined(QSim_COMPILER_MSVC)
 #include <intrin.h>	//for __cpuidex on MSVC
 #elif defined(QSim_COMPILER_GNUC) || defined(QSim_COMPILER_CLANG)
 #include <cpuid.h> //for __cpuid_count on GNU
 #else
 #error Unsupported compiler
+#endif
 #endif
 
 namespace QSim
@@ -98,6 +104,7 @@ namespace QSim
 
 	void CpuDetect::Cpuid(SQeX86Registers* pRegisters)
 	{
+#if !defined(QSim_DUMMY_CPUID)
 		if (pRegisters)
 		{
 #if defined(QSim_COMPILER_MSVC)
@@ -109,6 +116,7 @@ namespace QSim
 #error Please add compiler support for CpuDetect::Cpuid on your compiler.
 #endif
 		}
+#endif
 	}
 
 }

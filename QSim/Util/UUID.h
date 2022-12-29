@@ -6,17 +6,28 @@
 #include <cstdint>
 #include <string>
 
-// SSE and SSE2 are always available
+#if defined(QSim_SSE2)
 #include <xmmintrin.h> // SSE
 #include <emmintrin.h> // SSE2
+#endif
 
 namespace QSim
 {
 
+#if defined(QSim_SSE2)
+    using UUIDv4Register = __m128i;
+#else
+    struct UUIDv4Register
+    {
+        std::uint64_t lo;
+        std::uint64_t hi;
+    };
+#endif
+
     class UUIDv4
     {
     private:
-        UUIDv4(__m128i uuid);
+        UUIDv4(UUIDv4Register uuid);
 
     public:
         UUIDv4();
@@ -43,13 +54,24 @@ namespace QSim
         void StoreToBufferLE(void* buffer) const;
         void StoreToBufferBE(void* buffer) const;
 
-    private:
-        __m128i Load() const;
-        void Store(__m128i uuid);
+        static UUIDv4 LoadFromBufferLE(const void* buffer);
+        static UUIDv4 LoadFromBufferBE(const void* buffer);
 
-        static __m128i Generate();
+    private:
+        static UUIDv4Register LoadFromBufferLEReg(const void* buffer);
+        static UUIDv4Register LoadFromBufferBEReg(const void* buffer);
+        static void StoreToBufferLEReg(UUIDv4Register uuid, void* buffer);
+        static void StoreToBufferBEReg(UUIDv4Register uuid, void* buffer);
+
+        UUIDv4Register Load() const;
+        void Store(UUIDv4Register uuid);
+
+        static UUIDv4Register Generate();
+        static UUIDv4Register SwapEndianess(UUIDv4Register v);
+
+#if defined(QSim_SSE2)
         static __m128i PackUUID(__m128i hi, __m128i lo);
-        static __m128i SwapEndianess(__m128i v);
+#endif
 
     private:
         std::uint8_t m_data[16];

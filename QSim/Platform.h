@@ -1,7 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
-#ifndef QSim_Platform_H_
-#define QSim_Platform_H_
+#ifndef QSim_PLATFORM_H_
+#define QSim_PLATFORM_H_
 
 // Includes
 #include <cstdint>
@@ -25,7 +25,7 @@
 #	endif // !QSim_COMPILER_UNKNOWN
 #endif
 
-// platform macro
+// OS macro
 #if defined (_WIN32)
 #	ifndef QSim_PLATFORM_WINDOWS
 #	define QSim_PLATFORM_WINDOWS
@@ -45,44 +45,16 @@
 #endif
 
 // architecture
-#if defined(QSim_COMPILER_MSVC)
-# if defined(_WIN64)
-#   define QSim_ARCH_X64
-# else
-#   define QSim_ARCH_X32
-# endif
-#elif defined(QSim_COMPILER_GNUC) || defined(QSim_COMPILER_CLANG)
-# if defined(__x86_64__) || defined(__ppc64)
-#   define QSim_ARCH_X64
-# else
-#   define QSim_ARCH_X32
-# endif
-#endif
-
-// output compiler message about platform
-#if defined(QSim_OUTPUT_PLATFORM_INFO)
-
-#if defined(QSim_COMPILER_MSVC)
-#	pragma message("Compiler detected: Microsoft Visual Studio")
-#elif defined(QSim_COMPILER_CLANG)
-#	pragma message("Compiler detected: Clang Compiler")
-#elif defined(QSim_COMPILER_GNUC)
-#	pragma message("Compiler detected: GNU Compiler")
+// see https://stackoverflow.com/questions/152016/detecting-cpu-architecture-compile-time
+#if defined(__x86_64__) || defined(_M_X64)
+# define QSim_ARCH_X86_64
+#elif defined(i386) || defined(__i386__) || defined(__i386) || defined(_M_IX86)
+# define QSim_ARCH_X86_32
+#elif defined(__aarch64__) || defined(_M_ARM64)
+# define QSim_ARCH_ARM64
 #else
-#	pragma message("Compiler detection failed!")
+# define QSim_ARCH_UNKNOWN
 #endif
-
-#if defined(QSim_PLATFORM_WINDOWS)
-#	pragma message("Platform detected: Windows")
-#elif defined(QSim_PLATFORM_LINUX)
-#	pragma message("Platform detected: Linux")
-#elif defined(QSim_PLATFORM_MACOS)
-#	pragma message("Platform detected: Mac OS")
-#else
-#	pragma message("Platform detection failed!")
-#endif
-
-#endif // QSim_OUTPUT_PLATFORM_INFO
 
 // c++ version
 #if defined QSim_COMPILER_MSVC

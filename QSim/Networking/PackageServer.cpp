@@ -156,26 +156,32 @@ namespace QSim
     bool NetworkDataPackage::IsValidHeader(const Header_t& header)
     {
         std::uint64_t npid = 0;
-        std::copy_n(header.data(), 8, reinterpret_cast<std::uint8_t*>(&npid));
+        std::copy_n(header.data() + s_pidOff, 8, reinterpret_cast<std::uint8_t*>(&npid));
         std::uint64_t pid = ntohll(npid);
         return (pid == s_protocolId);
-    }
-    
-    std::uint32_t NetworkDataPackage::GetMessageIdFromHeader(const Header_t& header)
-    {
-        std::uint32_t nmid = 0;
-        std::copy_n(header.data() + 16, sizeof(nmid), reinterpret_cast<std::uint8_t*>(&nmid));
-        return ntohl(nmid);
     }
     
     std::uint64_t NetworkDataPackage::GetSizeFromHeader(const Header_t& header)
     {
         std::uint64_t nsize = 0;
-        std::copy_n(header.data() + 8, sizeof(nsize), reinterpret_cast<std::uint8_t*>(&nsize));
+        std::copy_n(header.data() + s_sizeOff, sizeof(nsize), reinterpret_cast<std::uint8_t*>(&nsize));
         return ntohll(nsize);
     }
 
-    NetworkDataPackage::Header_t NetworkDataPackage::GenerateHeader(std::uint64_t size, std::uint32_t msgId)
+    std::uint32_t NetworkDataPackage::GetMessageIdFromHeader(const Header_t& header)
+    {
+        std::uint32_t nmid = 0;
+        std::copy_n(header.data() + s_msgOff, sizeof(nmid), reinterpret_cast<std::uint8_t*>(&nmid));
+        return ntohl(nmid);
+    }
+    
+    UUIDv4 NetworkDataPackage::GetTopicFromHeader(const Header_t& header)
+    {
+        return UUIDv4::LoadFromBufferBE(header.data() + s_topicOff);
+    }
+
+    NetworkDataPackage::Header_t NetworkDataPackage::GenerateHeader(
+        std::uint64_t size, std::uint32_t msgId, const UUIDv4& topic)
     {
         Header_t header;
 
@@ -183,16 +189,17 @@ namespace QSim
         std::uint64_t nsize = htonll(size);
         std::uint32_t nmid = htonl(msgId);
         
-        std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid), 8, header.data());
-        std::copy_n(reinterpret_cast<const std::uint8_t*>(&nsize), 8, header.data() + 8);
-        std::copy_n(reinterpret_cast<const std::uint8_t*>(&nmid), 4, header.data() + 16);
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid), 8, header.data() + s_pidOff);
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&nsize), 8, header.data() + s_sizeOff);
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&nmid), 4, header.data() + s_msgOff);
+        topic.StoreToBufferBE(header.data() + s_topicOff);
 
         return header;
     }
 
     NetworkDataPackage::Header_t NetworkDataPackage::GetHeader() const
     {
-        return GenerateHeader(GetSize(), m_messageId);
+        return GenerateHeader(GetSize(), m_messageId, m_topic);
     }
 
     NetworkDataPackage NetworkDataPackage::CreateEmptyPackage(std::uint32_t msgId)

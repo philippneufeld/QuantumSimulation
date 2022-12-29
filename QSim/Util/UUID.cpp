@@ -7,12 +7,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include <iostream>
-
-// SSE and SSE2 are always available
-#include <xmmintrin.h> // SSE
-#include <emmintrin.h> // SSE2
-
 #if defined(QSim_SSSE3)
 #include <tmmintrin.h>
 #endif
@@ -23,6 +17,10 @@
 
 #if defined(QSim_AVX2)
 #include <immintrin.h>
+#endif
+
+#if defined(__BIG_ENDIAN__)
+#error "Please implement UUIDv4 for big endian systems"
 #endif
 
 namespace QSim
@@ -50,9 +48,9 @@ namespace QSim
     };
 
 
-    UUIDv4::UUIDv4(__m128i uuid)
+    UUIDv4::UUIDv4(UUIDv4Register uuid)
     {
-        Store(uuid);
+        StoreToBufferLEReg(uuid, m_data);
     }
 
     UUIDv4::UUIDv4() : UUIDv4(UUIDv4::Generate()) {}
@@ -62,10 +60,14 @@ namespace QSim
 #if defined(QSim_SSE4_1)
         __m128i cmp = _mm_xor_si128(Load(), rhs.Load());
         return !!_mm_testz_si128(cmp, cmp);
-#else
+#elif defined(QSim_SSE2)
         __m128i cmp = _mm_cmpeq_epi8(Load(), rhs.Load());
         int s = _mm_movemask_epi8(cmp);
         return (s == 0xffff);
+#else
+        const std::uint64_t* x = reinterpret_cast<const std::uint64_t*>(m_data);
+        const std::uint64_t* y = reinterpret_cast<const std::uint64_t*>(rhs.m_data);
+        return *x == *y && *(x + 1) == *(y + 1);
 #endif
     }
 
@@ -103,6 +105,7 @@ namespace QSim
 
     void UUIDv4::ToString(char* buffer) const
     {
+#if defined(QSim_SSE2)
         __m128i uuid = Load();
         __m128i uuids = _mm_srli_epi64(uuid, 4);
         
@@ -159,7 +162,22 @@ namespace QSim
         _mm_storeu_si32(buffer + 14, los2);
         _mm_storeu_si32(buffer + 9, los1);
         _mm_storeu_si64(buffer, lo);
-        
+#else
+        UUIDv4Register uuid = Load();
+        auto index = [](auto i) { return i%2==0 ? i+1 : i-1; };
+        auto tochar = [](auto i) { return i>9 ? 55 + i : 48 + i; };
+        for (int i=0; i<8; i++)
+            buffer[i] = tochar((uuid.lo >> (4*index(i))) & 0x0f);
+        for (int i=0; i<4; i++)
+            buffer[9+i] = tochar((uuid.lo >> (32+4*index(i))) & 0x0f);
+        for (int i=0; i<4; i++)
+            buffer[14+i] = tochar((uuid.lo >> (48+4*index(i))) & 0x0f);
+        for (int i=0; i<4; i++)
+            buffer[19+i] = tochar((uuid.hi >> (4*index(i))) & 0x0f);
+        for (int i=0; i<12; i++)
+            buffer[24+i] = tochar((uuid.hi >> (16+4*index(i))) & 0x0f);
+#endif
+
         buffer[8] = '-';
         buffer[13] = '-';
         buffer[18] = '-';
@@ -168,7 +186,7 @@ namespace QSim
 
     void UUIDv4::ToString(std::string& buffer) const
     {
-        buffer.resize(36);
+        buffer.resize(36, '0');
         ToString(buffer.data());
     }
 
@@ -181,6 +199,7 @@ namespace QSim
 
     UUIDv4 UUIDv4::FromString(const char* uuidStr)
     {
+#if defined(QSim_SSE2)
 #if defined(QSim_AVX2)
         const __m256i asciiDigitOff = _mm256_set1_epi8(48);
         const __m256i asciiLetterOffset = _mm256_set1_epi8(55);
@@ -241,6 +260,24 @@ namespace QSim
         uuid = _mm_or_si128(uuid1, uuid2);
 
         return uuid;
+#else
+        UUIDv4Register uuid;
+        uuid.lo = 0;
+        uuid.hi = 0;
+        auto index = [](auto i) { return i%2==0 ? i+1 : i-1; };
+        auto fromchar = [](auto c) { return static_cast<std::uint64_t>(c>64 ? c - 55 : c - 48); };
+        for (int i=0; i<8; i++)
+            uuid.lo |= (fromchar(uuidStr[i]) & 0x0f) << (4*index(i));
+        for (int i=0; i<4; i++)
+            uuid.lo |= (fromchar(uuidStr[9+i]) & 0x0f) << (32+4*index(i));
+        for (int i=0; i<4; i++)
+            uuid.lo |= (fromchar(uuidStr[14+i]) & 0x0f) << (48+4*index(i));
+        for (int i=0; i<4; i++)
+            uuid.hi |= (fromchar(uuidStr[19+i]) & 0x0f) << (4*index(i));
+        for (int i=0; i<12; i++)
+            uuid.hi |= (fromchar(uuidStr[24+i]) & 0x0f) << (16+4*index(i));
+        return uuid;
+#endif
     }
 
     UUIDv4 UUIDv4::FromString(const std::string& uuidStr)
@@ -250,34 +287,75 @@ namespace QSim
 
     void UUIDv4::StoreToBufferLE(void* buffer) const
     {
+#if defined(QSim_SSE2)
         __m128i uuid = _mm_loadu_si128(reinterpret_cast<const __m128i*>(m_data));
         _mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), uuid);
+#else
+        std::copy_n(m_data, 16, static_cast<std::uint8_t*>(buffer));
+#endif
     }
     
     void UUIDv4::StoreToBufferBE(void* buffer) const
     {
+#if defined(QSim_SSE2)
         __m128i uuid = _mm_loadu_si128(reinterpret_cast<const __m128i*>(m_data));
         _mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), SwapEndianess(uuid));
+#else
+        for (int i=0; i<16; i++) 
+            static_cast<std::uint8_t*>(buffer)[i] = m_data[15-i];
+#endif
     }
 
-    __m128i UUIDv4::Load() const
+    UUIDv4 UUIDv4::LoadFromBufferLE(const void* buffer)
     {
-        __m128i res = _mm_loadu_si128(reinterpret_cast<const __m128i*>(m_data));
-#if defined(__BIG_ENDIAN__)
-        res = SwapEndianess(res);
-#endif
-        return res;
-    }
-
-    void UUIDv4::Store(__m128i uuid)
-    {
-#if defined(__BIG_ENDIAN__)
-        uuid = SwapEndianess(uuid);
-#endif
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(m_data), uuid);
+        return LoadFromBufferLEReg(buffer);
     }
     
-    __m128i UUIDv4::Generate()
+    UUIDv4 UUIDv4::LoadFromBufferBE(const void* buffer)
+    {
+        return LoadFromBufferBEReg(buffer);
+    }
+
+    UUIDv4Register UUIDv4::LoadFromBufferLEReg(const void* buffer)
+    {
+#if defined(QSim_SSE2)
+        return _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer));
+#else
+        return *reinterpret_cast<const UUIDv4Register*>(buffer);
+#endif
+    }
+    
+    UUIDv4Register UUIDv4::LoadFromBufferBEReg(const void* buffer)
+    {
+        return SwapEndianess(LoadFromBufferLEReg(buffer));
+    }
+
+    void UUIDv4::StoreToBufferLEReg(UUIDv4Register uuid, void* buffer)
+    {
+#if defined(QSim_SSE2)
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), uuid);
+#else
+        std::copy_n(reinterpret_cast<const std::uint8_t*>(&uuid), 16, 
+            reinterpret_cast<std::uint8_t*>(buffer));
+#endif
+    }
+
+    void UUIDv4::StoreToBufferBEReg(UUIDv4Register uuid, void* buffer)
+    {
+        StoreToBufferLEReg(SwapEndianess(uuid), buffer);
+    } 
+
+    UUIDv4Register UUIDv4::Load() const
+    {
+        return LoadFromBufferLEReg(m_data);
+    }
+    
+    void UUIDv4::Store(UUIDv4Register uuid)
+    {
+        StoreToBufferLEReg(uuid, m_data);
+    }
+    
+    UUIDv4Register UUIDv4::Generate()
     {
         // Generates version 4 variant 1 UUIDs
         static std::random_device rdev;
@@ -286,14 +364,45 @@ namespace QSim
             std::numeric_limits<std::uint64_t>::min(), 
             std::numeric_limits<std::uint64_t>::max());
 
+#if defined(QSim_SSE2)
         const __m128i and_mask = _mm_set_epi64x(0xFFFFFFFFFFFFFF3Full, 0xFF0FFFFFFFFFFFFFull);
         const __m128i or_mask =  _mm_set_epi64x(0x0000000000000080ull, 0x0040000000000000ull); // v4.1
         __m128i v = _mm_set_epi64x(dist(engine), dist(engine));
         __m128i uuid = _mm_or_si128(_mm_and_si128(v, and_mask), or_mask);
+#else
+        UUIDv4Register uuid;
+        uuid.hi = (dist(engine) & 0xFFFFFFFFFFFFFF3Full) | 0x0000000000000080ull;
+        uuid.lo = (dist(engine) & 0xFF0FFFFFFFFFFFFFull) | 0x0040000000000000ull;
+#endif
 
         return uuid;
     }
 
+    UUIDv4Register UUIDv4::SwapEndianess(UUIDv4Register v)
+    {
+#if defined(QSim_SSSE3)
+        return _mm_shuffle_epi8(v, _mm_set_epi64x(0x0001020304050607ull, 0x08090A0B0C0D0E0Full));
+#elif defined(QSim_SSE2)
+        v = _mm_shuffle_epi32(v, _MM_SHUFFLE(0,1,2,3));
+        v = _mm_shufflelo_epi16(v, _MM_SHUFFLE(2,3,0,1));
+        v = _mm_shufflehi_epi16(v, _MM_SHUFFLE(2,3,0,1));
+
+        const __m128i mask = _mm_set_epi64x(0xFF00FF00FF00FF00ull, 0xFF00FF00FF00FF00ull);
+        __m128i tmp1 = _mm_slli_epi16(v, 8);
+        __m128i tmp2 = _mm_srli_epi16(v, 8);
+        tmp1 = _mm_and_si128(mask, tmp1);
+        tmp2 = _mm_andnot_si128(mask, tmp2);
+
+        return _mm_or_si128(tmp1, tmp2);
+#else
+    UUIDv4Register res;
+    for (int i=0; i<16; i++) 
+            reinterpret_cast<std::uint8_t*>(&res)[i] = reinterpret_cast<std::uint8_t*>(&v)[15-i];
+    return res;
+#endif
+    }
+
+#if defined(QSim_SSE2)
     __m128i UUIDv4::PackUUID(__m128i hi, __m128i lo)
     {
 #if defined(QSim_SSSE3)
@@ -352,25 +461,8 @@ namespace QSim
         return _mm_packus_epi16(res1, res2);
 #endif
     }
-
-    __m128i UUIDv4::SwapEndianess(__m128i v)
-    {
-#if defined(QSim_SSSE3)
-        return _mm_shuffle_epi8(v, _mm_set_epi64x(0x0001020304050607ull, 0x08090A0B0C0D0E0Full));
-#else
-        v = _mm_shuffle_epi32(v, _MM_SHUFFLE(0,1,2,3));
-        v = _mm_shufflelo_epi16(v, _MM_SHUFFLE(2,3,0,1));
-        v = _mm_shufflehi_epi16(v, _MM_SHUFFLE(2,3,0,1));
-
-        const __m128i mask = _mm_set_epi64x(0xFF00FF00FF00FF00ull, 0xFF00FF00FF00FF00ull);
-        __m128i tmp1 = _mm_slli_epi16(v, 8);
-        __m128i tmp2 = _mm_srli_epi16(v, 8);
-        tmp1 = _mm_and_si128(mask, tmp1);
-        tmp2 = _mm_andnot_si128(mask, tmp2);
-
-        return _mm_or_si128(tmp1, tmp2);
 #endif
-    }
+
 
 
 }
