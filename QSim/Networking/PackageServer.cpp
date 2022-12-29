@@ -65,7 +65,8 @@ namespace QSim
 
     DataPackagePayload& DataPackagePayload::operator=(DataPackagePayload&& rhs)
     {
-        std::swap(*this, rhs);
+        std::swap(m_pData, rhs.m_pData);
+        std::swap(m_size, rhs.m_size);
         return *this;
     }
     
@@ -120,7 +121,8 @@ namespace QSim
         : DataPackagePayload(rhs), m_messageId(rhs.m_messageId) {}
     
     NetworkDataPackage::NetworkDataPackage(NetworkDataPackage&& rhs)
-        : DataPackagePayload(std::move(rhs)), m_messageId(rhs.m_messageId) {}
+        : DataPackagePayload(std::move(rhs)), m_messageId(rhs.m_messageId), 
+        m_topic(std::move(rhs.m_topic)) {}
 
     NetworkDataPackage::NetworkDataPackage(const DataPackagePayload& rhs)
         : DataPackagePayload(rhs) {}
@@ -137,7 +139,9 @@ namespace QSim
 
     NetworkDataPackage& NetworkDataPackage::operator=(NetworkDataPackage&& rhs)
     {
-        std::swap(*this, rhs);
+        DataPackagePayload::operator=(std::move(rhs));
+        m_messageId = rhs.m_messageId;
+        m_topic = std::move(rhs.m_topic);
         return *this;
     }
 

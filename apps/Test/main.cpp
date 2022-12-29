@@ -76,7 +76,7 @@ int ClientMain()
 
     //std::this_thread::sleep_for(50s);
 
-    std::size_t id = client.ConnectHostname("ludwigsburg", 8000);
+    std::size_t id = client.ConnectHostname("panama", 8000);
     if (id == 0)
     {
         std::cout << "Failed to connect to server" << std::endl;
@@ -99,48 +99,8 @@ int ClientMain()
 }
 
 
-class Test
-{
-public:
-    Test(int=0) { std::cout << "Test c'tor" << std::endl; }
-    ~Test() { std::cout << "Test d'tor" << std::endl; }
-};
-
-int foo()
-{
-    std::cout << "foo" << std::endl;
-    return 0;
-}
-
-void bar()
-{
-    std::cout << "bar" << std::endl;
-    static Test test(foo());
-}
-
-
-
 int main(int argc, const char** argv)
 {
-    // 8BF9403E-7C3A-4DFD-BEDC-41CBC537E828
-    
-    UUIDv4 uuid;
-    std::cout << uuid.ToString() << std::endl;
-
-    UUIDv4 uuid2 = UUIDv4::FromString(uuid.ToString());
-    std::cout << uuid2.ToString() << std::endl;
-
-    UUIDv4 uuid3;
-
-    std::cout << (uuid == uuid2) << std::endl;
-    std::cout << (uuid == uuid3) << std::endl;
-
-    std::cout << std::hash<UUIDv4>{}(uuid) << std::endl;
-
-
-    return 0;
-    
-    
     ArgumentParser parser;
     parser.AddOption("worker", "Start as worker");
     auto args = parser.Parse(argc, argv);
