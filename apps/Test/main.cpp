@@ -26,7 +26,6 @@ public:
     {
         Print(std::string("Starting (") + (char*)data.GetData() + ")");
         std::this_thread::sleep_for(5s);
-        // Print(std::string("Finished (") + (char*)data.GetData() + ")");
 
         return DataPackagePayload();
     }
@@ -40,6 +39,15 @@ private:
     std::mutex m_mutex;
 };
 
+class Master : public ServerPool
+{
+public:
+    virtual void OnTaskCompleted(UUIDv4 id)
+    {
+        std::cout << "Task completed: " << id.ToString() << std::endl;
+    }
+};
+
 int WorkerMain()
 {
     Worker worker;
@@ -50,7 +58,7 @@ int WorkerMain()
 
 int MasterMain()
 {
-    ServerPool pool;
+    Master pool;
     std::thread thread([&](){ pool.Run(); });
     
     pool.ConnectWorkerHostname("localhost", 8000);

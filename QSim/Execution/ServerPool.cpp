@@ -177,13 +177,15 @@ namespace QSim
         return m_workers.size();
     }
 
-    std::future<DataPackagePayload> ServerPool::Submit(DataPackagePayload task)
+    std::pair<UUIDv4, std::future<DataPackagePayload>> ServerPool::Submit(DataPackagePayload task)
     {
         std::promise<DataPackagePayload> promise;
         std::future<DataPackagePayload> future = promise.get_future();
 
+        UUIDv4 id;
+
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_unscheduled.push_back(std::make_tuple(std::move(task), std::move(promise)));
+        m_unscheduled.push_back(std::make_tuple(id, std::move(task), std::move(promise)));
         lock.unlock();
 
         // send reserve request to all workers
@@ -194,7 +196,7 @@ namespace QSim
             WriteTo(worker, request);
         }
 
-        return future;
+        return std::make_pair(id, std::move(future));
     }
 
     void ServerPool::WaitUntilFinished()
@@ -210,10 +212,10 @@ namespace QSim
         m_workers.erase(worker);
         for (auto it=m_executing.begin(); it!=m_executing.end(); it++)
         {
-            auto& [task, prom, w, t] = *it;
+            auto& [id, task, prom, w, t] = *it;
             if (w == worker)
             {
-                m_unscheduled.push_front(std::make_tuple(std::move(task), std::move(prom)));
+                m_unscheduled.push_front(std::make_tuple(id, std::move(task), std::move(prom)));
                 it = m_executing.erase(it);
             }
         }
@@ -237,9 +239,9 @@ namespace QSim
             }
             else
             {
-                auto [task, prom] = std::move(m_unscheduled.front());
+                auto [id, task, prom] = std::move(m_unscheduled.front());
                 m_unscheduled.pop_front();
-                m_executing.push_back(std::make_tuple(task, std::move(prom), worker, ticket));
+                m_executing.push_back(std::make_tuple(id, task, std::move(prom), worker, ticket));
                 
                 NetworkDataPackage request = std::move(task);
                 request.SetMessageId(ServerPool_PostRequest);
@@ -259,7 +261,7 @@ namespace QSim
             auto it=m_executing.begin();
             for (; it!=m_executing.end(); it++)
             {
-                auto& [task, prom, w, t] = *it;
+                auto& [id, task, prom, w, t] = *it;
                 if (w == worker && t == ticket)
                     break;
             }
@@ -267,9 +269,9 @@ namespace QSim
             // enlist task back into the unscheduled list
             if (it != m_executing.end())
             {
-                auto [task, prom, w, t] = std::move(*it);
+                auto [id, task, prom, w, t] = std::move(*it);
                 m_executing.erase(it);
-                m_unscheduled.push_front(std::make_tuple(std::move(task), std::move(prom)));
+                m_unscheduled.push_front(std::make_tuple(id, std::move(task), std::move(prom)));
             }                
         }
         break;
@@ -295,11 +297,12 @@ namespace QSim
             auto it=m_executing.begin();
             for (; it!=m_executing.end(); it++)
             {
-                auto& [task, prom, w, t] = *it;
+                auto& [id, task, prom, w, t] = *it;
                 if (w == worker && t == ticket)
                 {
                     prom.set_value(std::move(data));
                     m_executing.erase(it);
+                    OnTaskCompleted(id);
                     break;
                 }
             }

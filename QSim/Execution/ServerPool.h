@@ -76,7 +76,8 @@ namespace QSim
         std::size_t ConnectWorkerHostname(const std::string& hostname, short port);
         std::size_t GetWorkerCount() const;
 
-        std::future<DataPackagePayload> Submit(DataPackagePayload task);
+        std::pair<UUIDv4, std::future<DataPackagePayload>> Submit(DataPackagePayload task);
+        virtual void OnTaskCompleted(UUIDv4 id) {};
         void WaitUntilFinished();
 
     private:
@@ -88,14 +89,16 @@ namespace QSim
         std::condition_variable m_taskFinished;
         std::set<std::size_t> m_workers;
         std::deque<std::tuple<
-            DataPackagePayload, 
-            std::promise<DataPackagePayload>
+            UUIDv4, // task id
+            DataPackagePayload, // task data
+            std::promise<DataPackagePayload> // task result promise
         >> m_unscheduled;
         std::list<std::tuple<
-            DataPackagePayload, 
-            std::promise<DataPackagePayload>, 
-            std::size_t, 
-            UUIDv4
+            UUIDv4, // task id
+            DataPackagePayload, // task data
+            std::promise<DataPackagePayload>, // task result promise
+            std::size_t, // worker id
+            UUIDv4 // ticket
         >> m_executing;
     };
 
