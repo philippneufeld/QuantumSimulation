@@ -109,6 +109,7 @@ namespace QSim
         void AddServer(TCPIPServerSocket* pServer);
         void RemoveServer(TCPIPServerSocket* pServer);
 
+        void Broadcast(NetworkDataPackage msg);
         void WriteTo(TCPIPConnection* pConn, NetworkDataPackage msg);
 
         void RunHandler();
@@ -139,10 +140,13 @@ namespace QSim
         bool Run(short port);
         void Stop();
 
+        void Broadcast(NetworkDataPackage msg);
         void WriteTo(std::size_t id, NetworkDataPackage msg);
 
+        void Disconnect(std::size_t id);
+
         // callbacks
-        virtual bool OnClientConnected(std::size_t id, const std::string& ip) { return true; }
+        virtual void OnClientConnected(std::size_t id, const std::string& ip) { }
         virtual void OnClientDisconnected(std::size_t id) {}
         virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) { }
 
@@ -172,6 +176,7 @@ namespace QSim
         void Stop();
 
         void WriteTo(std::size_t id, NetworkDataPackage data);
+        void Disconnect(std::size_t id);
 
     private:
         // connection handler callbacks

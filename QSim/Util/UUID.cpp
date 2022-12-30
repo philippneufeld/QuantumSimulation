@@ -97,6 +97,26 @@ namespace QSim
     {
         return !(*this < rhs);
     }
+
+    bool UUIDv4::IsNullUUID() const
+    {
+#if defined(QSim_SSE4_1)
+        __m128i uuid = Load();
+        return !!_mm_testz_si128(uuid, uuid);
+#elif defined(QSim_SSE2)
+        __m128i cmp = _mm_cmpeq_epi8(Load(), _mm_setzero_si128());
+        int s = _mm_movemask_epi8(cmp);
+        return (s == 0xffff);
+#else
+        const std::uint64_t* x = reinterpret_cast<const std::uint64_t*>(m_data);
+        return *x == 0 && *(x + 1) == 0;
+#endif
+    }
+
+    UUIDv4::operator bool() const
+    {
+        return !IsNullUUID();
+    }
  
     std::size_t UUIDv4::Hash() const
     {
@@ -314,6 +334,18 @@ namespace QSim
     UUIDv4 UUIDv4::LoadFromBufferBE(const void* buffer)
     {
         return LoadFromBufferBEReg(buffer);
+    }
+
+    UUIDv4 UUIDv4::NullUUID()
+    {
+#if defined(QSim_SSE2)
+        return _mm_setzero_si128();
+#else
+        UUIDv4Register reg;
+        reg.lo = 0;
+        reg.hi = 0;
+        return reg;
+#endif
     }
 
     UUIDv4Register UUIDv4::LoadFromBufferLEReg(const void* buffer)

@@ -113,12 +113,13 @@ namespace QSim
         if (IsValidHeader(header))
         {
             m_messageId = GetMessageIdFromHeader(header);
+            m_topic = GetTopicFromHeader(header);
             Allocate(GetSizeFromHeader(header));
         }
     }
 
     NetworkDataPackage::NetworkDataPackage(const NetworkDataPackage& rhs)
-        : DataPackagePayload(rhs), m_messageId(rhs.m_messageId) {}
+        : DataPackagePayload(rhs), m_messageId(rhs.m_messageId), m_topic(rhs.m_topic) {}
     
     NetworkDataPackage::NetworkDataPackage(NetworkDataPackage&& rhs)
         : DataPackagePayload(std::move(rhs)), m_messageId(rhs.m_messageId), 
@@ -181,7 +182,7 @@ namespace QSim
     
     UUIDv4 NetworkDataPackage::GetTopicFromHeader(const Header_t& header)
     {
-        return UUIDv4::LoadFromBufferBE(header.data() + s_topicOff);
+        return UUIDv4::LoadFromBufferLE(header.data() + s_topicOff);
     }
 
     NetworkDataPackage::Header_t NetworkDataPackage::GenerateHeader(
@@ -196,7 +197,7 @@ namespace QSim
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&npid), 8, header.data() + s_pidOff);
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&nsize), 8, header.data() + s_sizeOff);
         std::copy_n(reinterpret_cast<const std::uint8_t*>(&nmid), 4, header.data() + s_msgOff);
-        topic.StoreToBufferBE(header.data() + s_topicOff);
+        topic.StoreToBufferLE(header.data() + s_topicOff);
 
         return header;
     }
@@ -288,6 +289,12 @@ namespace QSim
         }
     }
 
+    void PackageConnectionHandler::Broadcast(NetworkDataPackage msg)
+    {
+        for (TCPIPConnection* pConn: m_connections)
+            WriteTo(pConn, msg);
+    }
+
     void PackageConnectionHandler::WriteTo(TCPIPConnection* pConn, NetworkDataPackage msg)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -347,7 +354,15 @@ namespace QSim
 
             // handle new connections
             for (TCPIPServerSocket* pServer: ac)
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                bool found = (std::find(m_servers.begin(), m_servers.end(), pServer) != m_servers.end());
+                lock.unlock();
+                if (!found)
+                    continue;
+
                 this->OnConnectionAcceptale(pServer);
+            }
 
             // validate read buffer
             for (auto it = readBuffer.begin(); it != readBuffer.end();)
@@ -363,6 +378,9 @@ namespace QSim
             for (TCPIPConnection* pConn: re)
             {
                 if (killed.count(pConn) != 0)
+                    continue;
+
+                if (m_connections.count(pConn) == 0)
                     continue;
                 
                 // check if data in read buffer
@@ -381,7 +399,10 @@ namespace QSim
                         continue;
                     }
                     
-                    readBuffer[pConn] = std::make_tuple(NetworkDataPackage(header), std::uint64_t(0));                    
+                    if (NetworkDataPackage::GetSizeFromHeader(header) == 0)
+                        OnConnectionMessage(pConn, NetworkDataPackage(header));
+                    else
+                        readBuffer[pConn] = std::make_tuple(NetworkDataPackage(header), std::uint64_t(0));
                 }
                 else
                 {
@@ -413,6 +434,9 @@ namespace QSim
                 // since all other threads may only append to the list 
                 // (this does not invalidate the iterators to the existing items)
                 if (killed.count(pConn) != 0)
+                    continue;
+                
+                if (m_connections.count(pConn) == 0)
                     continue;
 
                 auto& outputQueue = m_writeBuffer[pConn];
@@ -520,7 +544,7 @@ namespace QSim
 
         // start socket server
         m_pServer = new TCPIPServerSocket();
-        if (!m_pServer->Bind(8000))
+        if (!m_pServer->Bind(port))
             return false;
         if (!m_pServer->Listen(5))
             return false;
@@ -543,6 +567,19 @@ namespace QSim
     void PackageServer::WriteTo(std::size_t id, NetworkDataPackage msg)
     {
         PackageConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(msg));
+    }
+
+    void PackageServer::Broadcast(NetworkDataPackage msg)
+    {
+        PackageConnectionHandler::Broadcast(std::move(msg));
+    }
+
+    void PackageServer::Disconnect(std::size_t id)
+    {
+        TCPIPConnection* pConn = reinterpret_cast<TCPIPConnection*>(id);
+        pConn->Close();
+        OnClientDisconnected(id);
+        PackageConnectionHandler::RemoveConnection(pConn);
     }
 
     void PackageServer::OnConnectionAcceptale(TCPIPServerSocket* pServer) 
@@ -581,7 +618,10 @@ namespace QSim
     {
         auto pConn = new TCPIPClientSocket();
         if (!pConn->Connect(ip, port))
+        {
+            delete pConn;
             return 0;
+        }
         
         AddConnection(pConn);
         return reinterpret_cast<std::size_t>(pConn);
@@ -605,6 +645,14 @@ namespace QSim
     void PackageClient::WriteTo(std::size_t id, NetworkDataPackage data)
     {
         PackageConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(data));
+    }
+
+    void PackageClient::Disconnect(std::size_t id)
+    {
+        TCPIPConnection* pConn = reinterpret_cast<TCPIPConnection*>(id);
+        pConn->Close();
+        OnClientDisconnected(id);
+        PackageConnectionHandler::RemoveConnection(pConn);
     }
 
     void PackageClient::OnConnectionAcceptale(TCPIPServerSocket* pServer) { }

@@ -42,6 +42,9 @@ namespace QSim
         bool operator>(const UUIDv4& rhs) const;
         bool operator>=(const UUIDv4& rhs) const;
 
+        bool IsNullUUID() const;
+        operator bool() const;
+
         std::size_t Hash() const;
 
         void ToString(char* buffer) const;
@@ -56,6 +59,8 @@ namespace QSim
 
         static UUIDv4 LoadFromBufferLE(const void* buffer);
         static UUIDv4 LoadFromBufferBE(const void* buffer);
+
+        static UUIDv4 NullUUID();
 
     private:
         static UUIDv4Register LoadFromBufferLEReg(const void* buffer);

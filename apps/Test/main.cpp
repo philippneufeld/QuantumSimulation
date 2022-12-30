@@ -19,10 +19,9 @@ using namespace std::chrono_literals;
 class MyServer : public PackageServer
 {
 public:
-    virtual bool OnClientConnected(std::size_t id, const std::string& ip) override
+    virtual void OnClientConnected(std::size_t id, const std::string& ip) override
     {
         std::cout << "Client connected: " << ip << std::endl;
-        return true; 
     }
     virtual void OnClientDisconnected(std::size_t id) override 
     {
@@ -56,6 +55,30 @@ public:
     {
         std::cout << "Received data: " << data.GetSize() / sizeof(double) << std::endl;
     }
+};
+
+
+class Worker : public ServerPoolWorker
+{
+public:
+    virtual DataPackagePayload DoWork(DataPackagePayload data) override
+    {
+        Print("Starting task....");
+        std::this_thread::sleep_for(2s);
+        Print((char*)data.GetData());
+        std::this_thread::sleep_for(2s);
+        Print("Finished task");
+
+        return DataPackagePayload();
+    }
+
+    void Print(const std::string& str)
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        std::cout << str << std::endl;
+    }
+private:
+    std::mutex m_mutex;
 };
 
 int ServerMain()
@@ -98,6 +121,49 @@ int ClientMain()
     return 0;
 }
 
+int WorkerMain()
+{
+    Worker worker;
+    if(!worker.Run(8000))
+        return 1;
+    return 0;
+}
+
+int MasterMain()
+{
+    ServerPool pool;
+    std::thread thread([&](){ pool.Run(); });
+    
+    pool.ConnectWorkerHostname("panama", 8000);
+    pool.ConnectWorker("192.168.2.2", 8000);
+
+    if (pool.GetWorkerCount() == 0)
+    {
+        std::cout << "No worker found!" << std::endl;
+        pool.Stop();
+        thread.join();
+        return 1;
+    }
+
+    std::string str = "Hello world!";
+    DataPackagePayload data(str.size());
+    std::copy_n(str.data(), str.size(), (char*)data.GetData());
+
+    for (int i=0; i<10; i++)
+    {
+        pool.Submit(data);
+    }
+
+    std::cout << "Waiting..." << std::endl;
+    pool.WaitUntilFinished();
+    std::cout << "Finished" << std::endl;
+
+    pool.Stop();
+    thread.join();
+
+    return 0;
+}
+
 
 int main(int argc, const char** argv)
 {
@@ -106,9 +172,9 @@ int main(int argc, const char** argv)
     auto args = parser.Parse(argc, argv);
     
     if (args.IsOptionPresent("worker"))
-        return ClientMain();
+        return WorkerMain();
     else 
-        return ServerMain();
+        return MasterMain();
 
     return 0;
 }

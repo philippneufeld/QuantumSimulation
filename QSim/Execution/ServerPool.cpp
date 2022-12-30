@@ -12,8 +12,6 @@
 
 #include "ServerPool.h"
 
-#include <iostream>
-
 namespace QSim
 {
 
@@ -21,31 +19,64 @@ namespace QSim
 
     ServerPoolWorker::ServerPoolWorker(std::size_t threadCnt) : m_pool(threadCnt) { }
 
+    void ServerPoolWorker::OnClientConnected(std::size_t id, const std::string& ip)
+    {
+        std::size_t available = m_pool.GetAvailableThreads();
+        std::size_t reserved = m_tickets.size();
+        if (available > reserved)
+        {
+            NetworkDataPackage msg;
+            msg.SetMessageId(ServerPool_CapacityAvailable);
+            WriteTo(id, std::move(msg));
+        }
+    }
+
+    void ServerPoolWorker::OnClientDisconnected(std::size_t id)
+    {
+        // remove outstanding tickets
+        auto it = m_tickets.find(id);
+        for (; it!=m_tickets.end(); it = m_tickets.find(id))
+            m_tickets.erase(it);
+    }
+
     void ServerPoolWorker::OnMessageReceived(std::size_t id, NetworkDataPackage data)
     {
         NetworkDataPackage response;
         response.SetMessageId(ServerPool_InvalidRequest);
+        response.SetTopic(data.GetTopic());
 
         switch (data.GetMessageId())
         {
         case ServerPool_ReserveRequest:
         {
-            std::uint32_t reserveCnt = *reinterpret_cast<std::uint32_t*>(data.GetData());
-            reserveCnt = TryReserve(id, reserveCnt);
+            auto uuid = Reserve(id);
+            bool reserved = !uuid.IsNullUUID();
 
-            response.Allocate(8);
-            response.SetMessageId(ServerPool_Reserved);
-            *reinterpret_cast<std::uint32_t*>(response.GetData()) = reserveCnt;
+            response.SetMessageId(reserved ? ServerPool_Reserved : ServerPool_NotReserved);
+
+            if (reserved)
+            {
+                response.Allocate(sizeof(uuid));
+                uuid.StoreToBufferLE(response.GetData());
+            }          
         } 
         break;
         
         case ServerPool_PostRequest:
         {
-            if (TryRun(id, std::move(data)))
+            auto ticket = data.GetTopic();
+            if (Run(id, ticket, std::move(data)))
                 response.SetMessageId(ServerPool_Posted);
             else
                 response.SetMessageId(ServerPool_NotPosted);
         } 
+        break;
+
+        case ServerPool_CancelReservationRequest:
+        {
+            auto ticket = data.GetTopic();
+            CancelReservation(id, ticket);
+        }
         break;
         
         default:
@@ -58,48 +89,227 @@ namespace QSim
         WriteTo(id, std::move(response));
     }
 
-    std::uint32_t ServerPoolWorker::TryReserve(std::size_t id, std::uint32_t cnt)
+    UUIDv4 ServerPoolWorker::Reserve(std::size_t id)
     {
         std::size_t available = m_pool.GetAvailableThreads();
         std::size_t reserved = m_tickets.size();
         if (available <= reserved)
-            return 0;
+            return UUIDv4::NullUUID();
 
-        available -= reserved;
-
-        if (cnt > available)
-            cnt = available;
-
-        for (std::uint32_t i = 0; i < cnt; i++)
-            m_tickets.insert(id);
-        
-        return cnt;
+        UUIDv4 uuid;
+        m_tickets[id].insert(uuid);
+        return uuid;
     }
 
-    bool ServerPoolWorker::TryRun(std::size_t id, NetworkDataPackage data)
+    void ServerPoolWorker::CancelReservation(std::size_t id, const UUIDv4& ticket)
+    {
+        auto it = m_tickets[id].find(ticket);
+        if (it != m_tickets[id].end())
+            m_tickets[id].erase(it);
+
+        BroadcastAvailability();
+    }
+
+    bool ServerPoolWorker::Run(std::size_t id, const UUIDv4& ticket, NetworkDataPackage data)
     {
         // check for ticket
-        auto it = m_tickets.find(id);
-        if (it == m_tickets.end())
-        {
-            // no ticket
-            TryReserve(id, 1);
-            it = m_tickets.find(id);
-            if (it == m_tickets.end())
-                return false;
-        }
+        auto it = m_tickets[id].find(ticket);
+        if (it == m_tickets[id].end())
+            return false;
 
         // remove ticket
-        m_tickets.erase(it);
+        m_tickets[id].erase(it);
 
-        m_pool.Submit([this, id, data=std::move(data)]()
+        m_pool.Submit([this, id, ticket, data=std::move(data)]()
         { 
             NetworkDataPackage result = DoWork(std::move(data));
             result.SetMessageId(ServerPool_TaskCompleted);
+            result.SetTopic(ticket);
             WriteTo(id, std::move(result));
+            BroadcastAvailability();
         });
 
         return true;
+    }
+
+    void ServerPoolWorker::BroadcastAvailability()
+    {
+        std::size_t available = m_pool.GetAvailableThreads();
+        std::size_t reserved = m_tickets.size();
+        if (available > reserved)
+        {
+            NetworkDataPackage msg;
+            msg.SetMessageId(ServerPool_CapacityAvailable);
+            Broadcast(std::move(msg));
+        }
+    }
+
+
+    //
+    // ServerPool
+    //
+
+    std::size_t ServerPool::ConnectWorker(const std::string& ip, short port)
+    {
+        auto worker = PackageClient::Connect(ip, port);
+        
+        std::unique_lock<std::mutex> lock(m_mutex);
+        if (worker) m_workers.insert(worker);
+        lock.unlock();
+        
+        return worker;
+    }
+
+    std::size_t ServerPool::ConnectWorkerHostname(const std::string& hostname, short port)
+    {
+        auto worker = PackageClient::ConnectHostname(hostname, port);
+        
+        std::unique_lock<std::mutex> lock(m_mutex);
+        if (worker) m_workers.insert(worker);
+        lock.unlock();
+
+        return worker;
+    }
+
+    std::size_t ServerPool::GetWorkerCount() const
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        return m_workers.size();
+    }
+
+    std::future<DataPackagePayload> ServerPool::Submit(DataPackagePayload task)
+    {
+        std::promise<DataPackagePayload> promise;
+        std::future<DataPackagePayload> future = promise.get_future();
+
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_unscheduled.push_back(std::make_tuple(std::move(task), std::move(promise)));
+        lock.unlock();
+
+        // send reserve request to all workers
+        for (auto worker: m_workers)
+        {
+            NetworkDataPackage request;
+            request.SetMessageId(ServerPool_ReserveRequest);
+            WriteTo(worker, request);
+        }
+
+        return future;
+    }
+
+    void ServerPool::WaitUntilFinished()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_taskFinished.wait(lock, [this](){ return m_unscheduled.empty() && m_executing.empty(); });
+    }
+
+    void ServerPool::OnClientDisconnected(std::size_t worker)
+    {
+        // check if there were uncompleted tasks that were scheduled with the worker
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_workers.erase(worker);
+        for (auto it=m_executing.begin(); it!=m_executing.end(); it++)
+        {
+            auto& [task, prom, w, t] = *it;
+            if (w == worker)
+            {
+                m_unscheduled.push_front(std::make_tuple(std::move(task), std::move(prom)));
+                it = m_executing.erase(it);
+            }
+        }
+    }
+
+    void ServerPool::OnMessageReceived(std::size_t worker, NetworkDataPackage data)
+    {
+        switch (data.GetMessageId())
+        {
+        case ServerPool_Reserved:
+        {
+            auto ticket = UUIDv4::LoadFromBufferLE(data.GetData());
+
+            std::unique_lock<std::mutex> lock(m_mutex);
+            if (m_unscheduled.size() == 0)
+            {
+                NetworkDataPackage request;
+                request.SetMessageId(ServerPool_CancelReservationRequest);
+                request.SetTopic(ticket);
+                WriteTo(worker, request);
+            }
+            else
+            {
+                auto [task, prom] = std::move(m_unscheduled.front());
+                m_unscheduled.pop_front();
+                m_executing.push_back(std::make_tuple(task, std::move(prom), worker, ticket));
+                
+                NetworkDataPackage request = std::move(task);
+                request.SetMessageId(ServerPool_PostRequest);
+                request.SetTopic(ticket);
+
+                WriteTo(worker, std::move(request));
+            }
+        }
+        break;
+
+        case ServerPool_NotPosted:
+        {
+            auto ticket = data.GetTopic();
+            std::unique_lock<std::mutex> lock(m_mutex);
+
+            // search for task
+            auto it=m_executing.begin();
+            for (; it!=m_executing.end(); it++)
+            {
+                auto& [task, prom, w, t] = *it;
+                if (w == worker && t == ticket)
+                    break;
+            }
+
+            // enlist task back into the unscheduled list
+            if (it != m_executing.end())
+            {
+                auto [task, prom, w, t] = std::move(*it);
+                m_executing.erase(it);
+                m_unscheduled.push_front(std::make_tuple(std::move(task), std::move(prom)));
+            }                
+        }
+        break;
+
+        case ServerPool_CapacityAvailable:
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            if (!m_unscheduled.empty())
+            {
+                NetworkDataPackage request;
+                request.SetMessageId(ServerPool_ReserveRequest);
+                WriteTo(worker, request);
+            }
+        }
+        break;
+
+        case ServerPool_TaskCompleted:
+        {
+            auto ticket = data.GetTopic();
+            std::unique_lock<std::mutex> lock(m_mutex);
+
+            // search for task
+            auto it=m_executing.begin();
+            for (; it!=m_executing.end(); it++)
+            {
+                auto& [task, prom, w, t] = *it;
+                if (w == worker && t == ticket)
+                {
+                    prom.set_value(std::move(data));
+                    m_executing.erase(it);
+                    break;
+                }
+            }
+
+            lock.unlock();
+            m_taskFinished.notify_all();
+        }
+        break;
+
+        };
     }
 
 }
