@@ -530,6 +530,54 @@ namespace QSim
 
 
     //
+    // ConnectionUUIDMap
+    // 
+
+    UUIDv4 ConnectionUUIDMap::GetIdFromConnection(const TCPIPConnection* pConn) const
+    {
+        auto it = m_fromConn.find(pConn);
+        return it == m_fromConn.end() ? UUIDv4::NullUUID() : it->second;
+    }
+
+    TCPIPConnection* ConnectionUUIDMap::GetConnectionFromId(UUIDv4 id) const
+    {
+        auto it = m_fromUuid.find(id);
+        return it == m_fromUuid.end() ? nullptr : it->second;
+    }
+
+    UUIDv4 ConnectionUUIDMap::Insert(TCPIPConnection* pConn)
+    {
+        UUIDv4 uuid = m_fromConn[pConn];
+        m_fromUuid[uuid] = pConn;
+        return uuid;
+    }
+
+    void ConnectionUUIDMap::Remove(UUIDv4 id)
+    {
+        auto it = m_fromUuid.find(id);
+        if (it != m_fromUuid.end())
+        {
+            auto it2 = m_fromConn.find(it->second);
+            if (it2 != m_fromConn.end())
+                m_fromConn.erase(it2);
+            m_fromUuid.erase(it);
+        }
+    }
+    
+    void ConnectionUUIDMap::Remove(const TCPIPConnection* pConn)
+    {
+        auto it = m_fromConn.find(pConn);
+        if (it != m_fromConn.end())
+        {
+            auto it2 = m_fromUuid.find(it->second);
+            if (it2 != m_fromUuid.end())
+                m_fromUuid.erase(it2);
+            m_fromConn.erase(it);
+        }
+    }
+
+
+    //
     // PackageServer
     //
 
@@ -564,9 +612,9 @@ namespace QSim
         StopHandler();
     }
 
-    void PackageServer::WriteTo(std::size_t id, NetworkDataPackage msg)
+    void PackageServer::WriteTo(UUIDv4 id, NetworkDataPackage msg)
     {
-        PackageConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(msg));
+        PackageConnectionHandler::WriteTo(m_ids.GetConnectionFromId(id), std::move(msg));
     }
 
     void PackageServer::Broadcast(NetworkDataPackage msg)
@@ -574,11 +622,12 @@ namespace QSim
         PackageConnectionHandler::Broadcast(std::move(msg));
     }
 
-    void PackageServer::Disconnect(std::size_t id)
+    void PackageServer::Disconnect(UUIDv4 id)
     {
-        TCPIPConnection* pConn = reinterpret_cast<TCPIPConnection*>(id);
+        TCPIPConnection* pConn = m_ids.GetConnectionFromId(id);
         pConn->Close();
         OnClientDisconnected(id);
+        m_ids.Remove(id);
         PackageConnectionHandler::RemoveConnection(pConn);
     }
 
@@ -589,13 +638,14 @@ namespace QSim
         if (pConn->IsValid())
         {
             AddConnection(pConn);
-            OnClientConnected(reinterpret_cast<std::size_t>(pConn), ip);
+            UUIDv4 id = m_ids.Insert(pConn);
+            OnClientConnected(id, ip);
         }
     }
 
     void PackageServer::OnConnectionClosed(TCPIPConnection* pConn) 
     {
-        OnClientDisconnected(reinterpret_cast<std::size_t>(pConn));
+        OnClientDisconnected(m_ids.GetIdFromConnection(pConn));
     }
 
     void PackageServer::OnConnectionRemoved(TCPIPConnection* pConn) 
@@ -605,8 +655,9 @@ namespace QSim
 
     void PackageServer::OnConnectionMessage(TCPIPConnection* pConn, NetworkDataPackage msg) 
     {
-        OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
+        OnMessageReceived(m_ids.GetIdFromConnection(pConn), std::move(msg));
     }
+
 
     //
     // PackageClient
@@ -614,20 +665,20 @@ namespace QSim
 
     PackageClient::PackageClient() { }
 
-    std::size_t PackageClient::Connect(const std::string& ip, short port)
+    UUIDv4 PackageClient::Connect(const std::string& ip, short port)
     {
         auto pConn = new TCPIPClientSocket();
         if (!pConn->Connect(ip, port))
         {
             delete pConn;
-            return 0;
+            return UUIDv4::NullUUID();
         }
         
         AddConnection(pConn);
-        return reinterpret_cast<std::size_t>(pConn);
+        return m_ids.Insert(pConn);
     }
     
-    std::size_t PackageClient::ConnectHostname(const std::string& hostname, short port)
+    UUIDv4 PackageClient::ConnectHostname(const std::string& hostname, short port)
     {
         return Connect(TCPIPClientSocket::GetHostByName(hostname), port);
     }
@@ -642,16 +693,17 @@ namespace QSim
         StopHandler();
     }
 
-    void PackageClient::WriteTo(std::size_t id, NetworkDataPackage data)
+    void PackageClient::WriteTo(UUIDv4 id, NetworkDataPackage data)
     {
-        PackageConnectionHandler::WriteTo(reinterpret_cast<TCPIPConnection*>(id), std::move(data));
+        PackageConnectionHandler::WriteTo(m_ids.GetConnectionFromId(id), std::move(data));
     }
 
-    void PackageClient::Disconnect(std::size_t id)
+    void PackageClient::Disconnect(UUIDv4 id)
     {
-        TCPIPConnection* pConn = reinterpret_cast<TCPIPConnection*>(id);
+        TCPIPConnection* pConn = m_ids.GetConnectionFromId(id);
         pConn->Close();
         OnClientDisconnected(id);
+        m_ids.Remove(id);
         PackageConnectionHandler::RemoveConnection(pConn);
     }
 
@@ -659,7 +711,7 @@ namespace QSim
     
     void PackageClient::OnConnectionClosed(TCPIPConnection* pConn) 
     {
-        OnClientDisconnected(reinterpret_cast<std::size_t>(pConn));
+        OnClientDisconnected(m_ids.GetIdFromConnection(pConn));
     }
 
     void PackageClient::OnConnectionRemoved(TCPIPConnection* pConn) 
@@ -669,7 +721,7 @@ namespace QSim
     
     void PackageClient::OnConnectionMessage(TCPIPConnection* pConn, NetworkDataPackage msg) 
     {
-        OnMessageReceived(reinterpret_cast<std::size_t>(pConn), std::move(msg));
+        OnMessageReceived(m_ids.GetIdFromConnection(pConn), std::move(msg));
     }
 
 }

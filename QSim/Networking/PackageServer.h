@@ -131,6 +131,21 @@ namespace QSim
         std::map<TCPIPConnection*, std::queue<NetworkDataPackage>> m_writeBuffer;
     };
 
+    class ConnectionUUIDMap
+    {
+    public:
+        UUIDv4 GetIdFromConnection(const TCPIPConnection* pConn) const;
+        TCPIPConnection* GetConnectionFromId(UUIDv4 id) const;
+
+        UUIDv4 Insert(TCPIPConnection* pConn);
+        void Remove(UUIDv4 id);
+        void Remove(const TCPIPConnection* pConn);
+
+    private:
+        std::map<const TCPIPConnection*, UUIDv4> m_fromConn;
+        std::map<UUIDv4, TCPIPConnection*> m_fromUuid;
+    };
+
     class PackageServer : private PackageConnectionHandler
     {
     public:
@@ -141,14 +156,14 @@ namespace QSim
         void Stop();
 
         void Broadcast(NetworkDataPackage msg);
-        void WriteTo(std::size_t id, NetworkDataPackage msg);
+        void WriteTo(UUIDv4 id, NetworkDataPackage msg);
 
-        void Disconnect(std::size_t id);
+        void Disconnect(UUIDv4 id);
 
         // callbacks
-        virtual void OnClientConnected(std::size_t id, const std::string& ip) { }
-        virtual void OnClientDisconnected(std::size_t id) {}
-        virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) { }
+        virtual void OnClientConnected(UUIDv4 id, const std::string& ip) { }
+        virtual void OnClientDisconnected(UUIDv4 id) {}
+        virtual void OnMessageReceived(UUIDv4 id, NetworkDataPackage data) { }
 
     private:
         // connection handler callbacks
@@ -159,6 +174,7 @@ namespace QSim
 
     private:
         TCPIPServerSocket* m_pServer;
+        ConnectionUUIDMap m_ids;
     };
 
     class PackageClient : private PackageConnectionHandler
@@ -166,17 +182,17 @@ namespace QSim
     public:
         PackageClient();
 
-        std::size_t Connect(const std::string& ip, short port);
-        std::size_t ConnectHostname(const std::string& hostname, short port);
+        UUIDv4 Connect(const std::string& ip, short port);
+        UUIDv4 ConnectHostname(const std::string& hostname, short port);
 
-        virtual void OnClientDisconnected(std::size_t id) {}
-        virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) { }
+        virtual void OnClientDisconnected(UUIDv4 id) {}
+        virtual void OnMessageReceived(UUIDv4 id, NetworkDataPackage data) { }
 
         void Run();
         void Stop();
 
-        void WriteTo(std::size_t id, NetworkDataPackage data);
-        void Disconnect(std::size_t id);
+        void WriteTo(UUIDv4 id, NetworkDataPackage data);
+        void Disconnect(UUIDv4 id);
 
     private:
         // connection handler callbacks
@@ -184,6 +200,9 @@ namespace QSim
         virtual void OnConnectionClosed(TCPIPConnection* pConn) override;
         virtual void OnConnectionRemoved(TCPIPConnection* pConn) override;
         virtual void OnConnectionMessage(TCPIPConnection* pConn, NetworkDataPackage msg) override;
+
+    private:
+        ConnectionUUIDMap m_ids;
     };
 
 }

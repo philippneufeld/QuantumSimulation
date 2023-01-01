@@ -50,18 +50,18 @@ namespace QSim
         virtual DataPackagePayload DoWork(DataPackagePayload data) = 0;
 
     private:
-        virtual void OnClientConnected(std::size_t id, const std::string& ip) override;
-        virtual void OnClientDisconnected(std::size_t id) override;
-        virtual void OnMessageReceived(std::size_t id, NetworkDataPackage data) override;
+        virtual void OnClientConnected(UUIDv4 cid, const std::string& ip) override;
+        virtual void OnClientDisconnected(UUIDv4 cid) override;
+        virtual void OnMessageReceived(UUIDv4 cid, NetworkDataPackage data) override;
 
-        UUIDv4 Reserve(std::size_t id);
-        void CancelReservation(std::size_t id, const UUIDv4& ticket);
-        bool Run(std::size_t id, const UUIDv4& ticket, NetworkDataPackage data);
+        UUIDv4 Reserve(UUIDv4 cid);
+        void CancelReservation(UUIDv4 cid, const UUIDv4& ticket);
+        bool Run(UUIDv4 cid, const UUIDv4& ticket, NetworkDataPackage data);
         void BroadcastAvailability();
 
     private:
         ThreadPool m_pool;
-        std::map<std::size_t, std::set<UUIDv4>> m_tickets;
+        std::map<UUIDv4, std::set<UUIDv4>> m_tickets;
     };
 
     class ServerPool : private PackageClient
@@ -72,8 +72,8 @@ namespace QSim
         using PackageClient::Run;
         using PackageClient::Stop;
 
-        std::size_t ConnectWorker(const std::string& ip, short port);
-        std::size_t ConnectWorkerHostname(const std::string& hostname, short port);
+        UUIDv4 ConnectWorker(const std::string& ip, short port);
+        UUIDv4 ConnectWorkerHostname(const std::string& hostname, short port);
         std::size_t GetWorkerCount() const;
 
         std::pair<UUIDv4, std::future<DataPackagePayload>> Submit(DataPackagePayload task);
@@ -81,13 +81,13 @@ namespace QSim
         void WaitUntilFinished();
 
     private:
-        virtual void OnClientDisconnected(std::size_t worker) override;
-        virtual void OnMessageReceived(std::size_t worker, NetworkDataPackage data) override;
+        virtual void OnClientDisconnected(UUIDv4 worker) override;
+        virtual void OnMessageReceived(UUIDv4 worker, NetworkDataPackage data) override;
         
     private:
         mutable std::mutex m_mutex;
         std::condition_variable m_taskFinished;
-        std::set<std::size_t> m_workers;
+        std::set<UUIDv4> m_workers;
         std::deque<std::tuple<
             UUIDv4, // task id
             DataPackagePayload, // task data
@@ -97,7 +97,7 @@ namespace QSim
             UUIDv4, // task id
             DataPackagePayload, // task data
             std::promise<DataPackagePayload>, // task result promise
-            std::size_t, // worker id
+            UUIDv4, // worker id
             UUIDv4 // ticket
         >> m_executing;
     };

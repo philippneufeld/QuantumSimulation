@@ -19,7 +19,7 @@ namespace QSim
 
     ServerPoolWorker::ServerPoolWorker(std::size_t threadCnt) : m_pool(threadCnt) { }
 
-    void ServerPoolWorker::OnClientConnected(std::size_t id, const std::string& ip)
+    void ServerPoolWorker::OnClientConnected(UUIDv4 cid, const std::string& ip)
     {
         std::size_t available = m_pool.GetAvailableThreads();
         std::size_t reserved = m_tickets.size();
@@ -27,19 +27,19 @@ namespace QSim
         {
             NetworkDataPackage msg;
             msg.SetMessageId(ServerPool_CapacityAvailable);
-            WriteTo(id, std::move(msg));
+            WriteTo(cid, std::move(msg));
         }
     }
 
-    void ServerPoolWorker::OnClientDisconnected(std::size_t id)
+    void ServerPoolWorker::OnClientDisconnected(UUIDv4 cid)
     {
         // remove outstanding tickets
-        auto it = m_tickets.find(id);
-        for (; it!=m_tickets.end(); it = m_tickets.find(id))
+        auto it = m_tickets.find(cid);
+        for (; it!=m_tickets.end(); it = m_tickets.find(cid))
             m_tickets.erase(it);
     }
 
-    void ServerPoolWorker::OnMessageReceived(std::size_t id, NetworkDataPackage data)
+    void ServerPoolWorker::OnMessageReceived(UUIDv4 cid, NetworkDataPackage data)
     {
         NetworkDataPackage response;
         response.SetMessageId(ServerPool_InvalidRequest);
@@ -49,7 +49,7 @@ namespace QSim
         {
         case ServerPool_ReserveRequest:
         {
-            auto uuid = Reserve(id);
+            auto uuid = Reserve(cid);
             bool reserved = !uuid.IsNullUUID();
 
             response.SetMessageId(reserved ? ServerPool_Reserved : ServerPool_NotReserved);
@@ -65,7 +65,7 @@ namespace QSim
         case ServerPool_PostRequest:
         {
             auto ticket = data.GetTopic();
-            if (Run(id, ticket, std::move(data)))
+            if (Run(cid, ticket, std::move(data)))
                 response.SetMessageId(ServerPool_Posted);
             else
                 response.SetMessageId(ServerPool_NotPosted);
@@ -75,7 +75,7 @@ namespace QSim
         case ServerPool_CancelReservationRequest:
         {
             auto ticket = data.GetTopic();
-            CancelReservation(id, ticket);
+            CancelReservation(cid, ticket);
         }
         break;
         
@@ -86,10 +86,10 @@ namespace QSim
         break;
         }
 
-        WriteTo(id, std::move(response));
+        WriteTo(cid, std::move(response));
     }
 
-    UUIDv4 ServerPoolWorker::Reserve(std::size_t id)
+    UUIDv4 ServerPoolWorker::Reserve(UUIDv4 cid)
     {
         std::size_t available = m_pool.GetAvailableThreads();
         std::size_t reserved = m_tickets.size();
@@ -97,35 +97,35 @@ namespace QSim
             return UUIDv4::NullUUID();
 
         UUIDv4 uuid;
-        m_tickets[id].insert(uuid);
+        m_tickets[cid].insert(uuid);
         return uuid;
     }
 
-    void ServerPoolWorker::CancelReservation(std::size_t id, const UUIDv4& ticket)
+    void ServerPoolWorker::CancelReservation(UUIDv4 cid, const UUIDv4& ticket)
     {
-        auto it = m_tickets[id].find(ticket);
-        if (it != m_tickets[id].end())
-            m_tickets[id].erase(it);
+        auto it = m_tickets[cid].find(ticket);
+        if (it != m_tickets[cid].end())
+            m_tickets[cid].erase(it);
 
         BroadcastAvailability();
     }
 
-    bool ServerPoolWorker::Run(std::size_t id, const UUIDv4& ticket, NetworkDataPackage data)
+    bool ServerPoolWorker::Run(UUIDv4 cid, const UUIDv4& ticket, NetworkDataPackage data)
     {
         // check for ticket
-        auto it = m_tickets[id].find(ticket);
-        if (it == m_tickets[id].end())
+        auto it = m_tickets[cid].find(ticket);
+        if (it == m_tickets[cid].end())
             return false;
 
         // remove ticket
-        m_tickets[id].erase(it);
+        m_tickets[cid].erase(it);
 
-        m_pool.Submit([this, id, ticket, data=std::move(data)]()
+        m_pool.Submit([this, cid, ticket, data=std::move(data)]()
         { 
             NetworkDataPackage result = DoWork(std::move(data));
             result.SetMessageId(ServerPool_TaskCompleted);
             result.SetTopic(ticket);
-            WriteTo(id, std::move(result));
+            WriteTo(cid, std::move(result));
             BroadcastAvailability();
         });
 
@@ -149,7 +149,7 @@ namespace QSim
     // ServerPool
     //
 
-    std::size_t ServerPool::ConnectWorker(const std::string& ip, short port)
+    UUIDv4 ServerPool::ConnectWorker(const std::string& ip, short port)
     {
         auto worker = PackageClient::Connect(ip, port);
         
@@ -160,7 +160,7 @@ namespace QSim
         return worker;
     }
 
-    std::size_t ServerPool::ConnectWorkerHostname(const std::string& hostname, short port)
+    UUIDv4 ServerPool::ConnectWorkerHostname(const std::string& hostname, short port)
     {
         auto worker = PackageClient::ConnectHostname(hostname, port);
         
@@ -205,7 +205,7 @@ namespace QSim
         m_taskFinished.wait(lock, [this](){ return m_unscheduled.empty() && m_executing.empty(); });
     }
 
-    void ServerPool::OnClientDisconnected(std::size_t worker)
+    void ServerPool::OnClientDisconnected(UUIDv4 worker)
     {
         // check if there were uncompleted tasks that were scheduled with the worker
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -221,7 +221,7 @@ namespace QSim
         }
     }
 
-    void ServerPool::OnMessageReceived(std::size_t worker, NetworkDataPackage data)
+    void ServerPool::OnMessageReceived(UUIDv4 worker, NetworkDataPackage data)
     {
         switch (data.GetMessageId())
         {
