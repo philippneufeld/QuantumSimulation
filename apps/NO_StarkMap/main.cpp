@@ -411,7 +411,13 @@ int main(int argc, const char *argv[]) {
         // Run calculation
         NOStarkMapApp app(filename);
 
-        app.ConnectWorkerHostname("localhost", port);
+        app.ConnectWorkerHostname("ludwigsburg", port);
+        app.ConnectWorkerHostname("calca", port);
+        app.ConnectWorkerHostname("calcb", port);
+        app.ConnectWorkerHostname("calcc", port);
+        app.ConnectWorkerHostname("calcv", port);
+        app.ConnectWorkerHostname("calcr", port);
+        app.ConnectWorkerHostname("sost", port);
 
         VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
         app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
