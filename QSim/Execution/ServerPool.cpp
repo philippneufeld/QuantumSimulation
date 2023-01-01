@@ -22,7 +22,7 @@ namespace QSim
     void ServerPoolWorker::OnClientConnected(UUIDv4 cid, const std::string& ip)
     {
         std::size_t available = m_pool.GetAvailableThreads();
-        std::size_t reserved = m_tickets.size();
+        std::size_t reserved = GetReservedCount();
         if (available > reserved)
         {
             NetworkDataPackage msg;
@@ -92,13 +92,21 @@ namespace QSim
     UUIDv4 ServerPoolWorker::Reserve(UUIDv4 cid)
     {
         std::size_t available = m_pool.GetAvailableThreads();
-        std::size_t reserved = m_tickets.size();
+        std::size_t reserved = GetReservedCount();
         if (available <= reserved)
             return UUIDv4::NullUUID();
 
         UUIDv4 uuid;
         m_tickets[cid].insert(uuid);
         return uuid;
+    }
+
+    std::size_t ServerPoolWorker::GetReservedCount() const
+    {
+        std::size_t reserved = 0;
+        for (auto& tickets: m_tickets) 
+            reserved += tickets.second.size();
+        return reserved;
     }
 
     void ServerPoolWorker::CancelReservation(UUIDv4 cid, const UUIDv4& ticket)
@@ -135,7 +143,7 @@ namespace QSim
     void ServerPoolWorker::BroadcastAvailability()
     {
         std::size_t available = m_pool.GetAvailableThreads();
-        std::size_t reserved = m_tickets.size();
+        std::size_t reserved = GetReservedCount();
         if (available > reserved)
         {
             NetworkDataPackage msg;
@@ -178,6 +186,11 @@ namespace QSim
     }
 
     std::pair<UUIDv4, std::future<DataPackagePayload>> ServerPool::Submit(DataPackagePayload task)
+    {
+        return Submit([task=std::move(task)]{ return task; });
+    }
+
+    std::pair<UUIDv4, std::future<DataPackagePayload>> ServerPool::Submit(std::function<DataPackagePayload()> task)
     {
         std::promise<DataPackagePayload> promise;
         std::future<DataPackagePayload> future = promise.get_future();
@@ -241,11 +254,12 @@ namespace QSim
             {
                 auto [id, task, prom] = std::move(m_unscheduled.front());
                 m_unscheduled.pop_front();
-                m_executing.push_back(std::make_tuple(id, task, std::move(prom), worker, ticket));
                 
-                NetworkDataPackage request = std::move(task);
+                NetworkDataPackage request = std::invoke(task);
                 request.SetMessageId(ServerPool_PostRequest);
                 request.SetTopic(ticket);
+
+                m_executing.push_back(std::make_tuple(id, std::move(task), std::move(prom), worker, ticket));
 
                 WriteTo(worker, std::move(request));
             }

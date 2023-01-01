@@ -12,6 +12,7 @@
 #include <set>
 #include <future>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <condition_variable>
 
@@ -55,6 +56,7 @@ namespace QSim
         virtual void OnMessageReceived(UUIDv4 cid, NetworkDataPackage data) override;
 
         UUIDv4 Reserve(UUIDv4 cid);
+        std::size_t GetReservedCount() const;
         void CancelReservation(UUIDv4 cid, const UUIDv4& ticket);
         bool Run(UUIDv4 cid, const UUIDv4& ticket, NetworkDataPackage data);
         void BroadcastAvailability();
@@ -77,6 +79,7 @@ namespace QSim
         std::size_t GetWorkerCount() const;
 
         std::pair<UUIDv4, std::future<DataPackagePayload>> Submit(DataPackagePayload task);
+        std::pair<UUIDv4, std::future<DataPackagePayload>> Submit(std::function<DataPackagePayload()> task);
         virtual void OnTaskCompleted(UUIDv4 id) {};
         void WaitUntilFinished();
 
@@ -90,12 +93,12 @@ namespace QSim
         std::set<UUIDv4> m_workers;
         std::deque<std::tuple<
             UUIDv4, // task id
-            DataPackagePayload, // task data
+            std::function<DataPackagePayload()>, // task data generator
             std::promise<DataPackagePayload> // task result promise
         >> m_unscheduled;
         std::list<std::tuple<
             UUIDv4, // task id
-            DataPackagePayload, // task data
+            std::function<DataPackagePayload()>, // task data generator
             std::promise<DataPackagePayload>, // task result promise
             UUIDv4, // worker id
             UUIDv4 // ticket

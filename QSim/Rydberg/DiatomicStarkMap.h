@@ -32,6 +32,10 @@ namespace QSim
         // eigen-energy calculator
         Eigen::VectorXd GetEnergies(double electricField);
         std::pair<Eigen::VectorXd, Eigen::MatrixXd> GetEnergiesAndStates(double electricField);
+
+        Eigen::MatrixXd GetHamiltonian(double electricField);
+        static std::pair<Eigen::VectorXd, Eigen::MatrixXd> 
+            GetEnergiesAndStatesFromHamiltonian(const Eigen::MatrixXd& ham);
     
     private:
         void CalcDiagHamiltonianTerms();

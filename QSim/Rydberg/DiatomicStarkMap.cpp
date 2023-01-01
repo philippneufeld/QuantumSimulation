@@ -128,13 +128,23 @@ namespace QSim
 
     std::pair<Eigen::VectorXd, Eigen::MatrixXd> DiatomicStarkMap::GetEnergiesAndStates(double electricField)
     {
+        Eigen::MatrixXd hamiltonian = GetHamiltonian(electricField);
+        return GetEnergiesAndStatesFromHamiltonian(std::move(hamiltonian));
+    }
+
+    Eigen::MatrixXd DiatomicStarkMap::GetHamiltonian(double electricField)
+    {
         if (!m_bPrepared)
             PrepareCalculation();
 
-        Eigen::MatrixXd hamiltonian = m_hamiltonian0 + electricField * m_dipoleOperator;
+        return m_hamiltonian0 + electricField * m_dipoleOperator;
+    }
 
+    std::pair<Eigen::VectorXd, Eigen::MatrixXd> 
+        DiatomicStarkMap::GetEnergiesAndStatesFromHamiltonian(const Eigen::MatrixXd& ham)
+    {
         Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver;
-        solver.compute(hamiltonian);
+        solver.compute(ham);
         Eigen::VectorXd energies = solver.eigenvalues();
         Eigen::MatrixXd states = solver.eigenvectors();
         

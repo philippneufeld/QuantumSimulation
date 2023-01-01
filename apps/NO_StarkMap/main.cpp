@@ -13,11 +13,13 @@
 #include <QSim/Rydberg/RydbergDiatomic.h>
 
 #include <QSim/Execution/ThreadPool.h>
+#include <QSim/Execution/ServerPool.h>
+
 #include <QSim/Util/Argparse.h>
 #include <QSim/Util/ProgressBar.h>
+#include <QSim/Util/PathUtil.h>
 
 #include "IOThread.h"
-#include <QSim/Util/PathUtil.h>
 
 using namespace QSim;
 using namespace Eigen;
@@ -34,14 +36,42 @@ unsigned int GetNumberOfCalcThreads()
         return logical;
 }
 
-class NOStarkMapApp 
+class NOStarkMapAppWorker : public ServerPoolWorker
+{
+public:
+    NOStarkMapAppWorker() : ServerPoolWorker(GetNumberOfCalcThreads()) { }
+
+    virtual DataPackagePayload DoWork(DataPackagePayload data) override
+    {
+        std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
+        Eigen::MatrixXd hamiltonian = Eigen::Map<Eigen::MatrixXd>(
+            reinterpret_cast<double*>(data.GetData() + 4), n, n);
+
+        auto [energies, states] = DiatomicStarkMap::GetEnergiesAndStatesFromHamiltonian(hamiltonian);
+
+        DataPackagePayload result(4 + (n+n*n)*sizeof(double));
+        *reinterpret_cast<std::uint32_t*>(result.GetData()) = n;
+        double* dres = reinterpret_cast<double*>(result.GetData() + 4);
+        Eigen::Map<Eigen::VectorXd>(dres, n) = energies;
+        Eigen::Map<Eigen::MatrixXd>(dres+n, n, n) = states;
+
+        return result;
+    }
+
+};
+
+class NOStarkMapApp : public ServerPool
 {
   public:
     NOStarkMapApp(const std::string path) : m_path(path), m_ioThread(path) {}
 
     void RunCalculation(const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
     {
-        ThreadPool pool(GetNumberOfCalcThreads());
+        if (GetWorkerCount() == 0)
+        {
+            std::cout << "No worker servers connected!" << std::endl;
+            return;
+        }
 
         // initialize calculation and process basis
         std::cout << "Searching for appropriate basis set..." << std::endl;
@@ -51,7 +81,10 @@ class NOStarkMapApp
         std::cout << "Found basis set of size: " << basis.size() << std::endl;
 
         std::cout << "Calculating hamiltonian..." << std::endl;
-        starkMap.PrepareCalculation(pool);
+        {
+            ThreadPool tp;
+            starkMap.PrepareCalculation(tp);
+        }
         std::cout << "Calculation of hamiltonian finished. Starting diagonalization..." << std::endl;
 
         // start i/o thread
@@ -59,23 +92,29 @@ class NOStarkMapApp
 
         // do the actual calculation
         ProgressBar progress(eFields.size());
+        std::thread serverThread([&](){ Run(); });
         for (int i = 0; i < eFields.size(); i++) 
         {
-            pool.Submit([&, i = i]() 
+            auto [task, fut] = Submit([&, ef=eFields[i]]()
             {
-                // calculate eigenenergies and eigenstates
-                auto [energies, states] = starkMap.GetEnergiesAndStates(eFields[i]);
-
-                // get character of the states
-                auto character = DetermineStateCharacter(states);
-
-                // Store data
-                m_ioThread.StoreData(i, eFields[i], energies, states, character);
-                progress.IncrementCount();
+                auto n = basis.size();
+                DataPackagePayload data(4+n*n*sizeof(double));
+                *reinterpret_cast<std::uint32_t*>(data.GetData()) = n;
+                Eigen::Map<Eigen::MatrixXd> rawHamiltonian(
+                    reinterpret_cast<double*>(data.GetData() + 4), n, n);
+                rawHamiltonian = starkMap.GetHamiltonian(ef);
+                return data;
             });
+            m_tasks[task] = std::make_tuple(i, eFields[i], std::move(fut), &progress);
         }
 
         progress.WaitUntilFinished();
+
+        // stop thread
+        WaitUntilFinished();
+        Stop();
+        serverThread.join();
+
         std::cout << "Waiting for I/O to complete..." << std::endl;
         m_ioThread.WaitUntilFinished();
 
@@ -84,6 +123,27 @@ class NOStarkMapApp
         MatchStates(eFields, basis.size());
 
         std::cout << "Data stored successfully (" << m_path << ")" << std::endl;
+    }
+
+    virtual void OnTaskCompleted(UUIDv4 id) override
+    {
+        auto it = m_tasks.find(id);
+        if (it != m_tasks.end())
+        {
+            auto [i, ef, fut, prog] = std::move(it->second);
+            DataPackagePayload data = std::move(fut.get());
+            std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
+            double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
+            Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
+            Eigen::MatrixXd states = Eigen::Map<Eigen::MatrixXd>(dptr+n, n, n);
+
+            auto character = DetermineStateCharacter(states);
+
+            m_ioThread.StoreData(i, ef, energies, states, character);
+            m_tasks.erase(it);
+
+            prog->IncrementCount();
+        }
     }
 
   protected:
@@ -258,6 +318,10 @@ class NOStarkMapApp
   private:
     std::string m_path;
     IOThread m_ioThread;
+    std::map<UUIDv4, std::tuple<
+        int, double, 
+        std::future<DataPackagePayload>, 
+        ProgressBar*>> m_tasks;
 
     // state characterization
     int m_minn;
@@ -272,14 +336,15 @@ int main(int argc, const char *argv[]) {
     ArgumentParser argparse;
 
     std::string filename = GetDefaultAppDataDir("NO_StarkMap") + '/' + GenerateFilename("NOStarkMap") + ".h5";
+    argparse.AddOption("worker", "Start worker thread");
     argparse.AddOptionDefault("file", "HDF5 file path", filename);
     argparse.AddOptionDefault("n", "Principal quantum number", "42");
     argparse.AddOptionDefault("l", "Orbital angular momentum quantum number", "3");
-    argparse.AddOptionDefault("R", "Rotational quantum number", "5");
+    argparse.AddOptionDefault("R", "Rotational quantum number", "2");
     argparse.AddOptionDefault("N", "Total angular momentum quantum number", "3");
     argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
     argparse.AddOptionDefault("nMax", "Principal quantum number basis maximum", "100");
-    argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "0,1,2,3,4,5,6,7");
+    argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "0,1,2,3");
     argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
     argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "7.0");
     argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
@@ -301,44 +366,58 @@ int main(int argc, const char *argv[]) {
         std::cout << argparse.GetHelpString() << std::endl;
         return 0;
     }
-    filename = args.GetOptionStringValue("file");
 
-    // retrieve parameter
-    int n = args.GetOptionValue<int>("n");
-    int l = args.GetOptionValue<int>("l");
-    int R = args.GetOptionValue<int>("R");
-    int N = args.GetOptionValue<int>("N");
-    int mN = args.GetOptionValue<int>("mN");
-    int nMax = args.GetOptionValue<int>("nMax");
-    std::vector<int> Rs = args.GetOptionValue<std::vector<int>>("Rs");
-    double Fmin = args.GetOptionValue<double>("Fmin");
-    double Fmax = args.GetOptionValue<double>("Fmax");
-    int Fsteps = args.GetOptionValue<int>("Fsteps");
 
-    double dE = 10 * EnergyInverseCm_v;
-    if (args.IsOptionPresent("dErcm"))
-        dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
-    else if (args.IsOptionPresent("dEGHz"))
-        dE = args.GetOptionValue<double>("dEGHz") * EnergyGHz_v;
-    dE = 1.5 * EnergyInverseCm_v;
-
-    // validate quantum numbers
-    auto state = RydbergDiatomicState_t(n, l, R, N, mN);
-    if (n < 0 || l < 0 || l >= n || R < 0 || N < std::abs(R-l) || N > std::abs(R+l) || std::abs(mN) > N)
+    short port = 8000;
+    if (args.IsOptionPresent("worker"))
     {
-        std::cout << "Invalid quantum numbers" << std::endl;
-        return 0;
+        NOStarkMapAppWorker worker;
+        return worker.Run(port);
     }
-    
-    // find state
-    NitricOxide molecule;
-    double energy = molecule.GetEnergy(state);
-    std::cout << "State energy: " << energy / EnergyGHz_v << "GHz / " << energy / EnergyInverseCm_v << "cm^{-1}" << std::endl;
+    else
+    {
+        filename = args.GetOptionStringValue("file");
 
-    // Run calculation
-    NOStarkMapApp app(filename);
-    VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
-    app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
+        // retrieve parameter
+        int n = args.GetOptionValue<int>("n");
+        int l = args.GetOptionValue<int>("l");
+        int R = args.GetOptionValue<int>("R");
+        int N = args.GetOptionValue<int>("N");
+        int mN = args.GetOptionValue<int>("mN");
+        int nMax = args.GetOptionValue<int>("nMax");
+        std::vector<int> Rs = args.GetOptionValue<std::vector<int>>("Rs");
+        double Fmin = args.GetOptionValue<double>("Fmin");
+        double Fmax = args.GetOptionValue<double>("Fmax");
+        int Fsteps = args.GetOptionValue<int>("Fsteps");
+
+        double dE = 10 * EnergyInverseCm_v;
+        dE = 0.5 * EnergyInverseCm_v;
+        if (args.IsOptionPresent("dErcm"))
+            dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
+        else if (args.IsOptionPresent("dEGHz"))
+            dE = args.GetOptionValue<double>("dEGHz") * EnergyGHz_v;
+
+        // validate quantum numbers
+        auto state = RydbergDiatomicState_t(n, l, R, N, mN);
+        if (n < 0 || l < 0 || l >= n || R < 0 || N < std::abs(R-l) || N > std::abs(R+l) || std::abs(mN) > N)
+        {
+            std::cout << "Invalid quantum numbers" << std::endl;
+            return 0;
+        }
+        
+        // find state
+        NitricOxide molecule;
+        double energy = molecule.GetEnergy(state);
+        std::cout << "State energy: " << energy / EnergyGHz_v << "GHz / " << energy / EnergyInverseCm_v << "cm^{-1}" << std::endl;
+
+        // Run calculation
+        NOStarkMapApp app(filename);
+
+        app.ConnectWorkerHostname("localhost", port);
+
+        VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
+        app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
+    }
 
     return 0;
 }
