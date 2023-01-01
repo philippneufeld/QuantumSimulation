@@ -292,8 +292,7 @@ class NOStarkMapApp : public ServerPool
                     std::sort(indices.begin(), indices.end(),
                               [&](int i1, int i2) { return heuristic[i1] < heuristic[i2]; });
                     int k = indices.size();
-                    while (matched.find(indices[--k]) != matched.end() && k >= 0)
-                        ;
+                    while (matched.find(indices[--k]) != matched.end() && k >= 0);
                     idx = indices[k];
                 }
 
@@ -391,7 +390,6 @@ int main(int argc, const char *argv[]) {
         int Fsteps = args.GetOptionValue<int>("Fsteps");
 
         double dE = 10 * EnergyInverseCm_v;
-        dE = 0.5 * EnergyInverseCm_v;
         if (args.IsOptionPresent("dErcm"))
             dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
         else if (args.IsOptionPresent("dEGHz"))
