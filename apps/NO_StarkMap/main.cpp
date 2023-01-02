@@ -39,7 +39,7 @@ unsigned int GetNumberOfCalcThreads()
 class NOStarkMapAppWorker : public ServerPoolWorker
 {
 public:
-    NOStarkMapAppWorker() : ServerPoolWorker(GetNumberOfCalcThreads()) { }
+    NOStarkMapAppWorker(int threads) : ServerPoolWorker(threads) { }
 
     virtual DataPackagePayload DoWork(DataPackagePayload data) override
     {
@@ -65,7 +65,7 @@ public:
 class NOStarkMapApp : public ServerPool
 {
   public:
-    NOStarkMapApp(const std::string path) : m_path(path), m_ioThread(path) {}
+    NOStarkMapApp(const std::string path, int threads) : m_path(path), m_ioThread(path), m_threadPool(std::min(threads-1, 1)) {}
 
     void RunCalculation(const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
     {
@@ -83,10 +83,7 @@ class NOStarkMapApp : public ServerPool
         std::cout << "Found basis set of size: " << basis.size() << std::endl;
 
         std::cout << "Calculating hamiltonian..." << std::endl;
-        {
-            ThreadPool tp;
-            starkMap.PrepareCalculation(tp);
-        }
+        starkMap.PrepareCalculation(m_threadPool);
         std::cout << "Calculation of hamiltonian finished. Starting diagonalization..." << std::endl;
 
         // start i/o thread
@@ -99,8 +96,6 @@ class NOStarkMapApp : public ServerPool
         {
             auto [task, fut] = Submit([&, ef=eFields[i]]()
             {
-                std::cout << "Submit " << std::to_string(ef) << std::endl;
-
                 auto n = basis.size();
                 DataPackagePayload data(4+n*n*sizeof(double));
                 *reinterpret_cast<std::uint32_t*>(data.GetData()) = n;
@@ -131,24 +126,30 @@ class NOStarkMapApp : public ServerPool
 
     virtual void OnTaskCompleted(UUIDv4 id) override
     {
-        auto it = m_tasks.find(id);
-        std::cout << "Task completed " << (it != m_tasks.end()) << std::endl;
-        if (it != m_tasks.end())
+        m_threadPool.Submit([&, id=id]()
         {
-            auto [i, ef, fut, prog] = std::move(it->second);
-            DataPackagePayload data = std::move(fut.get());
-            std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
-            double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
-            Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
-            Eigen::MatrixXd states = Eigen::Map<Eigen::MatrixXd>(dptr+n, n, n);
+            std::unique_lock<std::mutex> lock(m_mutex);
+            auto it = m_tasks.find(id);
+            if (it != m_tasks.end())
+            {
+                auto [i, ef, fut, prog] = std::move(it->second);
+                lock.unlock();
 
-            auto character = DetermineStateCharacter(states);
+                DataPackagePayload data = std::move(fut.get());
+                std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
+                double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
+                Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
+                Eigen::MatrixXd states = Eigen::Map<Eigen::MatrixXd>(dptr+n, n, n);
+                auto character = DetermineStateCharacter(states);
+                m_ioThread.StoreData(i, ef, energies, states, character);
+                
+                lock.lock();
+                m_tasks.erase(it);
+                lock.unlock();
 
-            m_ioThread.StoreData(i, ef, energies, states, character);
-            m_tasks.erase(it);
-
-            prog->IncrementCount();
-        }
+                prog->IncrementCount();
+            }
+        });
     }
 
   protected:
@@ -322,6 +323,8 @@ class NOStarkMapApp : public ServerPool
   private:
     std::string m_path;
     IOThread m_ioThread;
+    std::mutex m_mutex;
+    ThreadPool m_threadPool;
     std::map<UUIDv4, std::tuple<
         int, double, 
         std::future<DataPackagePayload>, 
@@ -341,16 +344,17 @@ int main(int argc, const char *argv[]) {
 
     std::string filename = GetDefaultAppDataDir("NO_StarkMap", false) + '/' + GenerateFilename("NOStarkMap") + ".h5";
     argparse.AddOption("worker", "Start worker thread");
+    argparse.AddOptionDefault("threads", "Number of calculation threads", std::to_string(GetNumberOfCalcThreads()));
     argparse.AddOptionDefault("file", "HDF5 file path", filename);
-    argparse.AddOptionDefault("n", "Principal quantum number", "42");
-    argparse.AddOptionDefault("l", "Orbital angular momentum quantum number", "3");
+    argparse.AddOptionDefault("n", "Principal quantum number", "38");
+    argparse.AddOptionDefault("l", "Orbital angular momentum quantum number", "2");
     argparse.AddOptionDefault("R", "Rotational quantum number", "2");
     argparse.AddOptionDefault("N", "Total angular momentum quantum number", "3");
     argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
     argparse.AddOptionDefault("nMax", "Principal quantum number basis maximum", "100");
     argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "0,1,2,3");
     argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
-    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "7.0");
+    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "25.0");
     argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
     argparse.AddOption("dErcm", "Energy range cm^-1");
     argparse.AddOption("dEGHz", "Energy range GHz");
@@ -373,9 +377,10 @@ int main(int argc, const char *argv[]) {
 
 
     short port = 8000;
+    int threads = args.GetOptionValue<int>("threads");
     if (args.IsOptionPresent("worker"))
     {
-        NOStarkMapAppWorker worker;
+        NOStarkMapAppWorker worker(threads);
         return worker.Run(port);
     }
     else
@@ -397,7 +402,7 @@ int main(int argc, const char *argv[]) {
         double Fmax = args.GetOptionValue<double>("Fmax");
         int Fsteps = args.GetOptionValue<int>("Fsteps");
 
-        double dE = 10 * EnergyInverseCm_v;
+        double dE = 2 * EnergyInverseCm_v;
         if (args.IsOptionPresent("dErcm"))
             dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
         else if (args.IsOptionPresent("dEGHz"))
@@ -417,15 +422,19 @@ int main(int argc, const char *argv[]) {
         std::cout << "State energy: " << energy / EnergyGHz_v << "GHz / " << energy / EnergyInverseCm_v << "cm^{-1}" << std::endl;
 
         // Run calculation
-        NOStarkMapApp app(filename);
+        NOStarkMapApp app(filename, threads);
 
-        app.ConnectWorkerHostname("ludwigsburg", port);
-        app.ConnectWorkerHostname("calca", port);
-        app.ConnectWorkerHostname("calcb", port);
-        app.ConnectWorkerHostname("calcc", port);
-        app.ConnectWorkerHostname("calcv", port);
-        app.ConnectWorkerHostname("calcr", port);
-        app.ConnectWorkerHostname("sost", port);
+        // app.ConnectWorkerHostname("ludwigsburg", port);
+        // app.ConnectWorkerHostname("calca", port);
+        // app.ConnectWorkerHostname("calcb", port);
+        // app.ConnectWorkerHostname("calcc", port);
+        // app.ConnectWorkerHostname("calcv", port);
+        // app.ConnectWorkerHostname("calcr", port);
+        // app.ConnectWorkerHostname("sost", port);
+
+        app.ConnectWorker("192.168.2.2", port);
+        app.ConnectWorkerHostname("monaco", port);
+        app.ConnectWorkerHostname("panama", port);
 
         VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
         app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
