@@ -425,16 +425,16 @@ int main(int argc, const char *argv[]) {
         NOStarkMapApp app(filename, threads);
 
         // app.ConnectWorkerHostname("ludwigsburg", port);
-        // app.ConnectWorkerHostname("calca", port);
-        // app.ConnectWorkerHostname("calcb", port);
-        // app.ConnectWorkerHostname("calcc", port);
+        app.ConnectWorkerHostname("calca", port);
+        app.ConnectWorkerHostname("calcb", port);
+        app.ConnectWorkerHostname("calcc", port);
         // app.ConnectWorkerHostname("calcv", port);
         // app.ConnectWorkerHostname("calcr", port);
         // app.ConnectWorkerHostname("sost", port);
 
-        app.ConnectWorker("192.168.2.2", port);
-        app.ConnectWorkerHostname("monaco", port);
-        app.ConnectWorkerHostname("panama", port);
+        // app.ConnectWorker("192.168.2.2", port);
+        // app.ConnectWorkerHostname("monaco", port);
+        // app.ConnectWorkerHostname("panama", port);
 
         VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
         app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
