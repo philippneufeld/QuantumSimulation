@@ -43,6 +43,8 @@ public:
 
     virtual DataPackagePayload DoWork(DataPackagePayload data) override
     {
+        std::cout << "DoWork()" << std::endl;
+
         std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
         Eigen::MatrixXd hamiltonian = Eigen::Map<Eigen::MatrixXd>(
             reinterpret_cast<double*>(data.GetData() + 4), n, n);
@@ -97,6 +99,8 @@ class NOStarkMapApp : public ServerPool
         {
             auto [task, fut] = Submit([&, ef=eFields[i]]()
             {
+                std::cout << "Submit " << std::to_string(ef) << std::endl;
+
                 auto n = basis.size();
                 DataPackagePayload data(4+n*n*sizeof(double));
                 *reinterpret_cast<std::uint32_t*>(data.GetData()) = n;
@@ -128,6 +132,7 @@ class NOStarkMapApp : public ServerPool
     virtual void OnTaskCompleted(UUIDv4 id) override
     {
         auto it = m_tasks.find(id);
+        std::cout << "Task completed " << (it != m_tasks.end()) << std::endl;
         if (it != m_tasks.end())
         {
             auto [i, ef, fut, prog] = std::move(it->second);
@@ -334,7 +339,7 @@ int main(int argc, const char *argv[]) {
     // parsing command line arguments
     ArgumentParser argparse;
 
-    std::string filename = GetDefaultAppDataDir("NO_StarkMap") + '/' + GenerateFilename("NOStarkMap") + ".h5";
+    std::string filename = GetDefaultAppDataDir("NO_StarkMap", false) + '/' + GenerateFilename("NOStarkMap") + ".h5";
     argparse.AddOption("worker", "Start worker thread");
     argparse.AddOptionDefault("file", "HDF5 file path", filename);
     argparse.AddOptionDefault("n", "Principal quantum number", "42");
@@ -376,6 +381,9 @@ int main(int argc, const char *argv[]) {
     else
     {
         filename = args.GetOptionStringValue("file");
+
+        std::string dir = std::filesystem::path(filename).parent_path().string();
+        std::filesystem::create_directories(dir);
 
         // retrieve parameter
         int n = args.GetOptionValue<int>("n");
