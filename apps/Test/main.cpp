@@ -20,7 +20,7 @@ using namespace std::chrono_literals;
 class Worker : public ServerPoolWorker
 {
 public:
-    Worker() : ServerPoolWorker(6) {}
+    Worker() : ServerPoolWorker(5) {}
 
     virtual DataPackagePayload DoWork(DataPackagePayload data) override
     {
@@ -62,6 +62,7 @@ int MasterMain()
     std::thread thread([&](){ pool.Run(); });
     
     pool.ConnectWorkerHostname("localhost", 8000);
+    pool.ConnectWorkerHostname("ludwigsburg", 8000);
     pool.ConnectWorkerHostname("calca", 8000);
     pool.ConnectWorkerHostname("calcb", 8000);
     pool.ConnectWorkerHostname("calcc", 8000);

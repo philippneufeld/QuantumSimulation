@@ -46,7 +46,7 @@ namespace QSim
 
     class NetworkDataPackage : public DataPackagePayload
     {
-        constexpr static std::uint64_t s_protocolId = 0x13A3F6A39464CF1A;
+        constexpr static std::uint64_t s_protocolId = 0x13B5F6A39464CF1A;
 
         constexpr static std::size_t s_pidOff = 0;
         constexpr static std::size_t s_sizeOff = 8;
@@ -128,7 +128,7 @@ namespace QSim
         IOEvent m_wakeupSignal;
         std::list<TCPIPServerSocket*> m_servers;
         std::set<TCPIPConnection*> m_connections;
-        std::map<TCPIPConnection*, std::queue<NetworkDataPackage>> m_writeBuffer;
+        std::map<TCPIPConnection*, std::queue<std::tuple<NetworkDataPackage, std::uint64_t>>> m_writeBuffer;
     };
 
     class ConnectionUUIDMap

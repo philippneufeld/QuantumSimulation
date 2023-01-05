@@ -300,14 +300,14 @@ namespace QSim
         std::unique_lock<std::mutex> lock(m_mutex);
         if (m_connections.count(pConn) != 0)
         {
-            m_writeBuffer[pConn].push(std::move(msg));
+            m_writeBuffer[pConn].emplace(std::move(msg), 0ull);
             m_wakeupSignal.Set();
         }
     }
 
     void PackageConnectionHandler::RunHandler()
     {
-        std::map<TCPIPConnection*, std::tuple<NetworkDataPackage, std::uint64_t>> readBuffer;
+        std::map<TCPIPConnection*, std::tuple<NetworkDataPackage::Header_t, NetworkDataPackage, std::uint64_t>> readBuffer;
         std::set<TCPIPConnection*> killed;
 
         std::vector<TCPIPServerSocket*> checkAcceptable;
@@ -385,89 +385,103 @@ namespace QSim
                 
                 // check if data in read buffer
                 if (readBuffer.count(pConn) == 0)
-                {
-                    NetworkDataPackage::Header_t header;
-                    if (!pConn->Recvall(header.data(), sizeof(header)))
-                    {
-                        killed.insert(pConn);
-                        continue;
-                    }
+                        readBuffer[pConn] = std::make_tuple(NetworkDataPackage::Header_t{}, NetworkDataPackage{}, std::uint64_t(0));
+                auto& [header, buffer, alreadyRead] = readBuffer[pConn];
 
-                    if (!NetworkDataPackage::IsValidHeader(header))
+                if (alreadyRead < sizeof(header))
+                {
+                    auto cnt = pConn->RecvNonBlock(header.data() + alreadyRead, sizeof(header) - alreadyRead);
+                    if (cnt <= 0)
                     {
                         killed.insert(pConn);
                         continue;
                     }
-                    
-                    if (NetworkDataPackage::GetSizeFromHeader(header) == 0)
-                        OnConnectionMessage(pConn, NetworkDataPackage(header));
-                    else
-                        readBuffer[pConn] = std::make_tuple(NetworkDataPackage(header), std::uint64_t(0));
+                    alreadyRead += cnt;
+
+                    // check if header is complete and allocate package buffer in that case
+                    if (alreadyRead == sizeof(header))
+                    {
+                        if (!NetworkDataPackage::IsValidHeader(header))
+                        {
+                            killed.insert(pConn);
+                            continue;
+                        }
+                        buffer = NetworkDataPackage(header);
+                    }
                 }
-                else
+                else 
                 {
-                    auto& [buffer, alreadyRead] = readBuffer[pConn];
-                    std::uint64_t remaining = buffer.GetSize() - alreadyRead;
-
-                    std::size_t cnt = pConn->Recv(buffer.GetData() + alreadyRead, remaining);
+                    std::uint64_t pdataRead = alreadyRead - sizeof(header);
+                    std::uint64_t remaining = buffer.GetSize() - pdataRead;
+                    auto cnt = pConn->RecvNonBlock(buffer.GetData() + pdataRead, remaining);
                     if (cnt <= 0 || cnt > remaining)
                     {
                         killed.insert(pConn);
                         continue;
                     }
-                    
-                    alreadyRead += cnt; // update read buffer (reference)
+                    alreadyRead += cnt; 
+                }
 
-                    if (alreadyRead == buffer.GetSize())
-                    {
-                        NetworkDataPackage msg = std::move(buffer);
-                        readBuffer.erase(readBuffer.find(pConn));
-                        OnConnectionMessage(pConn, std::move(msg)); 
-                    }
+                // package complete?
+                if (alreadyRead == (buffer.GetSize() + sizeof(header)))
+                {
+                    NetworkDataPackage msg = std::move(buffer);
+                    readBuffer.erase(readBuffer.find(pConn));
+                    OnConnectionMessage(pConn, std::move(msg)); 
                 }
             }
 
             // handle sending messages
             for (TCPIPConnection* pConn: wr)
             {
-                // access to write buffer is thread-safe without lock in this case,
-                // since all other threads may only append to the list 
-                // (this does not invalidate the iterators to the existing items)
                 if (killed.count(pConn) != 0)
                     continue;
                 
                 if (m_connections.count(pConn) == 0)
                     continue;
 
+                std::unique_lock<std::mutex> lock(m_mutex);
                 auto& outputQueue = m_writeBuffer[pConn];
+                if (outputQueue.empty())
+                    continue;
+                auto& [package, alreadySent] = outputQueue.front();
+                lock.unlock();
 
-                while (true)
+                // access to write buffer is thread-safe without lock in this case,
+                // since all other threads may only append to the list 
+                // (this does not invalidate the iterators to the existing items)
+
+                constexpr auto headerSize = sizeof(NetworkDataPackage::Header_t);
+                if (alreadySent < headerSize)
                 {
-                    std::unique_lock<std::mutex> lock(m_mutex);
-                    if (outputQueue.empty())
-                        break;
-                    NetworkDataPackage package = std::move(outputQueue.front());
-                    outputQueue.pop();
-                    lock.unlock();
-
-                    // send package header (completely!)
                     NetworkDataPackage::Header_t header = package.GetHeader();
-                    if (!pConn->Sendall(header.data(), sizeof(header)))
+                    std::uint64_t remaining = headerSize - alreadySent;
+                    auto cnt = pConn->SendNonBlock(header.data() + alreadySent, remaining);
+                    if (cnt <= 0 || cnt > remaining)
                     {
                         killed.insert(pConn);
-                        break;
+                        continue;
                     }
-
-                    // send package data
-                    std::uint64_t size = package.GetSize();
-                    if (size > 0)
+                    alreadySent += cnt;
+                }
+                else 
+                {
+                    std::uint64_t pdataSent = alreadySent - headerSize;
+                    std::uint64_t remaining = package.GetSize() - pdataSent;
+                    auto cnt = pConn->SendNonBlock(package.GetData() + pdataSent, remaining);
+                    if (cnt <= 0 || cnt > remaining)
                     {
-                        if (pConn->Send(package.GetData(), size) != size)
-                        {
-                            killed.insert(pConn);
-                            break;
-                        }
+                        killed.insert(pConn);
+                        continue;
                     }
+                    alreadySent += cnt;
+                }
+
+                // if sent completely remove package from write buffer
+                if (alreadySent == (headerSize + package.GetSize()))
+                {
+                    lock.lock();
+                    outputQueue.pop();
                 }
             }
             

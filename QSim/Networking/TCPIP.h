@@ -63,8 +63,8 @@ namespace QSim
         std::make_signed_t<std::size_t> Send(const void* data, std::size_t n);
         std::make_signed_t<std::size_t> Recv(void* buffer, std::size_t buffSize);
 
-        bool Sendall(const void* data, std::size_t n);
-        bool Recvall(void* buffer, std::size_t n);
+        std::make_signed_t<std::size_t> SendNonBlock(const void* data, std::size_t n);
+        std::make_signed_t<std::size_t> RecvNonBlock(void* buffer, std::size_t buffSize);
     };
 
     class TCPIPServerSocket : public TCPIPSocket

@@ -59,7 +59,6 @@ namespace QSim
         std::size_t GetReservedCount() const;
         void CancelReservation(UUIDv4 cid, const UUIDv4& ticket);
         bool Run(UUIDv4 cid, const UUIDv4& ticket, NetworkDataPackage data);
-        void BroadcastAvailability();
 
     private:
         ThreadPool m_pool;

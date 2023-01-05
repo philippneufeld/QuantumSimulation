@@ -110,34 +110,20 @@ namespace QSim
         return recv(GetHandle(), buffer, buffSize, 0);
     }
 
-    bool TCPIPConnection::Sendall(const void* data, std::size_t n)
+    std::make_signed_t<std::size_t> TCPIPConnection::SendNonBlock(const void* data, std::size_t n)
     {
-        std::size_t sent = 0;
-        while (sent < n)
-        {
-            auto res = Send(static_cast<const std::uint8_t*>(data) + sent, n - sent);
-            if (res <= 0)
-                return false;
-            else
-                sent += res;
-        }
+        if (!IsValid())
+            return 0;
 
-        return true;
+        return send(GetHandle(), data, n, MSG_DONTWAIT);
     }
-
-    bool TCPIPConnection::Recvall(void* buffer, std::size_t n)
+    
+    std::make_signed_t<std::size_t> TCPIPConnection::RecvNonBlock(void* buffer, std::size_t buffSize)
     {
-        std::size_t received = 0;
-        while (received < n)
-        {
-            auto res = Recv(static_cast<std::uint8_t*>(buffer) + received, n - received);
-            if (res <= 0)
-                return false;
-            else
-                received += res;
-        }
+        if (!IsValid())
+            return 0;
 
-        return true;
+        return recv(GetHandle(), buffer, buffSize, MSG_DONTWAIT);
     }
 
     //

@@ -1,5 +1,7 @@
 // Philipp Neufeld, 2021-2022
 
+#include <iostream>
+
 #include <algorithm>
 #include <cstdlib>
 #include <sstream>
@@ -14,6 +16,13 @@
 
 namespace QSim
 {
+
+    void Print(std::string str)
+    {
+        static std::mutex mut;
+        std::unique_lock<std::mutex> lock(mut);
+        std::cout << str << std::endl;
+    }
 
     ServerPoolWorker::ServerPoolWorker() : m_pool() { }
 
@@ -115,7 +124,10 @@ namespace QSim
         if (it != m_tickets[cid].end())
             m_tickets[cid].erase(it);
 
-        BroadcastAvailability();
+        // let clients know that capacity is available again
+        NetworkDataPackage msg;
+        msg.SetMessageId(ServerPool_CapacityAvailable);
+        Broadcast(std::move(msg));
     }
 
     bool ServerPoolWorker::Run(UUIDv4 cid, const UUIDv4& ticket, NetworkDataPackage data)
@@ -134,22 +146,14 @@ namespace QSim
             result.SetMessageId(ServerPool_TaskCompleted);
             result.SetTopic(ticket);
             WriteTo(cid, std::move(result));
-            BroadcastAvailability();
-        });
 
-        return true;
-    }
-
-    void ServerPoolWorker::BroadcastAvailability()
-    {
-        std::size_t available = m_pool.GetAvailableThreads();
-        std::size_t reserved = GetReservedCount();
-        if (available > reserved)
-        {
+            // let clients know that capacity is available again
             NetworkDataPackage msg;
             msg.SetMessageId(ServerPool_CapacityAvailable);
             Broadcast(std::move(msg));
-        }
+        });
+
+        return true;
     }
 
 
@@ -236,6 +240,15 @@ namespace QSim
 
     void ServerPool::OnMessageReceived(UUIDv4 worker, NetworkDataPackage data)
     {
+        // TODO: Remove
+        std::map<int, std::string> dict;
+        dict[ServerPool_Reserved] = "ServerPool_Reserved";
+        dict[ServerPool_NotReserved] = "ServerPool_NotReserved";
+        dict[ServerPool_Posted] = "ServerPool_Posted";
+        dict[ServerPool_NotPosted] = "ServerPool_NotPosted";
+        dict[ServerPool_CapacityAvailable] = "ServerPool_CapacityAvailable";
+        dict[ServerPool_TaskCompleted] = "ServerPool_TaskCompleted";
+
         switch (data.GetMessageId())
         {
         case ServerPool_Reserved:
