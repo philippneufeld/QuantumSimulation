@@ -14,8 +14,7 @@
 class IOThread
 {
     using Data_t = std::tuple<int, double, 
-        Eigen::VectorXd, Eigen::MatrixXd, 
-        Eigen::Matrix<double, Eigen::Dynamic, 4>>;
+        Eigen::VectorXd, Eigen::MatrixXd>;
 public:
     IOThread(const std::string& path);
     ~IOThread();
@@ -26,8 +25,7 @@ public:
 
     void StoreData(int i, double eField,
         const Eigen::VectorXd& energies, 
-        const Eigen::MatrixXd& states, 
-        const Eigen::Matrix<double, Eigen::Dynamic, 4>& character);
+        const Eigen::MatrixXd& states);
     std::future<Data_t> LoadData(int i);
 
     void WaitUntilFinished();

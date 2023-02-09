@@ -79,7 +79,6 @@ class NOStarkMapApp : public ServerPool
         std::cout << "Searching for appropriate basis set..." << std::endl;
         DiatomicStarkMap starkMap(std::make_unique<NitricOxide>(), Rs, nMax, mN, energy, dE);
         std::vector<RydbergDiatomicState_t> basis = starkMap.GetBasis();
-        AnalyzeBasis(basis);
         std::cout << "Found basis set of size: " << basis.size() << std::endl;
 
         std::cout << "Calculating hamiltonian..." << std::endl;
@@ -140,8 +139,7 @@ class NOStarkMapApp : public ServerPool
                 double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
                 Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
                 Eigen::MatrixXd states = Eigen::Map<Eigen::MatrixXd>(dptr+n, n, n);
-                auto character = DetermineStateCharacter(states);
-                m_ioThread.StoreData(i, ef, energies, states, character);
+                m_ioThread.StoreData(i, ef, energies, states);
                 
                 lock.lock();
                 m_tasks.erase(it);
@@ -153,65 +151,6 @@ class NOStarkMapApp : public ServerPool
     }
 
   protected:
-    void AnalyzeBasis(const std::vector<RydbergDiatomicState_t> &basis) 
-    {
-        int basisSize = basis.size();
-        m_minn = std::numeric_limits<int>::max();
-        int maxn = std::numeric_limits<int>::min();
-        int maxR = std::numeric_limits<int>::min();
-        int maxL = std::numeric_limits<int>::min();
-        int maxN = std::numeric_limits<int>::min();
-        for (const auto &state : basis) 
-        {
-            auto [n, l, R, N, mN] = state;
-            m_minn = std::min(m_minn, n);
-            maxn = std::max(maxn, n);
-            maxL = std::max(maxL, l);
-            maxR = std::max(maxR, R);
-            maxN = std::max(maxN, N);
-        }
-
-        // generate character matrices
-        m_nCharMatrix = MatrixXd::Zero(maxn - m_minn + 1, basisSize);
-        m_lCharMatrix = MatrixXd::Zero(maxL + 1, basisSize);
-        m_RCharMatrix = MatrixXd::Zero(maxR + 1, basisSize);
-        m_NCharMatrix = MatrixXd::Zero(maxN + 1, basisSize);
-        for (int i = 0; i < basisSize; i++) 
-        {
-            auto [n, l, R, N, mN] = basis[i];
-            m_nCharMatrix(n - m_minn, i) = 1.0;
-            m_lCharMatrix(l, i) = 1.0;
-            m_RCharMatrix(R, i) = 1.0;
-            m_NCharMatrix(N, i) = 1.0;
-        }
-    }
-
-    Matrix<double, Dynamic, 4> DetermineStateCharacter(const MatrixXd &states) 
-    {
-        Matrix<double, Dynamic, 4> character(states.rows(), 4);
-        auto statesSq = states.cwiseAbs2().eval();
-        MatrixXd nMat = m_nCharMatrix * statesSq;
-        MatrixXd lMat = m_lCharMatrix * statesSq;
-        MatrixXd RMat = m_RCharMatrix * statesSq;
-        MatrixXd NMat = m_NCharMatrix * statesSq;
-
-        for (int j = 0; j < states.rows(); j++) 
-        {
-            int nIdx = 0, lIdx = 0, RIdx = 0, NIdx = 0;
-            nMat.col(j).maxCoeff(&nIdx);
-            lMat.col(j).maxCoeff(&lIdx);
-            RMat.col(j).maxCoeff(&RIdx);
-            NMat.col(j).maxCoeff(&NIdx);
-
-            character(j, 0) = m_minn + nIdx;
-            character(j, 1) = lIdx;
-            character(j, 2) = RIdx;
-            character(j, 3) = NIdx;
-        }
-
-        return character;
-    }
-
     void MatchStates(const VectorXd &eFields, int basisSize) 
     {
         MatrixXd prevStates;
@@ -227,7 +166,6 @@ class NOStarkMapApp : public ServerPool
 
         VectorXd energiesOrdered(basisSize);
         MatrixXd statesOrdered(basisSize, basisSize);
-        Matrix<double, Dynamic, 4> characterOrdered(basisSize, 4);
 
         MatrixXd overlaps(basisSize, basisSize);
         MatrixXd energyDiffs(basisSize, basisSize);
@@ -240,7 +178,7 @@ class NOStarkMapApp : public ServerPool
         auto nextDataPromise = m_ioThread.LoadData(0);
         for (int i = 0; i < eFields.size(); i++) 
         {
-            auto [idx, ef, energies, states, character] = nextDataPromise.get();
+            auto [idx, ef, energies, states] = nextDataPromise.get();
             if (i < eFields.size() - 1)
                 nextDataPromise = m_ioThread.LoadData(i + 1);
 
@@ -305,11 +243,10 @@ class NOStarkMapApp : public ServerPool
                 matched.insert(idx);
                 energiesOrdered[j] = energies[idx];
                 statesOrdered.col(j) = states.col(idx);
-                characterOrdered.row(j) = character.row(idx);
             }
 
             // store processed data back to file
-            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered, characterOrdered);
+            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered);
 
             // shift auxilliary variables
             prevEnergies2 = prevEnergies;
@@ -329,13 +266,6 @@ class NOStarkMapApp : public ServerPool
         int, double, 
         std::future<DataPackagePayload>, 
         ProgressBar*>> m_tasks;
-
-    // state characterization
-    int m_minn;
-    MatrixXd m_nCharMatrix;
-    MatrixXd m_lCharMatrix;
-    MatrixXd m_RCharMatrix;
-    MatrixXd m_NCharMatrix;
 };
 
 int main(int argc, const char *argv[]) {
@@ -424,7 +354,7 @@ int main(int argc, const char *argv[]) {
         // Run calculation
         NOStarkMapApp app(filename, threads);
 
-        // app.ConnectWorkerHostname("ludwigsburg", port);
+        app.ConnectWorkerHostname("localhost", port);
         app.ConnectWorkerHostname("calca", port);
         app.ConnectWorkerHostname("calcb", port);
         app.ConnectWorkerHostname("calcc", port);

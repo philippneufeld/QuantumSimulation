@@ -53,11 +53,11 @@ void IOThread::Stop()
 }
 
 void IOThread::StoreData(int i, double eField, const VectorXd& energies, 
-    const MatrixXd& states, const Matrix<double, Dynamic, 4>& character)
+    const MatrixXd& states)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
     m_commandQueue.push(CmdType::Store);
-    m_storageQueue.emplace(i, eField, energies, states, character);
+    m_storageQueue.emplace(i, eField, energies, states);
     lock.unlock();
 
     m_cond.notify_all();
@@ -108,7 +108,7 @@ void IOThread::ThreadProc()
             file.Open(m_path, DataFile_DEFAULT);
             auto root = file.OpenRootGroup();
 
-            const auto& [i, eField, energies, states, character] = data;
+            const auto& [i, eField, energies, states] = data;
             std::string groupName = GenerateGroupName(i);
             if (!root.DoesSubgroupExist(groupName))
             {
@@ -116,7 +116,6 @@ void IOThread::ThreadProc()
                 group.SetAttribute("Electric_Field", eField);
                 group.CreateDataset("Energies", energies);
                 group.CreateDataset("States", states);
-                group.CreateDataset("Character", character);
             }
             else
             {
@@ -124,7 +123,6 @@ void IOThread::ThreadProc()
                 group.SetAttribute("Electric_Field", eField);
                 group.GetDataset("Energies").Set(energies);
                 group.GetDataset("States").Set(states);
-                group.GetDataset("Character").Set(character);
             }
 
         }
@@ -141,8 +139,7 @@ void IOThread::ThreadProc()
             auto data = std::make_tuple(
                 i, group.GetAttribute<double>("Electric_Field"),
                 group.GetDataset("Energies").Get<VectorXd>(),
-                group.GetDataset("States").Get<MatrixXd>(),
-                group.GetDataset("Character").Get<MatrixXd>());
+                group.GetDataset("States").Get<MatrixXd>());
             
             promise.set_value(std::move(data));
         }
