@@ -354,17 +354,20 @@ int main(int argc, const char *argv[]) {
         // Run calculation
         NOStarkMapApp app(filename, threads);
 
-        app.ConnectWorkerHostname("localhost", port);
-        app.ConnectWorkerHostname("calca", port);
-        app.ConnectWorkerHostname("calcb", port);
-        app.ConnectWorkerHostname("calcc", port);
-        // app.ConnectWorkerHostname("calcv", port);
-        // app.ConnectWorkerHostname("calcr", port);
-        // app.ConnectWorkerHostname("sost", port);
+        std::vector<std::string> hostnames = {"calca", "calcb", "calcc", "calcr", "calcv", "ludwigsburg"};
 
-        // app.ConnectWorker("192.168.2.2", port);
-        // app.ConnectWorkerHostname("monaco", port);
-        // app.ConnectWorkerHostname("panama", port);
+        // make list of hostnames unique to connect to (replace own hostname by localhost)
+        std::string hostname = GetHostname();
+        std::sort(hostnames.begin(), hostnames.end());
+        hostnames.erase(std::unique(hostnames.begin(), hostnames.end()), hostnames.end());
+        auto it=std::find(hostnames.begin(), hostnames.end(), hostname);
+        if (it != hostnames.end())
+            *it = "localhost";
+        std::sort(hostnames.begin(), hostnames.end());
+        hostnames.erase(std::unique(hostnames.begin(), hostnames.end()), hostnames.end());
+        
+        for (const auto& host: hostnames)
+            app.ConnectWorkerHostname(host, port);
 
         VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
         app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
