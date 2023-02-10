@@ -354,15 +354,10 @@ int main(int argc, const char *argv[]) {
         // Run calculation
         NOStarkMapApp app(filename, threads);
 
-        std::vector<std::string> hostnames = {"calca", "calcb", "calcc", "calcr", "calcv", "ludwigsburg"};
-
-        // make list of hostnames unique to connect to (replace own hostname by localhost)
         std::string hostname = GetHostname();
-        std::sort(hostnames.begin(), hostnames.end());
-        hostnames.erase(std::unique(hostnames.begin(), hostnames.end()), hostnames.end());
-        auto it=std::find(hostnames.begin(), hostnames.end(), hostname);
-        if (it != hostnames.end())
-            *it = "localhost";
+        std::vector<std::string> hostnames = {"localhost", "calca", "calcb", "calcc", "calcr", "calcv"};
+        for (auto& h: hostnames)
+            h = (h == hostname ? "localhost" : h);
         std::sort(hostnames.begin(), hostnames.end());
         hostnames.erase(std::unique(hostnames.begin(), hostnames.end()), hostnames.end());
         
