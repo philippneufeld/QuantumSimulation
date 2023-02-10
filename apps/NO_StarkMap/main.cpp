@@ -255,7 +255,7 @@ class NOStarkMapApp : public ServerPool
 
             progress.IncrementCount();
         }
-        //// MAIN
+        //// DEV CHANGE
     }
 
   private:
