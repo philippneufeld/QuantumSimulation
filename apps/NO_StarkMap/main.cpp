@@ -65,11 +65,11 @@ public:
 class NOStarkMapApp : public ServerPool
 {
   public:
-    NOStarkMapApp(const std::string path, int threads) : m_path(path), m_ioThread(path), m_threadPool(std::min(threads-1, 1)) {}
+    NOStarkMapApp(const std::string path, int threads) : m_path(path), m_ioThread(path), m_threadPool(std::min(threads, 1)) {}
 
-    void RunCalculation(const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
+    void RunCalculation(bool remote, const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
     {
-        if (GetWorkerCount() == 0)
+        if (remote && GetWorkerCount() == 0)
         {
             std::cout << "No worker servers connected!" << std::endl;
             return;
@@ -90,20 +90,32 @@ class NOStarkMapApp : public ServerPool
 
         // do the actual calculation
         ProgressBar progress(eFields.size());
-        std::thread serverThread([&](){ Run(); });
+        std::thread serverThread([&](){ if(remote) Run(); });
         for (int i = 0; i < eFields.size(); i++) 
         {
-            auto [task, fut] = Submit([&, ef=eFields[i]]()
+            if (remote)
             {
-                auto n = basis.size();
-                DataPackagePayload data(4+n*n*sizeof(double));
-                *reinterpret_cast<std::uint32_t*>(data.GetData()) = n;
-                Eigen::Map<Eigen::MatrixXd> rawHamiltonian(
-                    reinterpret_cast<double*>(data.GetData() + 4), n, n);
-                rawHamiltonian = starkMap.GetHamiltonian(ef);
-                return data;
-            });
-            m_tasks[task] = std::make_tuple(i, eFields[i], std::move(fut), &progress);
+                auto [task, fut] = Submit([&, ef=eFields[i]]()
+                {
+                    auto n = basis.size();
+                    DataPackagePayload data(4+n*n*sizeof(double));
+                    *reinterpret_cast<std::uint32_t*>(data.GetData()) = n;
+                    Eigen::Map<Eigen::MatrixXd> rawHamiltonian(
+                        reinterpret_cast<double*>(data.GetData() + 4), n, n);
+                    rawHamiltonian = starkMap.GetHamiltonian(ef);
+                    return data;
+                });
+                m_tasks[task] = std::make_tuple(i, eFields[i], std::move(fut), &progress);
+            }
+            else
+            {
+                m_threadPool.Submit([&, pIOthread=&m_ioThread, i=i]()
+                {
+                    auto [energies, states] = starkMap.GetEnergiesAndStates(eFields[i]);
+                    pIOthread->StoreData(i, eFields[i], energies, states);
+                    progress.IncrementCount();
+                });
+            }
         }
 
         progress.WaitUntilFinished();
@@ -121,33 +133,32 @@ class NOStarkMapApp : public ServerPool
         MatchStates(eFields, basis.size());
 
         std::cout << "Data stored successfully (" << m_path << ")" << std::endl;
+
+        m_threadPool.WaitUntilFinished();
     }
 
     virtual void OnTaskCompleted(UUIDv4 id) override
     {
-        m_threadPool.Submit([&, id=id]()
+        std::unique_lock<std::mutex> lock(m_mutex);
+        auto it = m_tasks.find(id);
+        if (it != m_tasks.end())
         {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            auto it = m_tasks.find(id);
-            if (it != m_tasks.end())
-            {
-                auto [i, ef, fut, prog] = std::move(it->second);
-                lock.unlock();
+            auto [i, ef, fut, prog] = std::move(it->second);
+            lock.unlock();
 
-                DataPackagePayload data = std::move(fut.get());
-                std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
-                double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
-                Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
-                Eigen::MatrixXd states = Eigen::Map<Eigen::MatrixXd>(dptr+n, n, n);
-                m_ioThread.StoreData(i, ef, energies, states);
-                
-                lock.lock();
-                m_tasks.erase(it);
-                lock.unlock();
+            DataPackagePayload data = std::move(fut.get());
+            std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
+            double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
+            Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
+            Eigen::MatrixXd states = Eigen::Map<Eigen::MatrixXd>(dptr+n, n, n);
+            m_ioThread.StoreData(i, ef, energies, states);
+            
+            lock.lock();
+            m_tasks.erase(it);
+            lock.unlock();
 
-                prog->IncrementCount();
-            }
-        });
+            prog->IncrementCount();
+        }
     }
 
   protected:
@@ -275,6 +286,7 @@ int main(int argc, const char *argv[]) {
 
     std::string filename = GetDefaultAppDataDir("NO_StarkMap", false) + '/' + GenerateFilename("NOStarkMap") + ".h5";
     argparse.AddOption("worker", "Start worker thread");
+    argparse.AddOption("remote", "Search for worker servers and distribute work");
     argparse.AddOptionDefault("threads", "Number of calculation threads", std::to_string(GetNumberOfCalcThreads()));
     argparse.AddOptionDefault("file", "HDF5 file path", filename);
     argparse.AddOptionDefault("n", "Principal quantum number", "38");
@@ -355,18 +367,22 @@ int main(int argc, const char *argv[]) {
         // Run calculation
         NOStarkMapApp app(filename, threads);
 
-        std::string hostname = GetHostname();
-        std::vector<std::string> hostnames = {"localhost", "calca", "calcb", "calcc", "calcr", "calcv"};
-        for (auto& h: hostnames)
-            h = (h == hostname ? "localhost" : h);
-        std::sort(hostnames.begin(), hostnames.end());
-        hostnames.erase(std::unique(hostnames.begin(), hostnames.end()), hostnames.end());
+        bool remote = args.IsOptionPresent("remote");
+        if (remote)
+        {
+            std::string hostname = GetHostname();
+            std::vector<std::string> hostnames = {"localhost", "calca", "calcb", "calcc", "calcr", "calcv"};
+            for (auto& h: hostnames)
+                h = (h == hostname ? "localhost" : h);
+            std::sort(hostnames.begin(), hostnames.end());
+            hostnames.erase(std::unique(hostnames.begin(), hostnames.end()), hostnames.end());
         
-        for (const auto& host: hostnames)
-            app.ConnectWorkerHostname(host, port);
+            for (const auto& host: hostnames)
+                app.ConnectWorkerHostname(host, port);
+        }
 
         VectorXd eFields = VectorXd::LinSpaced(Fsteps, Fmin, Fmax); // V cm^-1
-        app.RunCalculation(100.0 * eFields, energy, dE, Rs, mN, nMax);
+        app.RunCalculation(remote, 100.0 * eFields, energy, dE, Rs, mN, nMax);
     }
 
     return 0;
