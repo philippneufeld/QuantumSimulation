@@ -165,37 +165,34 @@ class NOStarkMapApp : public ServerPool
   protected:
     void MatchStates(const VectorXd &eFields, int basisSize) 
     {
-        MatrixXd prevStates;
-        ProgressBar progress(eFields.size() - 1);
+        // nothing to do ?
+        if (eFields.size() < 2)
+            return; 
+
+        // create 1, 2, 3, ..., basisSize-1
+        std::vector<int> indices(basisSize);
+        for (int i = 0; i < indices.size(); i++)
+            indices[i] = i;
 
         // Allocate memory
         std::vector<double> overlapMax(basisSize);
         std::vector<int> overlapIndices(basisSize);
         std::vector<int> stateIndices(basisSize);
-
         VectorXd energiesOrdered(basisSize);
         MatrixXd statesOrdered(basisSize, basisSize);
-
         MatrixXd overlaps(basisSize, basisSize);
-        MatrixXd energyDiffs(basisSize, basisSize);
-
-        std::vector<int> indices(basisSize);
-        for (int i = 0; i < indices.size(); i++)
-            indices[i] = i;
 
         auto nextDataFuture = m_ioThread.LoadData(0);
-        for (int i = 0; i < eFields.size(); i++) 
+        MatrixXd prevStates = std::get<3>(nextDataFuture.get());
+        nextDataFuture = m_ioThread.LoadData(1);
+            
+        ProgressBar progress(eFields.size() - 1);
+        for (int i = 1; i < eFields.size(); i++) 
         {
+            // concurrent preloading of data
             auto [idx, ef, energies, states] = nextDataFuture.get();
             if (i < eFields.size() - 1)
                 nextDataFuture = m_ioThread.LoadData(i + 1);
-
-            // prepare ordering auxilliary variables
-            if (i == 0) 
-            {
-                prevStates = states;
-                continue;
-            }
 
             // calculate matching criteria
             overlaps = (states.transpose() * prevStates).array().square();
@@ -206,38 +203,35 @@ class NOStarkMapApp : public ServerPool
                 stateIndices[j] = j;
                 overlapMax[j] = overlaps.col(j).maxCoeff(&overlapIndices[j]);
             }
-
-            auto it = stateIndices.begin();
-            std::sort(it, stateIndices.end(), [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
-            
+            std::sort(stateIndices.begin(), stateIndices.end(), 
+                [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
+             
             // do the actual matching procedure
-            std::set<int> matched;
+            std::set<int> unmatched(indices.begin(), indices.end());
             for (int j : stateIndices) 
             {
-                auto overlap = overlaps.col(j);
-                idx = overlapIndices[j];
-
-                // index is already taken? Find greates overlap state that is
-                // not already taken
-                if (overlapMax[j] <= 0.5 || matched.count(idx) != 0) {
-                    std::sort(indices.begin(), indices.end(),
-                              [&](int i1, int i2) { return overlap[i1] < overlap[i2]; });
-                    int k = indices.size();
-                    while (matched.find(indices[--k]) != matched.end() && k >= 0);
-                    idx = indices[k];
+                // index is already taken? Find next best match
+                if (overlapMax[j] <= 0.5 || unmatched.count(overlapIndices[j]) == 0) {
+                    auto overlap = overlaps.col(j);
+                    auto cmp = [&](int i1, int i2) { return overlap[i1] > overlap[i2]; };
+                    std::set<int, decltype(cmp)> sorted_unmatched(unmatched.begin(), unmatched.end(), cmp);
+                    auto it = sorted_unmatched.begin();
+                    for (; unmatched.count(overlapIndices[j] = *it) == 0; it++);
                 }
+                unmatched.erase(overlapIndices[j]);
+            }
 
-                matched.insert(idx);
+            for(int j=0; j < basisSize; j++) {
+                int idx = overlapIndices[j];
                 energiesOrdered[j] = energies[idx];
                 statesOrdered.col(j) = states.col(idx);
             }
 
-            // store processed data back to file
-            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered);
-
             // shift auxilliary variables
             prevStates = statesOrdered;
 
+            // store processed data back to file
+            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered);
             progress.IncrementCount();
         }
         
@@ -271,9 +265,9 @@ int main(int argc, const char *argv[]) {
     argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
     argparse.AddOptionDefault("nMax", "Principal quantum number basis maximum", "100");
     argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "0,1,2,3");
-    argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.1");
-    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "10.0");
-    argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "160");
+    argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
+    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "5.0");
+    argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
     // argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
     // argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "25.0");
     // argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");

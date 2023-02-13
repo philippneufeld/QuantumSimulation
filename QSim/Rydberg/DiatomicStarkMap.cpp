@@ -137,6 +137,11 @@ namespace QSim
         if (!m_bPrepared)
             PrepareCalculation();
 
+        // force eigenstates to be defined by the electric field
+        // no electric field would result in degenerate subspaces
+        if (electricField == 0)
+            electricField = 1e-7;
+
         return m_hamiltonian0 + electricField * m_dipoleOperator;
     }
 
