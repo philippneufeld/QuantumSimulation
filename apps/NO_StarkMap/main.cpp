@@ -65,7 +65,7 @@ public:
 class NOStarkMapApp : public ServerPool
 {
   public:
-    NOStarkMapApp(const std::string path, int threads) : m_path(path), m_ioThread(path), m_threadPool(std::min(threads, 1)) {}
+    NOStarkMapApp(const std::string path, int threads) : m_path(path), m_ioThread(path), m_threadPool(std::max(threads, 1)) {}
 
     void RunCalculation(bool remote, const VectorXd &eFields, double energy, double dE, const std::vector<int>& Rs, int mN, int nMax) 
     {
@@ -74,6 +74,7 @@ class NOStarkMapApp : public ServerPool
             std::cout << "No worker servers connected!" << std::endl;
             return;
         }
+        std::cout << "Using " << m_threadPool.GetAvailableThreads() << " threads" << std::endl;
 
         // initialize calculation and process basis
         std::cout << "Searching for appropriate basis set..." << std::endl;
@@ -165,13 +166,10 @@ class NOStarkMapApp : public ServerPool
     void MatchStates(const VectorXd &eFields, int basisSize) 
     {
         MatrixXd prevStates;
-        VectorXd prevEnergies, prevEnergies2, extrEnergies;
-
         ProgressBar progress(eFields.size() - 1);
 
         // Allocate memory
         std::vector<double> overlapMax(basisSize);
-        std::vector<double> heuristicMax(basisSize);
         std::vector<int> overlapIndices(basisSize);
         std::vector<int> stateIndices(basisSize);
 
@@ -180,72 +178,50 @@ class NOStarkMapApp : public ServerPool
 
         MatrixXd overlaps(basisSize, basisSize);
         MatrixXd energyDiffs(basisSize, basisSize);
-        MatrixXd heuristics;
 
         std::vector<int> indices(basisSize);
         for (int i = 0; i < indices.size(); i++)
             indices[i] = i;
 
-        auto nextDataPromise = m_ioThread.LoadData(0);
+        auto nextDataFuture = m_ioThread.LoadData(0);
         for (int i = 0; i < eFields.size(); i++) 
         {
-            auto [idx, ef, energies, states] = nextDataPromise.get();
+            auto [idx, ef, energies, states] = nextDataFuture.get();
             if (i < eFields.size() - 1)
-                nextDataPromise = m_ioThread.LoadData(i + 1);
+                nextDataFuture = m_ioThread.LoadData(i + 1);
 
             // prepare ordering auxilliary variables
             if (i == 0) 
             {
-                prevEnergies = energies;
-                prevEnergies2 = prevEnergies;
                 prevStates = states;
                 continue;
             }
 
-            // calculate heuristic matching criteria
-            overlaps = (states.transpose() * prevStates).cwiseAbs();
-            // energyDiffs(overlaps.rows(), overlaps.cols());
-            for (int i1 = 0; i1 < energyDiffs.rows(); i1++) 
-            {
-                for (int i2 = 0; i2 < energyDiffs.rows(); i2++) 
-                {
-                    extrEnergies = prevEnergies2;
-                    if (i > 1)
-                        extrEnergies += (prevEnergies - prevEnergies2) / (eFields[i - 1] - eFields[i - 2]) *
-                                        (eFields[i] - eFields[i - 2]);
-                    energyDiffs(i1, i2) = std::abs(energies[i1] - extrEnergies[i2]);
-                }
-            }
-            energyDiffs /= energyDiffs.maxCoeff();
-            heuristics = overlaps - energyDiffs.cwiseSqrt();
+            // calculate matching criteria
+            overlaps = (states.transpose() * prevStates).array().square();
 
             // determine order in which states are processed
             for (int j = 0; j < states.rows(); j++) 
             {
                 stateIndices[j] = j;
                 overlapMax[j] = overlaps.col(j).maxCoeff(&overlapIndices[j]);
-                heuristicMax[j] = heuristics.col(j).maxCoeff();
             }
 
-            constexpr double threshold = 0.70710678118;
             auto it = stateIndices.begin();
             std::sort(it, stateIndices.end(), [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
-            for (; it < stateIndices.end() && overlapMax[*it] > threshold; it++);
-            std::sort(it, stateIndices.end(), [&](int i1, int i2) { return heuristicMax[i1] > heuristicMax[i2]; });
-
+            
             // do the actual matching procedure
             std::set<int> matched;
             for (int j : stateIndices) 
             {
                 auto overlap = overlaps.col(j);
-                auto heuristic = heuristics.col(j);
                 idx = overlapIndices[j];
 
                 // index is already taken? Find greates overlap state that is
                 // not already taken
-                if (overlapMax[j] <= threshold || matched.find(idx) != matched.end()) {
+                if (overlapMax[j] <= 0.5 || matched.count(idx) != 0) {
                     std::sort(indices.begin(), indices.end(),
-                              [&](int i1, int i2) { return heuristic[i1] < heuristic[i2]; });
+                              [&](int i1, int i2) { return overlap[i1] < overlap[i2]; });
                     int k = indices.size();
                     while (matched.find(indices[--k]) != matched.end() && k >= 0);
                     idx = indices[k];
@@ -260,13 +236,12 @@ class NOStarkMapApp : public ServerPool
             m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered);
 
             // shift auxilliary variables
-            prevEnergies2 = prevEnergies;
-            prevEnergies = energiesOrdered;
             prevStates = statesOrdered;
 
             progress.IncrementCount();
         }
-        //// DEV CHANGE
+        
+        m_ioThread.WaitUntilFinished();
     }
 
   private:
@@ -296,9 +271,12 @@ int main(int argc, const char *argv[]) {
     argparse.AddOptionDefault("mN", "Projection total angular momentum quantum number", "0");
     argparse.AddOptionDefault("nMax", "Principal quantum number basis maximum", "100");
     argparse.AddOptionDefault("Rs", "Rotational quantum number basis", "0,1,2,3");
-    argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
-    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "25.0");
-    argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
+    argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.1");
+    argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "10.0");
+    argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "160");
+    // argparse.AddOptionDefault("Fmin", "Rotational quantum number (V/cm)", "0.0");
+    // argparse.AddOptionDefault("Fmax", "Rotational quantum number (V/cm)", "25.0");
+    // argparse.AddOptionDefault("Fsteps", "Rotational quantum number", "256");
     argparse.AddOption("dErcm", "Energy range cm^-1");
     argparse.AddOption("dEGHz", "Energy range GHz");
     argparse.AddOption("help", "Print this help string");
