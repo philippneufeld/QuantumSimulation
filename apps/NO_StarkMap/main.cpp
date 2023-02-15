@@ -75,7 +75,7 @@ class NOStarkMapApp : public ServerPool
             std::cout << "No worker servers connected!" << std::endl;
             return;
         }
-        std::cout << "Using " << m_threadPool.GetAvailableThreads() << " threads" << std::endl;
+        std::cout << "Using " << m_threadPool.GetTotalThreadCount() << " threads" << std::endl;
 
         // initialize calculation and process basis
         std::cout << "Searching for appropriate basis set..." << std::endl;
@@ -133,8 +133,7 @@ class NOStarkMapApp : public ServerPool
         // do post processing
         std::cout << "Overlapping states..." << std::endl;
         auto indices = MatchStates(eFields, basis.size());
-
-        std::cout << "Rearranging states..." << std::endl;
+        std::cout << "Rearranging states (I/O intensive)..." << std::endl;
         RearrangeStates(indices);
 
         m_ioThread.WaitUntilFinished();
@@ -178,58 +177,75 @@ class NOStarkMapApp : public ServerPool
         if (eFields.size() < 2)
             return allOverlapIndices; 
 
-        // create 1, 2, 3, ..., basisSize-1
-        std::vector<int> indices(basisSize);
-        std::iota(indices.begin(), indices.end(), 0);
+        // split work
+        const std::size_t cnt = eFields.size() - 1;
+        const std::size_t threads = std::min<std::size_t>(cnt, m_threadPool.GetTotalThreadCount());
+        const std::size_t perThread = cnt / threads;
+        const std::size_t leftover = cnt - threads*perThread;
+        ProgressBar progress(cnt);
 
-        // Allocate memory
-        VectorXd overlapMax(basisSize);
-        VectorXi stateIndices(basisSize);
-        MatrixXd overlaps(basisSize, basisSize);
+        for (int tidx=0; tidx<threads; tidx++) {
+            m_threadPool.Submit([&, tidx=tidx]() {
+                // create 1, 2, 3, ..., basisSize-1
+                std::vector<int> indices(basisSize);
+                std::iota(indices.begin(), indices.end(), 0);
 
-        auto nextDataFuture = m_ioThread.LoadData(0);
-        MatrixXd prevStates = std::get<3>(nextDataFuture.get());
-        nextDataFuture = m_ioThread.LoadData(1);
-            
-        ProgressBar progress(eFields.size() - 1);
-        for (int i = 1; i < eFields.size(); i++) {
-            // concurrent preloading of data
-            auto [idx, ef, energies, states] = nextDataFuture.get();
-            if (i < eFields.size() - 1)
-                nextDataFuture = m_ioThread.LoadData(i + 1);
+                // Allocate memory
+                VectorXd overlapMax(basisSize);
+                VectorXi stateIndices(basisSize);
+                MatrixXd overlaps(basisSize, basisSize);
+                
+                // calculate iteration range for thread l
+                // leftover iterations distributed on first threads
+                std::size_t start = 1 + tidx*perThread + std::min<std::size_t>(tidx, leftover);
+                std::size_t stop = start + perThread + (tidx < leftover ? 1 : 0);
+                
+                // load previous data
+                auto nextDataFuture = m_ioThread.LoadData(start - 1);
+                MatrixXd prevStates = std::get<3>(nextDataFuture.get());
+                nextDataFuture = m_ioThread.LoadData(start);
+                
+                for (int i = start; i < stop; i++) {
+                    // concurrent preloading of data
+                    auto [idx, ef, energies, states] = nextDataFuture.get();
+                    if (i < eFields.size() - 1)
+                        nextDataFuture = m_ioThread.LoadData(i + 1);
 
-            // calculate matching criteria
-            overlaps = (states.transpose() * prevStates).array().square();
+                    // calculate matching criteria
+                    overlaps = (states.transpose() * prevStates).array().square();
 
-            // search for greatest overlap
-            VectorXi overlapIndices(basisSize);
-            for (int j = 0; j < states.rows(); j++)
-                overlapMax[j] = overlaps.col(j).maxCoeff(&overlapIndices[j]);
-            
-            // determine order in which states are processed
-            std::iota(stateIndices.begin(), stateIndices.end(), 0);
-            std::sort(stateIndices.begin(), stateIndices.end(), 
-                [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
-             
-            // do the actual matching procedure
-            std::set<int> unmatched(indices.begin(), indices.end());
-            for (int j : stateIndices) {
-                // index is already taken? Find next best match
-                if (overlapMax[j] <= 0.5 || unmatched.count(overlapIndices[j]) == 0) {
-                    auto overlap = overlaps.col(j);
-                    auto cmp = [&](int i1, int i2) { return overlap[i1] > overlap[i2]; };
-                    std::set<int, decltype(cmp)> sorted_unmatched(unmatched.begin(), unmatched.end(), cmp);
-                    auto it = sorted_unmatched.begin();
-                    for (; unmatched.count(overlapIndices[j] = *it) == 0; it++);
+                    // search for greatest overlap
+                    VectorXi overlapIndices(basisSize);
+                    for (int j = 0; j < states.rows(); j++)
+                        overlapMax[j] = overlaps.col(j).maxCoeff(&overlapIndices[j]);
+                    
+                    // determine order in which states are processed
+                    std::iota(stateIndices.begin(), stateIndices.end(), 0);
+                    std::sort(stateIndices.begin(), stateIndices.end(), 
+                        [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
+                    
+                    // do the actual matching procedure
+                    std::set<int> unmatched(indices.begin(), indices.end());
+                    for (int j : stateIndices) {
+                        // index is already taken? Find next best match
+                        if (overlapMax[j] <= 0.5 || unmatched.count(overlapIndices[j]) == 0) {
+                            auto overlap = overlaps.col(j);
+                            auto cmp = [&](int i1, int i2) { return overlap[i1] > overlap[i2]; };
+                            std::set<int, decltype(cmp)> sorted_unmatched(unmatched.begin(), unmatched.end(), cmp);
+                            auto it = sorted_unmatched.begin();
+                            for (; unmatched.count(overlapIndices[j] = *it) == 0; it++);
+                        }
+                        unmatched.erase(overlapIndices[j]);
+                    }
+                    
+                    prevStates = std::move(states);
+                    allOverlapIndices[i] = std::move(overlapIndices);
+
+                    progress.IncrementCount();
                 }
-                unmatched.erase(overlapIndices[j]);
-            }
-            
-            prevStates = std::move(states);
-            allOverlapIndices[i] = std::move(overlapIndices);
-
-            progress.IncrementCount();
+            });
         }
+        m_threadPool.WaitUntilFinished();
 
         // propagate indices
         VectorXd tmp(basisSize);

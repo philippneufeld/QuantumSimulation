@@ -36,6 +36,7 @@ namespace QSim
         void WaitUntilReadyForTask();
         void WaitUntilFinished();
 
+        unsigned int GetTotalThreadCount() const { return m_threads.size(); }
         unsigned int GetAvailableThreads() const;
 
     private:
