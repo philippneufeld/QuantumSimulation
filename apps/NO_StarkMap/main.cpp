@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <numeric>
 #include <set>
 
 #include <QSim/Constants.h>
@@ -131,8 +132,12 @@ class NOStarkMapApp : public ServerPool
 
         // do post processing
         std::cout << "Overlapping states..." << std::endl;
-        MatchStates(eFields, basis.size());
+        auto indices = MatchStates(eFields, basis.size());
 
+        std::cout << "Rearranging states..." << std::endl;
+        RearrangeStates(indices);
+
+        m_ioThread.WaitUntilFinished();
         std::cout << "Data stored successfully (" << m_path << ")" << std::endl;
 
         m_threadPool.WaitUntilFinished();
@@ -163,23 +168,23 @@ class NOStarkMapApp : public ServerPool
     }
 
   protected:
-    void MatchStates(const VectorXd &eFields, int basisSize) 
+    std::vector<VectorXi> MatchStates(const VectorXd &eFields, int basisSize) 
     {
+        std::vector<VectorXi> allOverlapIndices(eFields.size());
+        if (eFields.size() != 0)
+            allOverlapIndices[0] = VectorXi::LinSpaced(basisSize, 0, basisSize-1);
+
         // nothing to do ?
         if (eFields.size() < 2)
-            return; 
+            return allOverlapIndices; 
 
         // create 1, 2, 3, ..., basisSize-1
         std::vector<int> indices(basisSize);
-        for (int i = 0; i < indices.size(); i++)
-            indices[i] = i;
+        std::iota(indices.begin(), indices.end(), 0);
 
         // Allocate memory
-        std::vector<double> overlapMax(basisSize);
-        std::vector<int> overlapIndices(basisSize);
-        std::vector<int> stateIndices(basisSize);
-        VectorXd energiesOrdered(basisSize);
-        MatrixXd statesOrdered(basisSize, basisSize);
+        VectorXd overlapMax(basisSize);
+        VectorXi stateIndices(basisSize);
         MatrixXd overlaps(basisSize, basisSize);
 
         auto nextDataFuture = m_ioThread.LoadData(0);
@@ -187,8 +192,7 @@ class NOStarkMapApp : public ServerPool
         nextDataFuture = m_ioThread.LoadData(1);
             
         ProgressBar progress(eFields.size() - 1);
-        for (int i = 1; i < eFields.size(); i++) 
-        {
+        for (int i = 1; i < eFields.size(); i++) {
             // concurrent preloading of data
             auto [idx, ef, energies, states] = nextDataFuture.get();
             if (i < eFields.size() - 1)
@@ -197,19 +201,19 @@ class NOStarkMapApp : public ServerPool
             // calculate matching criteria
             overlaps = (states.transpose() * prevStates).array().square();
 
-            // determine order in which states are processed
-            for (int j = 0; j < states.rows(); j++) 
-            {
-                stateIndices[j] = j;
+            // search for greatest overlap
+            VectorXi overlapIndices(basisSize);
+            for (int j = 0; j < states.rows(); j++)
                 overlapMax[j] = overlaps.col(j).maxCoeff(&overlapIndices[j]);
-            }
+            
+            // determine order in which states are processed
+            std::iota(stateIndices.begin(), stateIndices.end(), 0);
             std::sort(stateIndices.begin(), stateIndices.end(), 
                 [&](int i1, int i2) { return overlapMax[i1] > overlapMax[i2]; });
              
             // do the actual matching procedure
             std::set<int> unmatched(indices.begin(), indices.end());
-            for (int j : stateIndices) 
-            {
+            for (int j : stateIndices) {
                 // index is already taken? Find next best match
                 if (overlapMax[j] <= 0.5 || unmatched.count(overlapIndices[j]) == 0) {
                     auto overlap = overlaps.col(j);
@@ -220,18 +224,48 @@ class NOStarkMapApp : public ServerPool
                 }
                 unmatched.erase(overlapIndices[j]);
             }
+            
+            prevStates = std::move(states);
+            allOverlapIndices[i] = std::move(overlapIndices);
 
-            for(int j=0; j < basisSize; j++) {
-                int idx = overlapIndices[j];
-                energiesOrdered[j] = energies[idx];
-                statesOrdered.col(j) = states.col(idx);
+            progress.IncrementCount();
+        }
+
+        // propagate indices
+        VectorXd tmp(basisSize);
+        for (int i=1; i < allOverlapIndices.size(); i++) {
+            for (int j=0; j < basisSize; j++) 
+                tmp[j] = allOverlapIndices[i][allOverlapIndices[i-1][j]];
+            for (int j=0; j < basisSize; j++)
+                allOverlapIndices[i][j] = tmp[j];
+        }
+
+        return allOverlapIndices;
+    }
+
+    void RearrangeStates(const std::vector<VectorXi>& indices)
+    {
+        if (indices.empty())
+            return;
+
+        VectorXd energiesBuffer(indices[0].size());
+        MatrixXd statesBuffer(indices[0].size(), indices[0].size());
+
+        ProgressBar progress(indices.size() - 1);
+        auto nextDataFuture = m_ioThread.LoadData(0);
+        for (int i = 0; i < indices.size(); i++) {
+            // concurrent preloading of data
+            auto [idx, ef, energies, states] = nextDataFuture.get();
+            if (i < indices.size() - 1)
+                nextDataFuture = m_ioThread.LoadData(i + 1);
+
+            for(int j=0; j < indices[i].size(); j++) {
+                int k = indices[i][j];
+                energiesBuffer[j] = energies[k];
+                statesBuffer.col(j) = states.col(k);
             }
 
-            // shift auxilliary variables
-            prevStates = statesOrdered;
-
-            // store processed data back to file
-            m_ioThread.StoreData(i, ef, energiesOrdered, statesOrdered);
+            m_ioThread.StoreData(idx, ef, energiesBuffer, statesBuffer);
             progress.IncrementCount();
         }
         
@@ -317,7 +351,7 @@ int main(int argc, const char *argv[]) {
         double Fmax = args.GetOptionValue<double>("Fmax");
         int Fsteps = args.GetOptionValue<int>("Fsteps");
 
-        double dE = 2 * EnergyInverseCm_v;
+        double dE = 3.5 * EnergyInverseCm_v;
         if (args.IsOptionPresent("dErcm"))
             dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
         else if (args.IsOptionPresent("dEGHz"))
