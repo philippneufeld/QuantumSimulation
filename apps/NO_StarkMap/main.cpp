@@ -20,6 +20,9 @@
 #include <QSim/Util/ProgressBar.h>
 #include <QSim/Util/PathUtil.h>
 
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+
 #include "IOThread.h"
 
 using namespace QSim;
@@ -37,6 +40,36 @@ unsigned int GetNumberOfCalcThreads()
         return logical;
 }
 
+DataPackagePayload Compress(const DataPackagePayload& data)
+{
+    boost::iostreams::filtering_streambuf<boost::iostreams::input> in;
+    in.push(boost::iostreams::gzip_compressor() );
+    in.push(boost::iostreams::array_source(reinterpret_cast<const char*>(data.GetData()), data.GetSize()));
+    
+    std::vector<char> buff;
+    buff.reserve(data.GetSize());
+    for(auto it = std::back_inserter(buff); in.sgetc() != -1; *it++ = in.sbumpc());
+    
+    DataPackagePayload result(buff.size());
+    std::copy(buff.begin(), buff.end(), reinterpret_cast<char*>(result.GetData()));
+    return result;
+}
+
+DataPackagePayload Decompress(const DataPackagePayload& data)
+{
+    boost::iostreams::filtering_streambuf<boost::iostreams::input> in;
+    in.push(boost::iostreams::gzip_decompressor());
+    in.push(boost::iostreams::array_source(reinterpret_cast<const char*>(data.GetData()), data.GetSize()));
+    
+    std::vector<char> buff;
+    buff.reserve(data.GetSize());
+    for(auto it = std::back_inserter(buff); in.sgetc() != -1; *it++ = in.sbumpc());
+    
+    DataPackagePayload result(buff.size());
+    std::copy(buff.begin(), buff.end(), reinterpret_cast<char*>(result.GetData()));
+    return result;
+}
+
 class NOStarkMapAppWorker : public ServerPoolWorker
 {
 public:
@@ -45,6 +78,7 @@ public:
     virtual DataPackagePayload DoWork(DataPackagePayload data) override
     {
         std::cout << "DoWork()" << std::endl;
+        data = Decompress(data);
 
         std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
         Eigen::MatrixXd hamiltonian = Eigen::Map<Eigen::MatrixXd>(
@@ -58,7 +92,7 @@ public:
         Eigen::Map<Eigen::VectorXd>(dres, n) = energies;
         Eigen::Map<Eigen::MatrixXd>(dres+n, n, n) = states;
 
-        return result;
+        return Compress(result);
     }
 
 };
@@ -105,7 +139,7 @@ class NOStarkMapApp : public ServerPool
                     Eigen::Map<Eigen::MatrixXd> rawHamiltonian(
                         reinterpret_cast<double*>(data.GetData() + 4), n, n);
                     rawHamiltonian = starkMap.GetHamiltonian(ef);
-                    return data;
+                    return Compress(data);
                 });
                 m_tasks[task] = std::make_tuple(i, eFields[i], std::move(fut), &progress);
             }
@@ -151,7 +185,7 @@ class NOStarkMapApp : public ServerPool
             auto [i, ef, fut, prog] = std::move(it->second);
             lock.unlock();
 
-            DataPackagePayload data = std::move(fut.get());
+            DataPackagePayload data = Decompress(std::move(fut.get()));
             std::uint32_t n = *reinterpret_cast<std::uint32_t*>(data.GetData());
             double* dptr = reinterpret_cast<double*>(data.GetData() + 4);
             Eigen::VectorXd energies = Eigen::Map<Eigen::VectorXd>(dptr, n);
@@ -367,7 +401,7 @@ int main(int argc, const char *argv[]) {
         double Fmax = args.GetOptionValue<double>("Fmax");
         int Fsteps = args.GetOptionValue<int>("Fsteps");
 
-        double dE = 3.5 * EnergyInverseCm_v;
+        double dE = 7.0 * EnergyInverseCm_v;
         if (args.IsOptionPresent("dErcm"))
             dE = args.GetOptionValue<double>("dErcm") * EnergyInverseCm_v;
         else if (args.IsOptionPresent("dEGHz"))
@@ -388,7 +422,6 @@ int main(int argc, const char *argv[]) {
 
         // Run calculation
         NOStarkMapApp app(filename, threads);
-
         bool remote = args.IsOptionPresent("remote");
         if (remote)
         {

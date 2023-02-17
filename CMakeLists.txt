@@ -67,18 +67,18 @@ endif()
 
 # eigen3 (linear algebra library)
 find_package(Eigen3 REQUIRED NO_MODULE)
-if (EIGEN3_FOUND)
-    # fixes weird bug in FindEigen3 on the PI5 simulation machines (OpenSUSE)
-    string(REGEX REPLACE "^/usr//usr" "/usr" EIGEN3_INCLUDE_DIR "${EIGEN3_INCLUDE_DIR}")
-    message("Found Eigen3: ${EIGEN3_INCLUDE_DIR}")
-    target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${EIGEN3_INCLUDE_DIR}")
-endif()
+target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC Eigen3::Eigen)
 
 # GNUC on an ARM system (disable ABI warning)
 if (CMAKE_COMPILER_IS_GNUCC AND ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
     message("ARM system and GNUC compiler detected. Disabling ABI warnings (-Wno-psabi)")
     target_compile_options("${QSIM_LIB_TARGET}" PUBLIC "-Wno-psabi")
 endif()
+
+# Boost
+find_package(Boost REQUIRED COMPONENTS system iostreams)
+target_include_directories("${QSIM_LIB_TARGET}" PUBLIC "${Boost_INCLUDE_DIRS}")
+target_link_libraries("${QSIM_LIB_TARGET}" PUBLIC "${Boost_LIBRARIES}")
 
 # put the built library file into the .../lib/ folder
 set(BUILD_LIB_DIR "${CMAKE_BINARY_DIR}/lib")
