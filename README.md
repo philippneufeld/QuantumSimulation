@@ -1,7 +1,6 @@
-# QuantumSimulation
+# Nitric oxide simulation
 
 This project includes methods of calculating the dynamics as well as the steady-state of simple N-level systems.
-
 Various apps are included that showcase the capabilities of the library.
 
 ## Dependencies
