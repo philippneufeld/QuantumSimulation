@@ -1,5 +1,6 @@
 # Nitric oxide simulation
 
+Code to run density matrix simulations and calculation of Stark maps for nitric oxide, developed during my Master's thesis time.
 This project includes methods of calculating the dynamics as well as the steady-state of simple N-level systems.
 Various apps are included that showcase the capabilities of the library.
 
